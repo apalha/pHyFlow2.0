@@ -1,0 +1,59 @@
+# Copyright (C) 2013 Artur Palha                                                                                                     
+#                                                                                                                                   
+# This file is part of pHyFlow.                                                                                                      
+#                                                                                                                                   
+# pHyFlow is free software: you can redistribute it and/or modify                                                                    
+# it under the terms of the GNU Lesser General Public License as published by                                                       
+# the Free Software Foundation, either version 3 of the License, or                                                                 
+# (at your option) any later version.                                                                                               
+#                                                                                                                                   
+# pHyFlow is distributed in the hope that it will be useful,                                                                         
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                                                                    
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the                                                                      
+# GNU Lesser General Public License for more details.                                                                               
+#                                                                                                                                   
+# You should have received a copy of the GNU Lesser General Public License                                                          
+# along with pHyFlow. If not, see <http://www.gnu.org/licenses/>. 
+
+# Last modified : 2013/05/22
+
+==============================================================================
+REQUIREMENTS
+
+To install pHyFlow you need the following install requirements:
+
+- python 2.7 
+- cuda
+- numpy
+- scipy
+- dolfin
+- matplotlib
+
+==============================================================================
+
+==============================================================================
+INSTRUCTIONS
+
+Change the install directory to one of your desire. For that edit the file
+install.py that is in the root dir of pHyFlow. Change the parameters in 'User
+defined installation parameters' to what suits you:
+
+Example:
+
+	#############################################################################
+	# User defined installation parameters
+
+	libParent = '/media/DATAPART1/programs/lib/python' # root install directory
+	
+	#############################################################################
+   
+   This will install pHyFlow into '/media/DATAPART1/programs/lib/python'. In the end
+   you will have a directory '/media/DATAPART1/programs/lib/python/pHyFlow' with the
+   necessary files and file structure to run pHyFlow.
+
+In the root directory of pHyFlow simple run:
+
+	python install.py
+
+
+

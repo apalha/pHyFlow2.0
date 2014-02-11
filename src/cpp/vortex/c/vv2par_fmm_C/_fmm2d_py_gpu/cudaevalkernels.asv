@@ -1,0 +1,2195 @@
+#include "expint.h"
+
+//kernels for direct evaluation. These will be used several times, therefore use define to avoid repeating code
+#define DIRACSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if(sqrdist!=0.0) {\
+    /*if(sqrdist>deltasqr*25)*/\
+        sqrdist=circ*(1.0/(sqrdist));\
+    /*else\
+        factor=circ/(sqrdist)*(1-expf(-sqrdist/deltasqr));*/\
+    xvelocity+=sqrdist*xdist;\
+    yvelocity-=sqrdist*ydist;\
+}
+#define IDIRACSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if(sqrdist!=0.0) {\
+    /*if(sqrdist>deltasqr*25)*/\
+        sqrdist=1/(sqrdist);\
+    /*else\
+        factor=circ/(sqrdist)*(1-expf(-sqrdist/deltasqr));*/\
+    xvelocity+=sqrdist*(circ*xdist+icirc*ydist);\
+    yvelocity-=sqrdist*(circ*ydist-icirc*xdist);\
+}
+#define RANKINESYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=1/(xdist*xdist+ydist*ydist);\
+if (sqrdist<shape){/*since both contains the 1/X, the comparison has to change sign*/\
+        xvelocity+=circ*sqrdist*xdist;\
+        yvelocity-=circ*sqrdist*ydist;\
+}\
+else if(sqrdist!=0){\
+        xvelocity+=circ*shape*xdist;\
+        yvelocity-=circ*shape*ydist;\
+}
+#define IRANKINESYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=1/(xdist*xdist+ydist*ydist);\
+if (sqrdist<shape){/*since both contains the 1/X, the comparison has to change sign*/\
+        xvelocity+=sqrdist*(circ*xdist+icirc*ydist);\
+        yvelocity-=sqrdist*(circ*ydist-icirc*xdist);\
+}\
+else if(sqrdist!=0){\
+        xvelocity+=shape*(circ*xdist+icirc*ydist);\
+        yvelocity-=shape*(circ*ydist-icirc*xdist);\
+}
+#define SCULLYSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist>cutoffsqr) {/*since both contains the 1/X, the comparison has to change sign**/\
+        sqrdist=circ/sqrdist;\
+        xvelocity+=sqrdist*xdist;\
+        yvelocity-=sqrdist*ydist;\
+}\
+else if(sqrdist!=0) {\
+        sqrdist=circ/(sqrdist+shape)*scale;\
+        xvelocity+=sqrdist*xdist;\
+        yvelocity-=sqrdist*ydist;\
+}
+#define ISCULLYSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist>cutoffsqr) {/*since both contains the 1/X, the comparison has to change sign**/\
+        sqrdist=1/sqrdist;\
+        xvelocity+=sqrdist*(circ*xdist+icirc*ydist);\
+        yvelocity-=sqrdist*(circ*ydist-icirc*xdist);\
+}\
+else if(sqrdist!=0) {\
+        sqrdist=1/(sqrdist+shape)*scale;\
+        xvelocity+=sqrdist*(circ*xdist+icirc*ydist);\
+        yvelocity-=sqrdist*(circ*ydist-icirc*xdist);\
+}
+#define OSEENSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist>cutoffsqr) {/*since both contains the 1/X, the comparison has to change sign*/\
+        sqrdist=circ/sqrdist;\
+        xvelocity+=sqrdist*xdist;\
+        yvelocity-=sqrdist*ydist;\
+}\
+else if(sqrdist!=0) {  /*can still fail if cutoffsqr==0*/\
+        sqrdist=-circ/sqrdist*scale*expm1(-shape*sqrdist);\
+        xvelocity+=sqrdist*xdist;\
+        yvelocity-=sqrdist*ydist;\
+}//since two version should exist, one that takes data from evaluation points and one from potential points, make a prototype
+#define IOSEENSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist>cutoffsqr) {/*since both contains the 1/X, the comparison has to change sign*/\
+        sqrdist=1/sqrdist;\
+        xvelocity+=sqrdist*(circ*xdist+icirc*ydist);\
+        yvelocity-=sqrdist*(circ*ydist-icirc*xdist);\
+}\
+else if(sqrdist!=0) {  /*can still fail if cutoffsqr==0*/\
+        sqrdist=-1/sqrdist*scale*expm1(-shape*sqrdist);\
+        xvelocity+=sqrdist*(circ*xdist+icirc*ydist);\
+        yvelocity-=sqrdist*(circ*ydist-icirc*xdist);\
+}
+#define DIRACLOGSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if(sqrdist!=0.0) {\
+    xvelocity-=0.5*circ*log(sqrdist);\
+}
+#define IDIRACLOGSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if(sqrdist!=0.0) {\
+    sqrdist=0.5*log(sqrdist);\
+    xvelocity-=circ*sqrdist;\
+    yvelocity-=icirc*sqrdist;\
+}
+#define RANKINELOGSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist >= cutoffsqr)\
+    sqrdist = 0.5*log(sqrdist);\
+else\
+    sqrdist = 0.5*(sqrdist/cutoffsqr)+shape;\
+xvelocity-=circ*sqrdist;
+#define IRANKINELOGSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist >= cutoffsqr)\
+    sqrdist = 0.5*log(sqrdist);\
+else\
+    sqrdist = 0.5*(sqrdist/cutoffsqr)+shape;\
+xvelocity-=circ*sqrdist;\
+yvelocity-=icirc*sqrdist;
+#define SCULLYLOGSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist >= cutoffsqr)\
+    sqrdist = 0.5*log(sqrdist);\
+else\
+    sqrdist = 0.5*log(shape+sqrdist)*scale;\
+xvelocity-=circ*sqrdist;
+#define ISCULLYLOGSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist >= cutoffsqr)\
+    sqrdist = 0.5*log(sqrdist);\
+else\
+    sqrdist = 0.5*log(shape+sqrdist)*scale;\
+xvelocity-=circ*sqrdist;\
+yvelocity-=icirc*sqrdist;
+#define OSEENLOGSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist >= cutoffsqr)\
+    sqrdist = 0.5*log(sqrdist);\
+else if(sqrdist!=0.0)\
+    sqrdist = (0.5*log(sqrdist)+0.5*expint(shape*sqrdist))*scale;\
+else\
+    sqrdist = -0.5*(log(shape)+gamma_)*scale;\
+xvelocity-=circ*sqrdist;
+#define IOSEENLOGSYNCKERNEL(xvelocity,yvelocity,circ,icirc) sqrdist=xdist*xdist+ydist*ydist;\
+if (sqrdist >= cutoffsqr)\
+    sqrdist = 0.5*log(sqrdist);\
+else if(sqrdist!=0.0)\
+    sqrdist = (0.5*log(sqrdist)+0.5*expint(shape*sqrdist))*scale;\
+else\
+    sqrdist = -0.5*(log(shape)+gamma_)*scale;\
+xvelocity-=circ*sqrdist;\
+yvelocity-=icirc*sqrdist;
+
+//depending on complex mass, complex answer etc, some changes has to be made to the kernel code. These strings are the differences
+#define DUMMYKERNELSTRING
+#define IKERNELSTRING1 __shared__ CUDAREAL igammav[maxthreads];
+#define IKERNELSTRING1DIRECT __shared__ CUDAREAL igammav[DIRECTMAXTHREADS];
+#define IKERNELSTRING2 TEXTUREFETCH(igammav[threadIdx.x],tmi,k+threadIdx.x);
+#define COMPLEXANSWER1 CUDAREAL yvelocity;
+#define COMPLEXANSWER2 yvelocity=0;
+#define COMPLEXANSWER3 yvelocities[i]+=yvelocity;
+#define COMPLEXANSWER3DIRECT yvelocities[i]=yvelocity;
+
+#define IKERNELSTRING2_2 TEXTUREFETCH(igammav[threadIdx.x+addstart],tmi,k+threadIdx.x);
+#define COMPLEXANSWER1_2 __shared__ CUDAREAL yvelocity[maxthreads],yvelocitytmp[maxthreads];
+#define COMPLEXANSWER2_2 yvelocity[threadIdx.x]=0;
+#define COMPLEXANSWER3_2 yvelocities[i]+=yvelocity[threadIdx.x];
+#define COMPLEXANSWER4_2 yvelocitytmp[threadIdx.x]=0;
+#define COMPLEXANSWER5_2 yvelocity[threadIdx.x]+=yvelocitytmp[threadIdx.x<<1]+yvelocitytmp[(threadIdx.x<<1)+1];
+#define COMPLEXANSWER6_2 yvelocity[threadIdx.x+ilocal]+=yvelocitytmp[threadIdx.x<<2]+yvelocitytmp[(threadIdx.x<<2)+1]+yvelocitytmp[(threadIdx.x<<2)+2]+yvelocitytmp[(threadIdx.x<<2)+3];
+#ifdef CUDASYNCVERSION
+//kernel code prototype
+#define SYNCNRONIZEDKERNEL(kernel,tevalr,tevali,txptr,ISTRING1,ISTRING2,CANSWER1,CANSWER2,CANSWER3,CANSWER4,CANSWER5,CANSWER6) int i,j,k,boxnr,m;\
+    CUDAREAL sqrdist,xdist,ydist,xvelocity;\
+    CANSWER1\
+    __shared__ CUDAREAL vxpositions[maxthreads];\
+    __shared__ CUDAREAL vypositions[maxthreads];\
+    __shared__ CUDAREAL gammav[maxthreads];\
+    ISTRING1\
+    __shared__ CUDAREAL xpositions[maxthreads];/*makes code approx 1% slower for heavy load, but for some reason, doubles has to be fetched into an array*/\
+    __shared__ CUDAREAL ypositions[maxthreads];\
+    __shared__ int count,loopmax,vcount,begin,end,loopstart;\
+    for(boxnr=blockIdx.x;boxnr<Nf;boxnr+=gridDim.x) {/*fist loop is over the boxes, one block take one box*/\
+        if(threadIdx.x==0) {\
+            count=tex1Dfetch(/*tevalend,m*/txptr,boxnr+1); /*right now, it is possible that twi boxes has same evalbegin if one box has 0 elements*/\
+            loopstart=tex1Dfetch(/*tevalbegin*/txptr,boxnr);\
+            loopmax=count-(count+blockDim.x-1-(loopstart%blockDim.x))%blockDim.x-1+blockDim.x;/*This one makes sure all threads loop the same number of times, necessary for __syncthreads()*/\
+        }\
+        __syncthreads();\
+        for(i=threadIdx.x+loopstart;i<loopmax;i+=blockDim.x) { /*if more points than threads*/\
+            if(i<count) {/*Always check if the point belongs to the box*/\
+                xvelocity=0; /*use local variables as much as possible to help the optimizer understand that they are constant*/\
+                /*yvelocity=0;*/CANSWER2\
+                TEXTUREFETCH(xpositions[threadIdx.x],tevalr,i);\
+                TEXTUREFETCH(ypositions[threadIdx.x],tevali,i);\
+            }\
+            for(m=tex1Dfetch(tboxstart, boxnr);m<tex1Dfetch(tboxstart, boxnr+1);m++) {/*Loop over all other boxes*/\
+                if(threadIdx.x==0) {/*Set up the loop limits*/\
+                    begin=tex1Dfetch(tixptr,tex1Dfetch(tpotbegin, m));\
+                    end=tex1Dfetch(tixptr,tex1Dfetch(tpotbegin, m)+1);\
+                    vcount=(end-begin)%blockDim.x;\
+                }\
+                __syncthreads();\
+                for(k=begin;k+blockDim.x<=end;k+=blockDim.x) {/*Loop over the elements in the external box, this step is for when there are more than blockDim.x elements left*/\
+                    TEXTUREFETCH(vxpositions[threadIdx.x],tzr,k+threadIdx.x);\
+                    TEXTUREFETCH(vypositions[threadIdx.x],tzi,k+threadIdx.x);\
+                    TEXTUREFETCH(gammav[threadIdx.x],tmr,k+threadIdx.x);\
+                    ISTRING2\
+                    __syncthreads();\
+                    if(i<count) {\
+                        for(j=0;j<blockDim.x;j++) {/*the interaction loop*/\
+                            xdist=vxpositions[j]-xpositions[threadIdx.x];\
+                            ydist=vypositions[j]-ypositions[threadIdx.x];\
+                            kernel(xvelocity,yvelocity,circ,icirc);\
+                        }\
+                    }\
+                    __syncthreads();\
+                }\
+                if(k+threadIdx.x<end) {/*The remaining points*/\
+                    TEXTUREFETCH(vxpositions[threadIdx.x],tzr,k+threadIdx.x);\
+                    TEXTUREFETCH(vypositions[threadIdx.x],tzi,k+threadIdx.x);\
+                    TEXTUREFETCH(gammav[threadIdx.x],tmr,k+threadIdx.x);\
+                    ISTRING2\
+                }\
+                __syncthreads();\
+                if(i<count) {\
+                    for(j=0;j<vcount;j++) {/*the interaction loop*/\
+                        xdist=vxpositions[j]-xpositions[threadIdx.x];\
+                        ydist=vypositions[j]-ypositions[threadIdx.x];\
+                        kernel(xvelocity,yvelocity,circ,icirc);\
+                    }\
+                }\
+                __syncthreads();\
+            }\
+            if(i<count) {/*write results*/\
+                xvelocities[i]+=xvelocity;\
+                /*yvelocities[i]+=yvelocity*/CANSWER3\
+            }\
+        }\
+        __syncthreads();\
+    }
+    
+//#define BOXLOOPSIZE 32 //cache this many boxes indices. Too high number results in more memory use. Do not use higher number than number of threads
+#define SOURCEMULTIPLIER 1 //most likely more source points than evaluation points, cache more source points to increase efficiency by reducing loop overhead
+
+/*This code caches a full line of points before any kernel evaluation,
+ *and if number of evaluation points is smaller than number of threads
+ *the code will use more threads for each point. At the moment, a maximum of
+ *4 threads for each point is used, since it was observed that the evaluation
+ *of high values of ndirect slightly increased when increasing the number of splits*/
+#define SYNCNRONIZEDKERNEL2(kernel,tevalr,tevali,txptr,ISTRING1,ISTRING2,CANSWER1,CANSWER2,CANSWER3,CANSWER4,CANSWER5,CANSWER6) int i,j,k,boxnr,m,addstart,ilocal;\
+    CUDAREAL sqrdist,xdist,ydist;\
+    __shared__ CUDAREAL xvelocity[maxthreads];\
+    CANSWER1\
+    __shared__ CUDAREAL xvelocitytmp[maxthreads];\
+    __shared__ CUDAREAL vxpositions[maxthreads*SOURCEMULTIPLIER];\
+    __shared__ CUDAREAL vypositions[maxthreads*SOURCEMULTIPLIER];\
+    __shared__ CUDAREAL gammav[maxthreads*SOURCEMULTIPLIER];\
+    ISTRING1\
+    __shared__ CUDAREAL xpositions[maxthreads];/*makes code approx 1% slower for heavy load, but for some reason, doubles has to be fetched into an array*/\
+    __shared__ CUDAREAL ypositions[maxthreads];\
+    __shared__ int count,loopmax,begin,end,loopstart;\
+    for(boxnr=blockIdx.x;boxnr<Nf;boxnr+=gridDim.x) {\
+        /*m=tex1Dfetch(tboxstart, boxnr);*/\
+        if(threadIdx.x==0) {\
+            count=tex1Dfetch(txptr,boxnr+1); /*right now, it is possible that two boxes has same evalbegin if one box has 0 elements*/\
+            loopstart=tex1Dfetch(txptr,boxnr);\
+            loopmax=count-(count+blockDim.x-1-(loopstart%blockDim.x))%blockDim.x-1+blockDim.x;\
+        }\
+        __syncthreads();\
+        for(i=threadIdx.x+loopstart;i<loopmax;i+=blockDim.x) { /*if more points than threads*/\
+            if(i<count) {\
+                xvelocity[threadIdx.x]=0; /*use local variables as much as possible to help the optimizer understand that they are constant*/\
+                CANSWER2\
+                TEXTUREFETCH(xpositions[threadIdx.x],tevalr,i);\
+                TEXTUREFETCH(ypositions[threadIdx.x],tevali,i);\
+            }\
+            addstart=0;\
+            for(m=tex1Dfetch(tboxstart, boxnr);m<tex1Dfetch(tboxstart, boxnr+1);m++) {/*Loop through all interaction boxes*/\
+                if(threadIdx.x==0) {/*cache start and end position*/\
+                    begin=tex1Dfetch(tixptr,tex1Dfetch(tpotbegin, m));\
+                    end=tex1Dfetch(tixptr,tex1Dfetch(tpotbegin, m)+1);\
+                    /*debugvector[0]=begin;debugvector[1]=end;debugvector[2]=m;debugvector[3]=tex1Dfetch(tboxstart, boxnr+1);*/\
+                }\
+                __syncthreads();\
+                /*if(end-begin<maxthreads*SOURCEMULTIPLIER-addstart&&tex1Dfetch(tboxstart, boxnr+1)!=m+1) {/*whole box can be cached. This code could have been faster, but did not give any improvements*/\
+                  /*for(k=begin;k+blockDim.x<=end;k+=blockDim.x,addstart+=blockDim.x) {*/\
+                     /*TEXTUREFETCH(vxpositions[addstart+threadIdx.x],tzr,k+threadIdx.x);*/\
+                     /*TEXTUREFETCH(vypositions[addstart+threadIdx.x],tzi,k+threadIdx.x);*/\
+                     /*TEXTUREFETCH(gammav[addstart+threadIdx.x],tmr,k+threadIdx.x);*/\
+                     /*ISTRING2 /*Fix this one*/\
+                  /*}*/\
+                  /*if(k+threadIdx.x<end) {*/\
+                    /*TEXTUREFETCH(vxpositions[addstart+threadIdx.x],tzr,k+threadIdx.x);*/\
+                     /*TEXTUREFETCH(vypositions[addstart+threadIdx.x],tzi,k+threadIdx.x);*/\
+                     /*TEXTUREFETCH(gammav[addstart+threadIdx.x],tmr,k+threadIdx.x);*/\
+                     /*ISTRING2 /*Fix this one*/\
+                  /*}*/\
+                  /*addstart+=end-k;*/\
+                  /*continue;*/\
+                /*}*/\
+                for(k=begin;k<=end/*&&addstart<maxthreads*SOURCEMULTIPLIER*/;k+=blockDim.x) {/*Start and fill the array. End condition is when box is done. Not that code has to enter the loop even if no points, because it may be the last loop, and summation is inside loop*/\
+                    if(end-k>=maxthreads*SOURCEMULTIPLIER-addstart&&maxthreads*SOURCEMULTIPLIER-addstart<=blockDim.x) {/*full array*/\
+                        if(addstart+threadIdx.x<maxthreads*SOURCEMULTIPLIER) {/*If it will fill the whole array, fill it and perform the interaction*/\
+                            TEXTUREFETCH(vxpositions[addstart+threadIdx.x],tzr,k+threadIdx.x);\
+                            TEXTUREFETCH(vypositions[addstart+threadIdx.x],tzi,k+threadIdx.x);\
+                            TEXTUREFETCH(gammav[addstart+threadIdx.x],tmr,k+threadIdx.x);\
+                            ISTRING2\
+                        }\
+                        __syncthreads();\
+                        ilocal=0;/*remembers how many interactions that has been doen*/\
+                        if(count-(i-threadIdx.x)>=blockDim.x) {/*if more calculation points than threads, one thread per evaluation point*/\
+                            for(j=0;j<maxthreads*SOURCEMULTIPLIER;j++) {\
+                                xdist=vxpositions[j]-xpositions[threadIdx.x];\
+                                ydist=vypositions[j]-ypositions[threadIdx.x];\
+                                kernel(xvelocity[threadIdx.x],yvelocity[threadIdx.x],gammav[j],igammav[j]);\
+                            }\
+                        }\
+                        else { /*else, use several threads for each point to get better balance*/\
+                            if(count-(i-threadIdx.x)>=(blockDim.x>>1)){ /*more than half of the points active?*/\
+                                xvelocitytmp[threadIdx.x]=0;\
+                                CANSWER4/*yvelocitytmp[threadIdx.x]=0*/;\
+                                for(j=0;j<maxthreads*SOURCEMULTIPLIER;j+=2) {/*calculate temporary points*/\
+                                    xdist=vxpositions[j+(threadIdx.x&1)]-xpositions[(threadIdx.x>>1)];\
+                                    ydist=vypositions[j+(threadIdx.x&1)]-ypositions[(threadIdx.x>>1)];\
+                                    kernel(xvelocitytmp[threadIdx.x],yvelocitytmp[threadIdx.x],gammav[j+(threadIdx.x&1)],igammav[j+(threadIdx.x&1)]);\
+                                }\
+                                __syncthreads();\
+                                if(threadIdx.x<(blockDim.x>>1)) {/*sum, note that ilocal only can be zero here*/\
+                                    xvelocity[threadIdx.x]+=xvelocitytmp[threadIdx.x<<1]+xvelocitytmp[(threadIdx.x<<1)+1];\
+                                    CANSWER5/*yvelocity[threadIdx.x]+=yvelocitytmp[threadIdx.x<<1]+yvelocitytmp[(threadIdx.x<<1)+1];*/\
+                                }\
+                                __syncthreads();\
+                                ilocal+=(blockDim.x>>1);\
+                            }\
+                            if(count-(i-threadIdx.x)-ilocal>=(blockDim.x>>2)){/*if remaining points are more than 1/4 of the number of threads*/\
+                                xvelocitytmp[threadIdx.x]=0;\
+                                CANSWER4/*yvelocitytmp[threadIdx.x]=0*/;\
+                                for(j=0;j<maxthreads*SOURCEMULTIPLIER;j+=4) {/*calculate temporary points*/\
+                                    xdist=vxpositions[j+(threadIdx.x&3)]-xpositions[(threadIdx.x>>2)+ilocal];\
+                                    ydist=vypositions[j+(threadIdx.x&3)]-ypositions[(threadIdx.x>>2)+ilocal];\
+                                    kernel(xvelocitytmp[threadIdx.x],yvelocitytmp[threadIdx.x],gammav[j+(threadIdx.x&3)],igammav[j+(threadIdx.x&3)]);\
+                                }\
+                                __syncthreads();\
+                                if(threadIdx.x<(blockDim.x>>2)) {/*sum*/\
+                                    xvelocity[threadIdx.x+ilocal]+=xvelocitytmp[threadIdx.x<<2]+xvelocitytmp[(threadIdx.x<<2)+1]+xvelocitytmp[(threadIdx.x<<2)+2]+xvelocitytmp[(threadIdx.x<<2)+3];\
+                                    CANSWER6/*yvelocity[threadIdx.x+ilocal]+=yvelocitytmp[threadIdx.x<<2]+yvelocitytmp[(threadIdx.x<<2)+1]+yvelocitytmp[(threadIdx.x<<2)+2]+yvelocitytmp[(threadIdx.x<<2)+3];*/\
+                                }\
+                                __syncthreads();\
+                                ilocal+=(blockDim.x>>2);\
+                            }\
+                            if((threadIdx.x>>2)+ilocal+(i-threadIdx.x)<count) {/*take care of the remaining points. More additional steps could be performed, but for high ndirect, adding more steps seems to decrease performance slightly*/\
+                                xvelocitytmp[threadIdx.x]=0;\
+                                CANSWER4/*yvelocitytmp[threadIdx.x]=0*/;\
+                                for(j=0;j<maxthreads*SOURCEMULTIPLIER;j+=4) {\
+                                    xdist=vxpositions[j+(threadIdx.x&3)]-xpositions[(threadIdx.x>>2)+ilocal];\
+                                    ydist=vypositions[j+(threadIdx.x&3)]-ypositions[(threadIdx.x>>2)+ilocal];\
+                                    kernel(xvelocitytmp[threadIdx.x],yvelocitytmp[threadIdx.x],gammav[j+(threadIdx.x&3)],igammav[j+(threadIdx.x&3)]);\
+                                }\
+                            }\
+                            __syncthreads();\
+                            if(threadIdx.x+ilocal+(i-threadIdx.x)<count) {/*sum*/\
+                              xvelocity[threadIdx.x+ilocal]+=xvelocitytmp[threadIdx.x<<2]+xvelocitytmp[(threadIdx.x<<2)+1]+xvelocitytmp[(threadIdx.x<<2)+2]+xvelocitytmp[(threadIdx.x<<2)+3];\
+                              CANSWER6/*yvelocity[threadIdx.x+ilocal]+=yvelocitytmp[threadIdx.x<<2]+yvelocitytmp[(threadIdx.x<<2)+1]+yvelocitytmp[(threadIdx.x<<2)+2]+yvelocitytmp[(threadIdx.x<<2)+3];*/\
+                            }\
+                        }\
+                        __syncthreads();\
+                        k-=blockDim.x-(maxthreads*SOURCEMULTIPLIER-addstart);/*All blockDim.x points was not read, correct the value for the next loop*/\
+                        addstart=0;\
+                        __syncthreads();\
+                        continue;\
+                    }\
+                    else if(end-k<=blockDim.x&&tex1Dfetch(tboxstart, boxnr+1)==m+1) {/*time to compute array due to no more available interaction points. Here, the list will not be full*/\
+                        if(k+threadIdx.x<end) {\
+                            TEXTUREFETCH(vxpositions[addstart+threadIdx.x],tzr,k+threadIdx.x);\
+                            TEXTUREFETCH(vypositions[addstart+threadIdx.x],tzi,k+threadIdx.x);\
+                            TEXTUREFETCH(gammav[addstart+threadIdx.x],tmr,k+threadIdx.x);\
+                            ISTRING2 /*Fix this one*/\
+                        }\
+                        addstart+=end-k;\
+                        __syncthreads();/*The remaining part is the same as above, but with the loops only running to addstart*/\
+                        if(count-(i-threadIdx.x)>=blockDim.x) {/*if more calculation points than threads*/\
+                            for(j=0;j<addstart;j++) {\
+                                xdist=vxpositions[j]-xpositions[threadIdx.x];\
+                                ydist=vypositions[j]-ypositions[threadIdx.x];\
+                                kernel(xvelocity[threadIdx.x],yvelocity[threadIdx.x],gammav[j],igammav[j]);\
+                            }\
+                        }\
+                        else { /*else, use several threads for each point to get better balance*/\
+                            ilocal=0;\
+                            if(count-(i-threadIdx.x)>=(blockDim.x>>1)){ /*more than half of the points active?*/\
+                                xvelocitytmp[threadIdx.x]=0;\
+                                CANSWER4/*yvelocitytmp[threadIdx.x]=0*/;\
+                                for(j=0;j+(threadIdx.x&1)<addstart;j+=2) {/*calculate temporary points*/\
+                                    xdist=vxpositions[j+(threadIdx.x&1)]-xpositions[(threadIdx.x>>1)];\
+                                    ydist=vypositions[j+(threadIdx.x&1)]-ypositions[(threadIdx.x>>1)];\
+                                    kernel(xvelocitytmp[threadIdx.x],yvelocitytmp[threadIdx.x],gammav[j+(threadIdx.x&1)],igammav[j+(threadIdx.x&1)]);\
+                                }\
+                                __syncthreads();\
+                                if(threadIdx.x<(blockDim.x>>1)) {/*sum*/\
+                                    xvelocity[threadIdx.x]+=xvelocitytmp[threadIdx.x<<1]+xvelocitytmp[(threadIdx.x<<1)+1];\
+                                    CANSWER5/*yvelocity[threadIdx.x]+=yvelocitytmp[threadIdx.x<<1]+yvelocitytmp[(threadIdx.x<<1)+1];*/\
+                                }\
+                                __syncthreads();\
+                                ilocal+=(blockDim.x>>1);\
+                            }\
+                            if(count-(i-threadIdx.x)-ilocal>=(blockDim.x>>2)){/*if remaining points are more than 1/4 of the number of threads*/\
+                                xvelocitytmp[threadIdx.x]=0;\
+                                CANSWER4/*yvelocitytmp[threadIdx.x]=0*/;\
+                                for(j=0;j+(threadIdx.x&3)<addstart;j+=4) {\
+                                    xdist=vxpositions[j+(threadIdx.x&3)]-xpositions[(threadIdx.x>>2)+ilocal];\
+                                    ydist=vypositions[j+(threadIdx.x&3)]-ypositions[(threadIdx.x>>2)+ilocal];\
+                                    kernel(xvelocitytmp[threadIdx.x],yvelocitytmp[threadIdx.x],gammav[j+(threadIdx.x&3)],igammav[j+(threadIdx.x&3)]);\
+                                }\
+                                __syncthreads();\
+                                if(threadIdx.x<(blockDim.x>>2)) {/*sum*/\
+                                    xvelocity[threadIdx.x+ilocal]+=xvelocitytmp[threadIdx.x<<2]+xvelocitytmp[(threadIdx.x<<2)+1]+xvelocitytmp[(threadIdx.x<<2)+2]+xvelocitytmp[(threadIdx.x<<2)+3];\
+                                    CANSWER6/*yvelocity[threadIdx.x+ilocal]+=yvelocitytmp[threadIdx.x<<2]+yvelocitytmp[(threadIdx.x<<2)+1]+yvelocitytmp[(threadIdx.x<<2)+2]+yvelocitytmp[(threadIdx.x<<2)+3];*/\
+                                }\
+                                __syncthreads();\
+                                ilocal+=(blockDim.x>>2);\
+                            }\
+                            if((threadIdx.x>>2)+ilocal+(i-threadIdx.x)<count) {/*take care of the remaining points. More additional steps could be performed, but for high ndirect, adding more steps seems to decrease performance slightly*/\
+                                xvelocitytmp[threadIdx.x]=0;\
+                                CANSWER4/*yvelocitytmp[threadIdx.x]=0*/;\
+                                for(j=0;j+(threadIdx.x&3)<addstart;j+=4) {\
+                                    xdist=vxpositions[j+(threadIdx.x&3)]-xpositions[(threadIdx.x>>2)+ilocal];\
+                                    ydist=vypositions[j+(threadIdx.x&3)]-ypositions[(threadIdx.x>>2)+ilocal];\
+                                    kernel(xvelocitytmp[threadIdx.x],yvelocitytmp[threadIdx.x],gammav[j+(threadIdx.x&3)],igammav[j+(threadIdx.x&3)]);\
+                                }\
+                            }\
+                            __syncthreads();\
+                            if(threadIdx.x+ilocal+(i-threadIdx.x)<count) {\
+                              xvelocity[threadIdx.x+ilocal]+=xvelocitytmp[threadIdx.x<<2]+xvelocitytmp[(threadIdx.x<<2)+1]+xvelocitytmp[(threadIdx.x<<2)+2]+xvelocitytmp[(threadIdx.x<<2)+3];\
+                              CANSWER6/*yvelocity[threadIdx.x+ilocal]+=yvelocitytmp[threadIdx.x<<2]+yvelocitytmp[(threadIdx.x<<2)+1]+yvelocitytmp[(threadIdx.x<<2)+2]+yvelocitytmp[(threadIdx.x<<2)+3];*/\
+                            }\
+                        }\
+                        addstart=0;\
+                        __syncthreads();\
+                        continue;\
+                    }\
+                    if(k+threadIdx.x<end) {/*If the list is not full, add the points and continue to next loop*/\
+                        TEXTUREFETCH(vxpositions[addstart+threadIdx.x],tzr,k+threadIdx.x);\
+                        TEXTUREFETCH(vypositions[addstart+threadIdx.x],tzi,k+threadIdx.x);\
+                        TEXTUREFETCH(gammav[addstart+threadIdx.x],tmr,k+threadIdx.x);\
+                        ISTRING2 /*Fix this one*/\
+                    }\
+                    if(k+blockDim.x<end)/*update addstart with the number of points added this loop*/\
+                      addstart+=blockDim.x;/*for sourcemultiplier==1, this is really unnecessary (but ifdefs cannot be used inside defines)*/\
+                    else\
+                      addstart+=end-k;\
+                }\
+            }\
+            if(i<count) {\
+                xvelocities[i]+=xvelocity[threadIdx.x];/*add the velocity*/\
+                CANSWER3\
+            }\
+        }\
+        __syncthreads();\
+    }
+    //for direct summation (tol==0) some simplifications can be made, since there are no mesh
+#define SYNCNRONIZEDKERNELDIRECTSUM(kernel,tevalr,tevali,evalcount,ISTRING1,ISTRING2,CANSWER1,CANSWER2,CANSWER3) int i,j,k;\
+    CUDAREAL sqrdist,xdist,ydist,xvelocity;\
+    CANSWER1\
+    __shared__ CUDAREAL vxpositions[DIRECTMAXTHREADS];\
+    __shared__ CUDAREAL vypositions[DIRECTMAXTHREADS];\
+    __shared__ CUDAREAL gammav[DIRECTMAXTHREADS];\
+    ISTRING1\
+    __shared__ CUDAREAL xpositions[DIRECTMAXTHREADS];/*makes code approx 1% slower for heavy load, but for some reason, doubles has to be fetched into an array*/\
+    __shared__ CUDAREAL ypositions[DIRECTMAXTHREADS];\
+    __shared__ int loopmax,vcount;\
+    if(threadIdx.x==0) {\
+        loopmax=evalcount+blockDim.x-(evalcount+blockDim.x-1)%blockDim.x-1;\
+        vcount=count%blockDim.x;\
+    }\
+    __syncthreads();\
+    for(i=threadIdx.x+blockIdx.x*blockDim.x;i<loopmax;i+=blockDim.x*gridDim.x) { /*if more points than threads*/\
+        if(i<evalcount) {\
+            xvelocity=0; /*use local variables as much as possible to help the optimizer understand that they are constant*/\
+            /*yvelocity=0;*/CANSWER2\
+            TEXTUREFETCH(xpositions[threadIdx.x],tevalr,i);\
+            TEXTUREFETCH(ypositions[threadIdx.x],tevali,i);\
+        }\
+        for(k=0;k+blockDim.x<=count;k+=blockDim.x) {\
+            TEXTUREFETCH(vxpositions[threadIdx.x],tzr,k+threadIdx.x);\
+            TEXTUREFETCH(vypositions[threadIdx.x],tzi,k+threadIdx.x);\
+            TEXTUREFETCH(gammav[threadIdx.x],tmr,k+threadIdx.x);\
+            ISTRING2\
+            __syncthreads();\
+            if(i<evalcount) {\
+                for(j=0;j<blockDim.x;j++) {\
+                    xdist=vxpositions[j]-xpositions[threadIdx.x];\
+                    ydist=vypositions[j]-ypositions[threadIdx.x];\
+                    kernel(xvelocity,yvelocity,circ,icirc);\
+                }\
+            }\
+            __syncthreads();\
+        }\
+        if(k+threadIdx.x<count) {\
+            TEXTUREFETCH(vxpositions[threadIdx.x],tzr,k+threadIdx.x);\
+            TEXTUREFETCH(vypositions[threadIdx.x],tzi,k+threadIdx.x);\
+            TEXTUREFETCH(gammav[threadIdx.x],tmr,k+threadIdx.x);\
+            ISTRING2\
+        }\
+        __syncthreads();\
+        if(i<evalcount) {\
+            for(j=0;j<vcount;j++) {\
+                xdist=vxpositions[j]-xpositions[threadIdx.x];\
+                ydist=vypositions[j]-ypositions[threadIdx.x];\
+                kernel(xvelocity,yvelocity,circ,icirc);\
+            }\
+            xvelocities[i]=xvelocity;\
+            CANSWER3\
+        }\
+        __syncthreads();\
+    }
+#define circ gammav[j]
+#define icirc igammav[j]
+
+//choose between the old and new SYNCRONIZEDKERNEL by changing the defines
+#ifdef SYNCKERNELOLD
+#define IKERNELSTR2 IKERNELSTRING2
+#define CANS1 COMPLEXANSWER1
+#define CANS2 COMPLEXANSWER2
+#define CANS3 COMPLEXANSWER3
+#define CANS4
+#define CANS5
+#define CANS6
+#define SYNCKERNEL SYNCNRONIZEDKERNEL
+
+#else
+#define IKERNELSTR2 IKERNELSTRING2_2
+#define CANS1 COMPLEXANSWER1_2
+#define CANS2 COMPLEXANSWER2_2
+#define CANS3 COMPLEXANSWER3_2
+#define CANS4 COMPLEXANSWER4_2
+#define CANS5 COMPLEXANSWER5_2
+#define CANS6 COMPLEXANSWER6_2
+#define SYNCKERNEL SYNCNRONIZEDKERNEL2
+#endif
+//create all the functions
+//there are one version that reads data from evaluation points, and one that reads from potential point.
+//TODO check if there actually is any speed improvement in this, or if it would work by rebining the texture instead
+__global__ void pot1_nomi_dirac_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(DIRACSYNCKERNEL,ter,tei,tjxptr,DUMMYKERNELSTRING,DUMMYKERNELSTRING,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot1_mi_dirac_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(IDIRACSYNCKERNEL,ter,tei,tjxptr,IKERNELSTRING1,IKERNELSTR2,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot1_nomi_rankine_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(RANKINESYNCKERNEL,ter,tei,tjxptr,DUMMYKERNELSTRING,DUMMYKERNELSTRING,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot1_mi_rankine_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(IRANKINESYNCKERNEL,ter,tei,tjxptr,IKERNELSTRING1,IKERNELSTR2,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot1_nomi_scully_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(SCULLYSYNCKERNEL,ter,tei,tjxptr,DUMMYKERNELSTRING,DUMMYKERNELSTRING,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot1_mi_scully_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(ISCULLYSYNCKERNEL,ter,tei,tjxptr,IKERNELSTRING1,IKERNELSTR2,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot1_nomi_oseen_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(OSEENSYNCKERNEL,ter,tei,tjxptr,DUMMYKERNELSTRING,DUMMYKERNELSTRING,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot1_mi_oseen_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(IOSEENSYNCKERNEL,ter,tei,tjxptr,IKERNELSTRING1,IKERNELSTR2,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+
+//log kernels
+__global__ void pot0_nomi_dirac_synchronized(CUDAREAL* xvelocities,int Nf DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(DIRACLOGSYNCKERNEL,ter,tei,tjxptr,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+}
+__global__ void pot0_mi_dirac_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(IDIRACLOGSYNCKERNEL,ter,tei,tjxptr,IKERNELSTRING1,IKERNELSTR2,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot0_nomi_rankine_synchronized(CUDAREAL* xvelocities,int Nf,CUDAREAL shape,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(RANKINELOGSYNCKERNEL,ter,tei,tjxptr,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+}
+__global__ void pot0_mi_rankine_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(IRANKINELOGSYNCKERNEL,ter,tei,tjxptr,IKERNELSTRING1,IKERNELSTR2,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot0_nomi_scully_synchronized(CUDAREAL* xvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(SCULLYLOGSYNCKERNEL,ter,tei,tjxptr,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+}
+__global__ void pot0_mi_scully_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(ISCULLYLOGSYNCKERNEL,ter,tei,tjxptr,IKERNELSTRING1,IKERNELSTR2,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+__global__ void pot0_nomi_oseen_synchronized(CUDAREAL* xvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(OSEENLOGSYNCKERNEL,ter,tei,tjxptr,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+}
+// __global__ void pot0_nomi_oseen_synchronized2(CUDAREAL* xvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+// {
+//     SYNCKERNEL(OSEENLOGSYNCKERNEL,tzr,tzi,tixptr,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+// }
+__global__ void pot0_mi_oseen_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+{
+    SYNCKERNEL(IOSEENLOGSYNCKERNEL,ter,tei,tjxptr,IKERNELSTRING1,IKERNELSTR2,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+}
+// __global__ void pot0_mi_oseen_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int Nf,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+// {
+//     SYNCKERNEL(IOSEENLOGSYNCKERNEL,tzr,tzi,tixptr,IKERNELSTRING1,IKERNELSTR2,CANS1,CANS2,CANS3,CANS4,CANS5,CANS6);
+// }
+
+//direct eval kernels
+__global__ void direct_pot1_nomi_dirac_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(DIRACSYNCKERNEL,ter,tei,evalcount,DUMMYKERNELSTRING,DUMMYKERNELSTRING,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot1_nomi_dirac_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(DIRACSYNCKERNEL,tzr,tzi,count,DUMMYKERNELSTRING,DUMMYKERNELSTRING,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot1_mi_dirac_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(IDIRACSYNCKERNEL,ter,tei,evalcount,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot1_mi_dirac_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(IDIRACSYNCKERNEL,tzr,tzi,count,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot1_nomi_rankine_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount,CUDAREAL shape)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(RANKINESYNCKERNEL,ter,tei,evalcount,DUMMYKERNELSTRING,DUMMYKERNELSTRING,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot1_nomi_rankine_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,CUDAREAL shape)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(RANKINESYNCKERNEL,tzr,tzi,count,DUMMYKERNELSTRING,DUMMYKERNELSTRING,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot1_mi_rankine_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount,CUDAREAL shape)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(IRANKINESYNCKERNEL,ter,tei,evalcount,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot1_mi_rankine_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,CUDAREAL shape)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(IRANKINESYNCKERNEL,tzr,tzi,count,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot1_nomi_scully_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(SCULLYSYNCKERNEL,ter,tei,evalcount,DUMMYKERNELSTRING,DUMMYKERNELSTRING,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot1_nomi_scully_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(SCULLYSYNCKERNEL,tzr,tzi,count,DUMMYKERNELSTRING,DUMMYKERNELSTRING,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot1_mi_scully_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(ISCULLYSYNCKERNEL,ter,tei,evalcount,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot1_mi_scully_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(ISCULLYSYNCKERNEL,tzr,tzi,count,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot1_nomi_oseen_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(OSEENSYNCKERNEL,ter,tei,evalcount,DUMMYKERNELSTRING,DUMMYKERNELSTRING,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot1_nomi_oseen_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(OSEENSYNCKERNEL,tzr,tzi,count,DUMMYKERNELSTRING,DUMMYKERNELSTRING,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot1_mi_oseen_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(IOSEENSYNCKERNEL,ter,tei,evalcount,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot1_mi_oseen_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(IOSEENSYNCKERNEL,tzr,tzi,count,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+
+//log kernels
+__global__ void direct_pot0_nomi_dirac_synchronized(CUDAREAL* xvelocities,int count,int evalcount)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(DIRACLOGSYNCKERNEL,ter,tei,evalcount,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+}
+// __global__ void direct_pot0_nomi_dirac_synchronized2(CUDAREAL* xvelocities,int count)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(DIRACLOGSYNCKERNEL,tzr,tzi,count,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+// }
+__global__ void direct_pot0_mi_dirac_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(IDIRACLOGSYNCKERNEL,ter,tei,evalcount,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot0_mi_dirac_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(IDIRACLOGSYNCKERNEL,tzr,tzi,count,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot0_nomi_rankine_synchronized(CUDAREAL* xvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(RANKINELOGSYNCKERNEL,ter,tei,evalcount,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+}
+// __global__ void direct_pot0_nomi_rankine_synchronized2(CUDAREAL* xvelocities,int count,CUDAREAL shape,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(RANKINELOGSYNCKERNEL,tzr,tzi,count,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+// }
+__global__ void direct_pot0_mi_rankine_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(IRANKINELOGSYNCKERNEL,ter,tei,evalcount,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot0_mi_rankine_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,CUDAREAL shape,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(IRANKINELOGSYNCKERNEL,tzr,tzi,count,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot0_nomi_scully_synchronized(CUDAREAL* xvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(SCULLYLOGSYNCKERNEL,ter,tei,evalcount,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+}
+// __global__ void direct_pot0_nomi_scully_synchronized2(CUDAREAL* xvelocities,int count,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(SCULLYLOGSYNCKERNEL,tzr,tzi,count,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+// }
+__global__ void direct_pot0_mi_scully_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(ISCULLYLOGSYNCKERNEL,ter,tei,evalcount,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot0_mi_scully_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(ISCULLYLOGSYNCKERNEL,tzr,tzi,count,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+__global__ void direct_pot0_nomi_oseen_synchronized(CUDAREAL* xvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(OSEENLOGSYNCKERNEL,ter,tei,evalcount,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+}
+// __global__ void direct_pot0_nomi_oseen_synchronized2(CUDAREAL* xvelocities,int count,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(OSEENLOGSYNCKERNEL,tzr,tzi,count,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING,DUMMYKERNELSTRING);
+// }
+__global__ void direct_pot0_mi_oseen_synchronized(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,int evalcount,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+{
+    SYNCNRONIZEDKERNELDIRECTSUM(IOSEENLOGSYNCKERNEL,ter,tei,evalcount,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+}
+// __global__ void direct_pot0_mi_oseen_synchronized2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int count,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr)
+// {
+//     SYNCNRONIZEDKERNELDIRECTSUM(IOSEENLOGSYNCKERNEL,tzr,tzi,count,IKERNELSTRING1DIRECT,IKERNELSTRING2,COMPLEXANSWER1,COMPLEXANSWER2,COMPLEXANSWER3DIRECT);
+// }
+#undef circ
+ 
+// #else //!CUDASYNCVERSION, DO NOT USE
+// 
+// //currently not being used
+// #define BASICKERNEL(kernel,tevalr,tevali) int i, j,m;\
+//     CUDAREAL sqrdist,xdist,ydist,xvelocity,yvelocity,xposition,yposition;\
+//     for(i=blockDim.x * blockIdx.x + threadIdx.x;i<NE;i+=blockDim.x*gridDim.x) {\
+//         xvelocity=0; /*use local variables as much as possible to help the optimizer understand that they are constant*/\
+//         yvelocity=0;\
+//         xposition=tex1Dfetch(tevalr,i); /*for small counts, it appears to be faster to fetch each step, but not for large counts*/\
+//         yposition=tex1Dfetch(tevali,i);\
+//         for(m=tex1Dfetch(tpointboxstart,i);m<boxinteractions&&tex1Dfetch(tevalbegin,tex1Dfetch(tpointboxstart,i))==tex1Dfetch(tevalbegin,m);m++) {\
+//             for(j=tex1Dfetch(tpotbegin,m);j<tex1Dfetch(tpotend,m);j++) {\
+//                 xdist=tex1Dfetch(tzr,j)-xposition;\
+//                 ydist=tex1Dfetch(tzi,j)-yposition;\
+//                 kernel\
+//             }\
+//         }\
+//         xvelocities[i]+=xvelocity;\
+//         yvelocities[i]+=yvelocity;\
+//     }
+// #define circ tex1Dfetch(tmr,j)
+// __global__ void pot1_nomi_dirac(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int NE,int boxinteractions DEBUGVECTORSTRING)
+// {
+//     BASICKERNEL(DIRACSYNCKERNEL,ter,tei);
+// }
+// __global__ void pot1_nomi_dirac2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int NE,int boxinteractions DEBUGVECTORSTRING)
+// {
+//     BASICKERNEL(DIRACSYNCKERNEL,tzr,tzi);
+// }
+// __global__ void pot1_nomi_rankine(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int NE,int boxinteractions,CUDAREAL shape DEBUGVECTORSTRING)
+// {
+//     BASICKERNEL(RANKINESYNCKERNEL,ter,tei);
+// }
+// __global__ void pot1_nomi_rankine2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int NE,int boxinteractions,CUDAREAL shape DEBUGVECTORSTRING)
+// {
+//     BASICKERNEL(RANKINESYNCKERNEL,tzr,tzi);
+// }
+// __global__ void pot1_nomi_scully(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int NE,int boxinteractions,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+// {
+//     BASICKERNEL(SCULLYSYNCKERNEL,ter,tei);
+// }
+// __global__ void pot1_nomi_scully2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int NE,int boxinteractions,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+// {
+//     BASICKERNEL(SCULLYSYNCKERNEL,tzr,tzi);
+// }
+// __global__ void pot1_nomi_oseen(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int NE,int boxinteractions,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+// {
+//     BASICKERNEL(OSEENSYNCKERNEL,ter,tei);
+// }
+// __global__ void pot1_nomi_oseen2(CUDAREAL* xvelocities,CUDAREAL* yvelocities,int NE,int boxinteractions,CUDAREAL shape,CUDAREAL scale,CUDAREAL cutoffsqr DEBUGVECTORSTRING)
+// {
+//     BASICKERNEL(OSEENSYNCKERNEL,tzr,tzi);
+// }
+// #undef circ
+#endif //CUDASYNCVERSION
+#define tevalr ter
+#define tevali tei
+#define DEBUGCHECKBOX 250
+
+//multipole evaluations on gpu
+#ifdef MULTIPOLEEVALCUDA
+__global__ void cuda_mpexp_eval(int p, double *xvelocities, double *yvelocities, int Nf,int fetchbase,int pot DEBUGVECTORSTRING)
+        /* Evaluation of near field at coordinates (zr,zi). */
+{
+    __shared__ dcmplx coeff[128]; //max 128 coefficients supported here
+    __shared__ int count,loopmax,m1,base,distbase; /*save space, same for all threads*/
+    __shared__ CUDAREAL xpositions[maxthreads];/*makes code approx 1% slower for heavy load, but for some reason, doubles has to be fetched into an array*/
+    __shared__ CUDAREAL ypositions[maxthreads];
+    __shared__ dcmplx z0,dz0;
+    CUDAREAL xvelocity,yvelocity;
+    CUDAREAL re,im,pre,pim,pre0;
+    int i,j,boxnr,m;
+    for(boxnr=blockIdx.x;boxnr<Nf;boxnr+=gridDim.x) { //if more boxes than number of blocks, loop the code
+        if(threadIdx.x==0) {
+            m1=tex1Dfetch(tmpboxstart, boxnr+1); //distant box interactions
+            count=tex1Dfetch(tjxptr,boxnr+1); /*right now, it is possible that two boxes has same evalbegin if one box has 0 elements*/
+            loopmax=count-(count+blockDim.x-1-(tex1Dfetch(tjxptr,boxnr)%blockDim.x))%blockDim.x-1+blockDim.x; //loop end, this is to make sure all threads run the same number of loops, since __syncthreads() has to be called by all threads at the same time
+            base=(boxnr+fetchbase)*(p+1)*sizeof(dcmplx)/sizeof(float); //to read coefficients and z0 positions, find the point in the array
+        }
+        
+        if(threadIdx.x<sizeof(dcmplx)/sizeof(float)) { //the box position
+           ((float*)&z0)[threadIdx.x] =tex1Dfetch(tz0,(boxnr+fetchbase)*sizeof(dcmplx)/sizeof(float)+threadIdx.x);
+        }
+        __syncthreads();
+        //start by performing the interaction within the box
+        if(p<127) { //should perhaps be corrected to handle more than this many coefficients
+            for(j=threadIdx.x;j<(p+1)*sizeof(dcmplx)/sizeof(float);j+=blockDim.x) { //read coefficients to shared memory
+                ((float*)coeff)[j] =tex1Dfetch(tcoeff2,base+j);
+            }
+            //__syncthreads(); /*should not be necessary*/
+            for(i=threadIdx.x+tex1Dfetch(tjxptr,boxnr);i<loopmax;i+=blockDim.x) { /*if more points than threads*/
+                if(i<count) { //get local positions
+                    TEXTUREFETCH(xpositions[threadIdx.x],tevalr,i);
+                    TEXTUREFETCH(ypositions[threadIdx.x],tevali,i);
+                }
+                __syncthreads();
+                if(i<count) { //if the thread has a point to evaluate
+                  //use same algorithm as CPU code to perform multipole evaluation in box
+                    re=xpositions[threadIdx.x]-creal(z0);
+                    im=ypositions[threadIdx.x]-cimag(z0);
+                    pre=creal(coeff[p]);
+                    pim=cimag(coeff[p]);
+
+                    for (j = p-1; j >= 0; j--) {
+                                pre0 = re*pre-im*pim+creal(coeff[j]);
+                        pim = re*pim+im*pre+cimag(coeff[j]);
+                        pre = pre0;
+                    }
+                    xvelocity=pre;
+                    yvelocity=pim;
+                      
+                }
+                
+                //now, continue and perform all interactions with other boxes according to the lists
+                for(m=tex1Dfetch(tmpboxstart, boxnr);m<m1;m++) {
+
+                    if(threadIdx.x==0){ //the base value for the corresponding box
+                         distbase=(tex1Dfetch(tmpdistbox,m)+fetchbase)*(p+1)*sizeof(dcmplx)/sizeof(float);
+                    }
+                    __syncthreads();
+                    for(j=threadIdx.x;j<(p+1)*sizeof(dcmplx)/sizeof(float);j+=blockDim.x) { //cache coefficients for corresponding box
+                        ((float*)coeff)[j] =tex1Dfetch(tcoeff1,distbase+j);
+                    }
+                    if(threadIdx.x<sizeof(dcmplx)/sizeof(float)) { //position of corresponding box
+                        ((float*)&dz0)[threadIdx.x] =tex1Dfetch(tz0, (tex1Dfetch(tmpdistbox,m)+fetchbase)*sizeof(dcmplx)/sizeof(float)+threadIdx.x);
+                    }
+                    __syncthreads();
+                    if(i<count) {//if the thread has a point to evaluate
+                      //use same algorithm as CPU code to perform multipole evaluation between boxes
+                        pre=xpositions[threadIdx.x]-creal(dz0);
+                        pim=ypositions[threadIdx.x]-cimag(dz0);
+                        pre0=pre*pre+pim*pim;
+                        re=pre/pre0;
+                        im=-pim/pre0;
+                        pre=creal(coeff[p]);
+                        pim=cimag(coeff[p]);
+                        for (j = p-1; j > 0; j--) {
+                            pre0 = re*pre-im*pim+creal(coeff[j]);
+                            pim = re*pim+im*pre+cimag(coeff[j]);
+                            pre = pre0;
+                        } {
+                            pre0 = re*pre-im*pim;
+                            pim = re*pim+im*pre;
+                            pre = pre0;
+                            if (pot == 0) {
+                               pre0=0.5*log(re*re+im*im);
+                               im=atan2(im,re);
+                               pre -= creal(coeff[0])*pre0-cimag(coeff[0])*im;
+                               pim -= creal(coeff[0])*im+cimag(coeff[0])*pre0;
+                            }
+                        }
+                        xvelocity+=pre;
+                        yvelocity+=pim;
+                        
+                    }
+                    __syncthreads();
+                    if(m+1==m1&&i+blockDim.x<loopmax) { //if final step, reload coefficient matrix with previous values if necessary
+                        for(j=threadIdx.x;j<(p+1)*sizeof(dcmplx)/sizeof(float);j+=blockDim.x) {
+                            ((float*)coeff)[j] =tex1Dfetch(tcoeff2, base+j);
+                        }
+//                         __syncthreads();
+                    }
+                }
+                __syncthreads();
+                if(i<count) { //write velocity to global memory
+                    xvelocities[i]+=xvelocity;
+                    if(yvelocities!=NULL)
+                        yvelocities[i]+=yvelocity;
+                }
+            }
+            __syncthreads();
+         }
+    }
+}
+#endif
+#undef tevalr
+#undef tevali
+
+
+// #define SMALLLARGEINIT 
+// #define TINY2INIT
+
+//many different attempts to configure the code for best performance. TINY3SMALLINIT worked best on my system, all should work
+#define TINY3SMALLINIT
+#ifdef MULTIPOLEINITCUDA
+#ifdef LARGEINIT
+#define initthreadperblock 64
+#define initnrcoeff 32
+#elif defined(SMALLLARGEINIT) 
+#define initthreadperblock 64
+#define initnrcoeff 16
+#elif defined(TINYLARGEINIT) 
+#define initthreadperblock 64
+#define initnrcoeff 8
+#elif defined(MEDIUMINIT)
+#define initthreadperblock 32
+#define initnrcoeff 32
+#elif defined(SMALLINIT)
+#define initthreadperblock 32
+#define initnrcoeff 16
+#elif defined(TINY2SMALLINIT)
+#define initthreadperblock 32
+#define initnrcoeff 8
+#elif defined(TINY3SMALLINIT)
+#define initthreadperblock 32
+#define initnrcoeff 4
+#elif defined(TINYINIT)
+#define initthreadperblock 16
+#define initnrcoeff 16
+#elif defined(TINY2INIT)
+#define initthreadperblock 16
+#define initnrcoeff 8
+#elif defined(TINY3INIT)
+#define initthreadperblock 16
+#define initnrcoeff 4
+#endif
+#if defined(MEDIUMINIT) || defined(TINYINIT) //Depending on the size of coeffmatrix compared to the number of threads, different summation is used
+#define INITUPDATECOEFF for(k=0;k<innercount2;k++) {\
+    if(isfinite(creal(coeffmatrix[k*initnrcoeff+threadIdx.x]))&&isfinite(cimag(coeffmatrix[k*initnrcoeff+threadIdx.x]))) {\
+        coeff[2*j+2*threadIdx.x]-=creal(coeffmatrix[k*initnrcoeff+threadIdx.x]);\
+        coeff[2*j+2*threadIdx.x+1]-=cimag(coeffmatrix[k*initnrcoeff+threadIdx.x]);\
+    }\
+}
+#define INITUPDATECOEFFWITHCHECK if(threadIdx.x<innercount+1) {\
+    INITUPDATECOEFF\
+}
+
+#elif defined(LARGEINIT) || defined(TINY2INIT) || defined(SMALLINIT)
+#define INITUPDATECOEFF for(k=0;k<innercount2;k++) {\
+    if(isfinite(((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x]))\
+         coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x];\
+}
+#define INITUPDATECOEFFWITHCHECK if(threadIdx.x<innercount*2+2) {\
+    INITUPDATECOEFF\
+}
+
+#elif defined(SMALLLARGEINIT) || defined(TINY2SMALLINIT) || defined(TINY3INIT)
+#define INITUPDATECOEFF for(k=(threadIdx.x&1)+2;k<innercount2;k+=2) { /*make an intermediate step to keep better load balance between the threads, 4 points in coeff matrix for each thread otherwise*/\
+    ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[src];\
+}\
+__syncthreads();\
+if(threadIdx.x<(blockDim.x>>1)) { /*now only 2 points to add for each thread*/\
+    if(1<innercount2)\
+        ((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x];\
+    if(isfinite(((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]))\
+        coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];\
+}
+
+#define INITUPDATECOEFFWITHCHECK if(threadIdx.x<innercount*4+4) { /*make an intermediate step to keep better load balance between the threads, 4 points in coeff matrix for each thread otherwise*/\
+    for(k=(threadIdx.x&1)+2;k<innercount2;k+=2) {\
+        ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[src];\
+    }\
+}\
+__syncthreads();\
+if(threadIdx.x<innercount*2+2) {  /*now only 2 points to add for each thread*/\
+    if(1<innercount2)\
+        ((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x];\
+    if(isfinite(((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]))\
+        coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];\
+}
+
+#else
+#define INITUPDATECOEFF for(k=(threadIdx.x&3)+4;k<innercount2;k+=4) {/*make an intermediate step to keep better load balance between the threads, 8 points in coeff matrix for each thread otherwise*/\
+    ((CUDAREAL*)coeffmatrix)[dest2]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x>>2];\
+}\
+__syncthreads();\
+if(threadIdx.x<(blockDim.x>>1)) { /*a second intermediate step*/\
+    if((threadIdx.x&1)+2<innercount2)\
+        ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[((threadIdx.x&1)+2)*initnrcoeff])[threadIdx.x>>1];\
+}\
+__syncthreads();\
+if(threadIdx.x<(blockDim.x>>2)) { /*write results*/\
+    if(1<innercount2)\
+        ((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x];\
+    if(isfinite(((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]))\
+        coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];\
+}
+
+#define INITUPDATECOEFFWITHCHECK if(threadIdx.x<innercount*8+8) { /*make an intermediate step to keep better load balance between the threads, 8 points in coeff matrix for each thread otherwise*/\
+    for(k=(threadIdx.x&3)+4;k<innercount2;k+=4) {\
+            ((CUDAREAL*)coeffmatrix)[dest2]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x>>2];\
+    }\
+}\
+__syncthreads();\
+if(threadIdx.x<innercount*4+4) {  /*a second intermediate step*/\
+    if((threadIdx.x&1)+2<innercount2)\
+        ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[((threadIdx.x&1)+2)*initnrcoeff])[threadIdx.x>>1];\
+}\
+__syncthreads();\
+if(threadIdx.x<innercount*2+2) { /*write results*/\
+    if(1<innercount2)\
+        ((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x];\
+    if(isfinite(((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]))\
+        coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];\
+}
+#endif
+
+
+//Initiates the coefficients at the lowers level from the potential points. 
+//Different threads take different points and write results to a temporary array, 
+//which is later summed to the coefficient matrix. This is necessary, since all points
+//has to write their coefficients to the same array
+__global__ void cuda_mpexp_init(int p, CUDAREAL *coeff1, CUDAREAL *coeff2, int Nf,int fetchbase,int complexpoint,int pot DEBUGVECTORSTRING)
+{
+    __shared__ dcmplx coeffmatrix[initthreadperblock*initnrcoeff];
+    __shared__ CUDAREAL coeff[256];
+    __shared__ int count,loopmax,m,m1,base,innercount,innercount2; /*save space, same for all threads*/
+    __shared__ CUDAREAL xpositions[initthreadperblock];/*makes code approx 1% slower for heavy load, but for some reason, doubles has to be fetched into an array*/
+    __shared__ CUDAREAL ypositions[initthreadperblock];//Not really shared, but for TEXTUREFETCH to work
+    __shared__ CUDAREAL zre[initthreadperblock],zim[initthreadperblock];
+    __shared__ dcmplx z0,dz0;
+    int boxnr;
+    #if defined(SMALLLARGEINIT) || defined(TINY2SMALLINIT) || defined(TINY3INIT)
+    int dest,src;
+    #endif
+    #if defined(TINYLARGEINIT) || defined(TINY3SMALLINIT)
+    int dest,dest2;
+    #endif
+    CUDAREAL re,im,zre0;
+    int i,j,k;
+    for(boxnr=blockIdx.x;boxnr<Nf;boxnr+=gridDim.x) { //The loop over the boxes
+        if(threadIdx.x==0) {
+            m=tex1Dfetch(tmpboxstart, boxnr); //Remote interactions
+            m1=tex1Dfetch(tmpboxstart, boxnr+1);
+            count=tex1Dfetch(tixptr, boxnr+1); /*right now, it is possible that two boxes has same evalbegin if one box has 0 elements*/
+            loopmax=count-(count+blockDim.x-1-(tex1Dfetch(tixptr,boxnr)%blockDim.x))%blockDim.x-1+blockDim.x;//All threads need to loop the same number of times due to __syncthreads()
+            base=(boxnr+fetchbase)*(p+1)*sizeof(dcmplx)/sizeof(CUDAREAL);
+        }
+        
+        if(threadIdx.x<sizeof(dcmplx)/sizeof(float)) { //get the box position
+           ((float*)&z0)[threadIdx.x] =tex1Dfetch(tz0,(boxnr+fetchbase)*sizeof(dcmplx)/sizeof(float)+threadIdx.x);
+        }
+        __syncthreads();
+        if(p<127) { //start by initiating the coefficients in the current box
+            for(j=threadIdx.x;j<(p+1)*2;j+=blockDim.x) {
+                ((CUDAREAL*)coeff)[j] =0;      
+            }
+            //depending on the radio between threads and nr of coefficients in each iteration, it has to be configured differently
+            #if defined(SMALLLARGEINIT) || defined(TINY2SMALLINIT) || defined(TINY3INIT) || defined(TINY3SMALLINIT) ||defined(TINYLARGEINIT)
+            dest=sizeof(dcmplx)/sizeof(CUDAREAL)*((threadIdx.x&1)*initnrcoeff)+(threadIdx.x>>1); //save this value, since it is used frequently
+            #endif
+            #if defined(SMALLLARGEINIT) || defined(TINY2SMALLINIT) || defined(TINY3INIT)
+            src=threadIdx.x>>1;
+            #endif
+            #if defined(TINYLARGEINIT) || defined(TINY3SMALLINIT)
+            dest2=sizeof(dcmplx)/sizeof(CUDAREAL)*((threadIdx.x&3)*initnrcoeff)+(threadIdx.x>>2); //save this value, since it is used frequently
+            #endif
+//             //__syncthreads(); /*should not be necessary*/
+            for(i=threadIdx.x+tex1Dfetch(tixptr,boxnr);i<loopmax;i+=blockDim.x) { /*if more points than threads*/
+                if(i<count) { //if point belongs to box, read the input for this point and save in local memory
+                    TEXTUREFETCH(xpositions[threadIdx.x],tzr,i);
+                    TEXTUREFETCH(ypositions[threadIdx.x],tzi,i);
+                    TEXTUREFETCH(zre[threadIdx.x],tmr,i);
+                    re = xpositions[threadIdx.x]-creal(z0);
+                    im = ypositions[threadIdx.x]-cimag(z0);
+                    if(complexpoint) {
+                        TEXTUREFETCH(zim[threadIdx.x],tmi,i);
+                    }
+                    else {
+                        zim[threadIdx.x] = 0;
+                    }
+                }
+                for(j=pot;j<=p-initnrcoeff;j+=initnrcoeff) { //due to limited memory, do this in loops
+                    //first, make one pass calculating the coffient values and store them in a large matrix, then sum the matrix. This is because all points contribute to the same coefficien values
+                    if(i<count) {
+                        if(pot==0) { //special case for pot==0
+                          //The same algorithm as for the CPU case, but temporary save the results in coeffmatrix instead
+                            if(j==0) {
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff], zre[threadIdx.x], zim[threadIdx.x]);
+                                zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                zre[threadIdx.x] = zre0;
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+1], -zre[threadIdx.x], -zim[threadIdx.x]);
+                                zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                zre[threadIdx.x] = zre0;
+                                for(k=2;k<initnrcoeff;k++) {
+                                    COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], -zre[threadIdx.x]/(j+k), -zim[threadIdx.x]/(j+k));
+                                    zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                    zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                    zre[threadIdx.x] = zre0;
+                                }
+                            }
+                            else {
+                                for(k=0;k<initnrcoeff;k++) {
+                                    COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], -zre[threadIdx.x]/(j+k), -zim[threadIdx.x]/(j+k));
+                                    zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                    zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                    zre[threadIdx.x] = zre0;
+                                }
+                            }
+                        }
+                        else { //pot==1
+                            
+                            //pass 1, calculate coeff matrix
+                            for(k=0;k<initnrcoeff;k++) {
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], zre[threadIdx.x], zim[threadIdx.x]);
+                                zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                zre[threadIdx.x] = zre0;
+                            }
+                        }
+                    }
+                    if(threadIdx.x==0)
+                        innercount2=imin(count-i,blockDim.x);
+                    __syncthreads();
+                    
+
+                    //make the summation by letting different threads take different points in the coeff array instead
+//                     #if defined(MEDIUMINIT) || defined(TINYINIT) //Depending on the size of coeffmatrix compared to the number of threads, different summation is used
+//                     for(k=0;k<innercount2;k++) {
+//                         coeff[2*j+2*threadIdx.x]-=creal(coeffmatrix[k*initnrcoeff+threadIdx.x]);
+//                         coeff[2*j+2*threadIdx.x+1]-=cimag(coeffmatrix[k*initnrcoeff+threadIdx.x]);
+//                     }
+//                     #elif defined(LARGEINIT) || defined(TINY2INIT) || defined(SMALLINIT)
+//                     for(k=0;k<innercount2;k++) {
+//                         coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x];
+//                     }
+//                     #elif defined(SMALLLARGEINIT) || defined(TINY2SMALLINIT) || defined(TINY3INIT)
+//                     for(k=(threadIdx.x&1)+2;k<innercount2;k+=2) { //make an intermediate step to keep better load balance between the threads, 4 points in coeff matrix for each thread otherwise
+//                         ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[src];
+//                     }
+//                     __syncthreads();
+//                     if(threadIdx.x<(blockDim.x>>1)) { //now only 2 points to add for each thread
+//                         if(1<innercount2)
+//                             coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x]+((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                         else
+//                             coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                     }
+//                         
+//                     #else
+//                     for(k=(threadIdx.x&3)+4;k<innercount2;k+=4) {//make an intermediate step to keep better load balance between the threads, 8 points in coeff matrix for each thread otherwise
+//                         ((CUDAREAL*)coeffmatrix)[dest2]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x>>2];
+//                     }
+//                     __syncthreads();
+//                     if(threadIdx.x<(blockDim.x>>1)) { //a second intermediate step
+//                         if((threadIdx.x&1)+2<innercount2)
+//                             ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[((threadIdx.x&1)+2)*initnrcoeff])[threadIdx.x>>1];
+//                     }
+//                     __syncthreads();
+//                     if(threadIdx.x<(blockDim.x>>2)) { //write results
+//                         if(1<innercount2)
+//                             coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x]+((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                         else
+//                             coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                     }
+//                     #endif
+                    INITUPDATECOEFF
+                    __syncthreads();
+                }
+                if(threadIdx.x==0) {
+                    innercount=p-j;
+                }
+                
+                //one additional pass for the rest of the values. Almost same as above, but the matrix will not be full
+                //This is for performance issues that the full loops are handled separately. This is basically the same
+                //code as above, but with additional if-statements
+                __syncthreads();
+                if(i<count) {
+                    if(pot==0) {
+                      //The same algorithm as for the CPU case, but temporary save the results in coeffmatrix instead
+                        if(j==0) {
+                            COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff], zre[threadIdx.x], zim[threadIdx.x]);
+                            zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                            zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                            zre[threadIdx.x] = zre0;
+                            if(innercount>=1) {
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+1], -zre[threadIdx.x], -zim[threadIdx.x]);
+                                zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                zre[threadIdx.x] = zre0;
+                            }
+                            for(k=2;k<innercount;k++) {
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], -zre[threadIdx.x]/(j+k), -zim[threadIdx.x]/(j+k));
+                                zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                zre[threadIdx.x] = zre0;
+                            }
+                            if(innercount>=2)
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], -zre[threadIdx.x]/(j+k), -zim[threadIdx.x]/(j+k));
+                        }
+                        else {
+                            for(k=0;k<innercount;k++) {
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], -zre[threadIdx.x]/(j+k), -zim[threadIdx.x]/(j+k));
+                                zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                zre[threadIdx.x] = zre0;
+                            }
+                            COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], -zre[threadIdx.x]/(j+k), -zim[threadIdx.x]/(j+k));
+                        }
+                    }
+                    else {
+//                     pass 1, calculate coeff matrix
+                        for(k=0;k<innercount;k++) {
+                            COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], zre[threadIdx.x], zim[threadIdx.x]);
+                            zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                            zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                            zre[threadIdx.x] = zre0;
+                        }
+                        COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], zre[threadIdx.x], zim[threadIdx.x]);
+                    }
+                }
+                if(threadIdx.x==0)
+                    innercount2=imin(count-i,blockDim.x);
+                __syncthreads();
+                //make the summation by letting different threads take different points in the coeff array instead
+//                 #if defined(MEDIUMINIT) || defined(TINYINIT) //Depending on the size of coeffmatrix compared to the number of threads, different summation is used
+//                 if(threadIdx.x<innercount+1) {
+//                     for(k=0;k<innercount2;k++) {
+//                         if(isfinite(creal(coeffmatrix[k*initnrcoeff+threadIdx.x]))&&isfinite(cimag(coeffmatrix[k*initnrcoeff+threadIdx.x]))) {
+//                             coeff[2*j+2*threadIdx.x]-=creal(coeffmatrix[k*initnrcoeff+threadIdx.x]);
+//                             coeff[2*j+2*threadIdx.x+1]-=cimag(coeffmatrix[k*initnrcoeff+threadIdx.x]);
+//                         }
+//                     }
+//                 }
+//                 #elif defined(LARGEINIT) || defined(TINY2INIT) || defined(SMALLINIT)
+//                 if(threadIdx.x<innercount*2+2) {
+//                     for(k=0;k<innercount2;k++) {
+//                         if(isfinite(((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x]))
+//                             coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x];
+//                     }
+//                 }
+//                 #elif defined(SMALLLARGEINIT) || defined(TINY2SMALLINIT) || defined(TINY3INIT)
+//                 if(threadIdx.x<innercount*4+4) { //make an intermediate step to keep better load balance between the threads, 4 points in coeff matrix for each thread otherwise
+//                     for(k=(threadIdx.x&1)+2;k<innercount2;k+=2) {
+//                         ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[src];
+//                     }
+//                 }
+//                 __syncthreads();
+//                 if(threadIdx.x<innercount*2+2) {  //now only 2 points to add for each thread
+//                     if(1<innercount2)
+// //                         ((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x];
+// //                     if(isfinite(((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]))
+//                         coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x]+((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                     else
+//                         coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                 }
+//                 #else
+//                 if(threadIdx.x<innercount*8+8) { //make an intermediate step to keep better load balance between the threads, 8 points in coeff matrix for each thread otherwise
+//                     for(k=(threadIdx.x&3)+4;k<innercount2;k+=4) {
+//                         ((CUDAREAL*)coeffmatrix)[dest2]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x>>2];
+//                     }
+//                 }
+//                 __syncthreads();
+//                 if(threadIdx.x<innercount*4+4) {  //a second intermediate step
+//                     if((threadIdx.x&1)+2<innercount2)
+//                         ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[((threadIdx.x&1)+2)*initnrcoeff])[threadIdx.x>>1];
+//                 }
+//                 __syncthreads();
+//                 if(threadIdx.x<innercount*2+2) { //write results
+//                     if(1<innercount2)
+// //                         ((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x];
+//                         coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x]+((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                     else
+// //                     if(isfinite(((CUDAREAL*)&coeffmatrix[0])[threadIdx.x]))
+//                         coeff[2*j+threadIdx.x]-=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                 }
+//                 #endif
+                INITUPDATECOEFFWITHCHECK
+                __syncthreads();
+            }
+//             for(k=threadIdx.x;k<(p+1)*sizeof(dcmplx)/sizeof(float);k+=blockDim.x) { /*usually works, but in some instances fails, no idea why, but I have seen instances where only the first loop has added values even though it has passed all iterations with correct coeff*/
+//                 ((float*)&coeff1[base])[k]=((float*)&coeff)[k];
+//             }
+            for(k=threadIdx.x;k<(p+1)*sizeof(dcmplx)/sizeof(CUDAREAL);k+=blockDim.x) {
+                coeff1[base+k]=coeff[k]; 
+            }
+            __syncthreads();
+            for(j=threadIdx.x;j<(p+1)*2;j+=blockDim.x) {
+                ((CUDAREAL*)coeff)[j] =0;      
+            }
+            
+            //Now, take care of the distant interactions in the same way. Works according to the same principle as above, but with a different formula for the coefficients
+            for(;m<m1;) {
+                if(threadIdx.x==0) { //update the loop parameters for the new box
+                    count=tex1Dfetch(tixptr, tex1Dfetch(tmpdistbox,m)+1); /*right now, it is possible that two boxes has same evalbegin if one box has 0 elements*/
+                    loopmax=count-(count+blockDim.x-1-(tex1Dfetch(tixptr, tex1Dfetch(tmpdistbox,m))%blockDim.x))%blockDim.x-1+blockDim.x;
+                }
+                __syncthreads();
+                
+                for(i=threadIdx.x+tex1Dfetch(tixptr, tex1Dfetch(tmpdistbox,m));i<loopmax;i+=blockDim.x) { /*if more points than threads*/
+                    
+                    if(i<count) { //if point belongs to the box, read input, check CPU version for how the algorithm works, it is the same, but the temporary coeffmatrix is used here as well
+                        TEXTUREFETCH(xpositions[threadIdx.x], tzr, i);
+                        TEXTUREFETCH(ypositions[threadIdx.x], tzi, i);
+
+                        re = xpositions[threadIdx.x]-creal(z0);
+                        im = ypositions[threadIdx.x]-cimag(z0);
+                        zim[threadIdx.x] = 0;
+                        zre[threadIdx.x]=xpositions[threadIdx.x]-creal(z0);
+                        zim[threadIdx.x]=ypositions[threadIdx.x]-cimag(z0);
+                        zre0=zre[threadIdx.x]*zre[threadIdx.x]+zim[threadIdx.x]*zim[threadIdx.x];
+                        if(zre0==0.0) {
+                          if(zre[threadIdx.x]!=0.0) {
+                            re=1/(zre[threadIdx.x]+(zim[threadIdx.x]/zre[threadIdx.x])*zim[threadIdx.x]);
+                            im=-(re/zre[threadIdx.x])*zim[threadIdx.x];
+                          }
+                          else {
+                            re=0;
+                            im=-1/zim[threadIdx.x];
+                          }
+                        }
+                        else {
+                          re=zre[threadIdx.x]/zre0;
+                          im=-zim[threadIdx.x]/zre0;
+                        }
+                        if(complexpoint) {
+                            TEXTUREFETCH(zre[threadIdx.x], tmr, i);
+                            TEXTUREFETCH(zim[threadIdx.x], tmi, i);
+                            if(pot==0) {
+                                zre0=0.5*log(re*re+im*im);
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff], zre[threadIdx.x]*zre0, zim[threadIdx.x]*zre0);
+                                zre0=atan2(-im, -re);
+                                COMPLEXADD(coeffmatrix[threadIdx.x*initnrcoeff], -zim[threadIdx.x]*zre0, zre[threadIdx.x]*zre0);
+                            }
+                            zre0=zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                            zim[threadIdx.x]=zre[threadIdx.x]*im+zim[threadIdx.x]*re;
+                            zre[threadIdx.x]=zre0;
+                        }
+                        else {
+                            TEXTUREFETCH(zre[threadIdx.x], tmr, i);
+                            if(pot==0) {
+                                zre0=0.5*log(re*re+im*im);
+                                zim[threadIdx.x]=atan2(-im, -re);
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff], zre[threadIdx.x]*zre0, zim[threadIdx.x]*zre[threadIdx.x]);
+                            }
+                            zim[threadIdx.x]=zre[threadIdx.x]*im;
+                            zre[threadIdx.x]*=re;
+                        }
+                        
+                    }
+                    
+                    for(j=0;j<=p-initnrcoeff;j+=initnrcoeff) { //take initnrcoeff coefficients each loop. High values gives less idle threads, but used more memory (which slows down the code)
+                        if(i<count) {
+                          //same algorithm as for CPU
+                            if(pot==0) {
+                                for(k=(j==0);k<initnrcoeff;k++) {
+                                    COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], zre[threadIdx.x]/(k+j), zim[threadIdx.x]/(k+j));
+                                    zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                    zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                    zre[threadIdx.x] = zre0;
+                                }
+                            }
+                            else {
+                                
+                                //pass 1, calculate coeff matrix
+                                for(k=0;k<initnrcoeff;k++) {
+                                    COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], zre[threadIdx.x], zim[threadIdx.x]);
+                                    zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                    zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                    zre[threadIdx.x] = zre0;
+                                    
+                                }
+                            }
+                        }
+                        if(threadIdx.x==0) {
+                            innercount2=imin(count-i, blockDim.x); //the loopmax for the second step, contains number of points summed over
+                        }
+                        __syncthreads();
+                        
+                        //The same summation as for the local coefficients
+//                         #if defined(MEDIUMINIT) || defined(TINYINIT)
+//                         for(k=0;k<innercount2;k++) { //since several boxes can contribute to the same value, += has to be used
+//                             coeff[2*j+2*threadIdx.x]+=creal(coeffmatrix[k*initnrcoeff+threadIdx.x]);
+//                             coeff[2*j+2*threadIdx.x+1]+=cimag(coeffmatrix[k*initnrcoeff+threadIdx.x]);
+//                         }
+//                         #elif defined(LARGEINIT) || defined(TINY2INIT) || defined(SMALLINIT)
+//                         for(k=0;k<innercount2;k++) { //since several boxes can contribute to the same value, += has to be used
+//                             coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x];
+//                         }
+//                         #elif defined(SMALLLARGEINIT) || defined(TINY2SMALLINIT) || defined(TINY3INIT)
+//                         for(k=(threadIdx.x&1)+2;k<innercount2;k+=2) {
+//                             ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[src];
+//                         }
+//                         __syncthreads();
+//                         if(threadIdx.x<(blockDim.x>>1)) { //since several boxes can contribute to the same value, += has to be used
+//                             if(1<innercount2)
+//                                 coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x]+((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                             else
+//                                 coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                         }
+//                         #else
+// //             dest=sizeof(dcmplx)/sizeof(CUDAREAL)*((threadIdx.x&1)*initnrcoeff)+(threadIdx.x>>1); //the values for dest and dest2, set elsewhere, but kept here for code readability
+// //             dest2=sizeof(dcmplx)/sizeof(CUDAREAL)*((threadIdx.x&3)*initnrcoeff)+(threadIdx.x>>2);
+//                         for(k=(threadIdx.x&3)+4;k<innercount2;k+=4) {
+//                             ((CUDAREAL*)coeffmatrix)[dest2]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x>>2];
+//                         }
+//                         __syncthreads();
+//                         if(threadIdx.x<(blockDim.x>>1)) {
+//                             if(((threadIdx.x&1)+2)<innercount2)
+//                                 ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[((threadIdx.x&1)+2)*initnrcoeff])[threadIdx.x>>1];
+//                         }
+//                         __syncthreads();
+//                         
+//                         if(threadIdx.x<(blockDim.x>>2)) { //since several boxes can contribute to the same value, += has to be used
+//                             if(1<innercount2)
+//                                 coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x]+((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                             else
+//                                 coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                         }
+//                         #endif
+                        INITUPDATECOEFF
+                        __syncthreads();
+                    }
+                    if(threadIdx.x==0) {
+                        innercount=p-j;
+                    }
+                    
+                    //same as before, but without a full matrix. See above for comments on the algorithm
+                    __syncthreads();
+                    if(i<count) {
+                        if(pot==0) {
+//                     pass 1, calculate coeff matrix
+                            for(k=(j==0);k<innercount;k++) {
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], zre[threadIdx.x]/(k+j), zim[threadIdx.x]/(k+j));
+                                zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                zre[threadIdx.x] = zre0;
+                                
+                            }
+                            COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], zre[threadIdx.x]/(k+j), zim[threadIdx.x]/(k+j));
+                        }
+                        else {
+                            for(k=0;k<innercount;k++) {
+                                COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], zre[threadIdx.x], zim[threadIdx.x]);
+                                zre0 = zre[threadIdx.x]*re-zim[threadIdx.x]*im;
+                                zim[threadIdx.x] = zim[threadIdx.x]*re+zre[threadIdx.x]*im;
+                                zre[threadIdx.x] = zre0;
+                                
+                            }
+                            COMPLEXASSIGN(coeffmatrix[threadIdx.x*initnrcoeff+k], zre[threadIdx.x], zim[threadIdx.x]);
+                        }
+                    }
+                    if(threadIdx.x==0)
+                        innercount2=imin(count-i, blockDim.x);
+                    __syncthreads();
+                    //The same summation as for the local coefficients
+//                     #if defined(MEDIUMINIT) || defined(TINYINIT)
+//                     if(threadIdx.x<innercount+1) {
+//                         for(k=0;k<innercount2;k++) {
+//                             coeff[2*j+2*threadIdx.x]+=creal(coeffmatrix[k*initnrcoeff+threadIdx.x]);
+//                             coeff[2*j+2*threadIdx.x+1]+=cimag(coeffmatrix[k*initnrcoeff+threadIdx.x]);
+//                         }
+//                     }
+//                     #elif defined(LARGEINIT) || defined(TINY2INIT) || defined(SMALLINIT)
+//                     if(threadIdx.x<innercount*2+2) {
+//                         for(k=0;k<innercount2;k++) {
+//                             coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x];
+//                         }
+//                     }
+//                     #elif defined(SMALLLARGEINIT) || defined(TINY2SMALLINIT) || defined(TINY3INIT)
+//                     if(threadIdx.x<innercount*4+4) {
+//                         for(k=(threadIdx.x&1)+2;k<innercount2;k+=2) {
+//                             ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x>>1];
+//                         }
+//                     }
+//                     __syncthreads();
+//                     if(threadIdx.x<innercount*2+2) {
+//                         if(1<innercount2)
+//                             coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x]+((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                         else
+//                             coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                     }
+//                     #else
+//                     if(threadIdx.x<innercount*8+8) {
+//                         for(k=(threadIdx.x&3)+4;k<innercount2;k+=4) {
+//                             ((CUDAREAL*)coeffmatrix)[dest2]+=((CUDAREAL*)&coeffmatrix[k*initnrcoeff])[threadIdx.x>>2];
+//                         }
+//                     }
+//                     __syncthreads();
+//                     if(threadIdx.x<innercount*4+4) {
+//                         if(((threadIdx.x&1)+2)<innercount2)
+//                             ((CUDAREAL*)coeffmatrix)[dest]+=((CUDAREAL*)&coeffmatrix[((threadIdx.x&1)+2)*initnrcoeff])[threadIdx.x>>1];
+//                     }
+//                     __syncthreads();
+//                     if(threadIdx.x<innercount*2+2) {
+//                         if(1<innercount2)
+//                             coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[initnrcoeff])[threadIdx.x]+((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                         else
+//                             coeff[2*j+threadIdx.x]+=((CUDAREAL*)&coeffmatrix[0])[threadIdx.x];
+//                     }
+//                     #endif
+                    INITUPDATECOEFFWITHCHECK
+                    __syncthreads();
+                }
+                if(threadIdx.x==0)
+                    m++;
+                __syncthreads();
+            }
+//             for(k=threadIdx.x;k<(p+1)*sizeof(dcmplx)/sizeof(float);k+=blockDim.x) {
+//                 ((float*)&coeff2[base])[k]=((float*)&coeff)[k];
+//                 
+//             }
+            for(k=threadIdx.x;k<(p+1)*sizeof(dcmplx)/sizeof(CUDAREAL);k+=blockDim.x) {
+                coeff2[base+k]=-coeff[k]; 
+            }
+            __syncthreads();
+        }
+    }
+}
+
+
+extern __shared__ dcmplx localcoeffs[];
+//performs m2m interaction using horner based scheme
+__global__ void shift_m2m_cuda_horner(int parentlevel,int parentstart,int pshift,
+	       dcmplx *This,const dcmplx *that,const dcmplx *z,int potshift  DEBUGVECTORSTRING)
+{
+//     dcmplx localcoeff[PMAX];
+    dcmplx *localcoeff;
+    dcmplx z0,tmp;
+    __shared__ dcmplx z0base[(SHIFT_M2M_MAXTHREADS+3)/4];
+    int i,j;
+    for(int boxnr=blockIdx.x*blockDim.x/4;boxnr<(1<<(parentlevel<<1));boxnr+=gridDim.x*blockDim.x/4) { //loop over all boxes. One block takes care of blockDim.x/4 boxes
+        localcoeff=(dcmplx*)&localcoeffs[threadIdx.x*(pshift+1)];
+        if(threadIdx.x<blockDim.x/4&&threadIdx.x<(1<<(parentlevel<<1))) { /*only works if sizeof(dcmplx)/sizeof(float)<=4, which is the case for both double and float*/
+           z0base[threadIdx.x]=z[boxnr+parentstart+threadIdx.x];
+        }
+        __syncthreads();
+        if(boxnr+(threadIdx.x>>2)<(1<<(parentlevel<<1))) { /*safety check. For standard parameters, this should only be an issue for parentlevel = 1 - 3, then, it should be a multiple of blockDim/4*/
+            z0=z[(boxnr<<2)+parentstart+(1<<(parentlevel<<1))+threadIdx.x];
+            //calculate distances
+            COMPLEXASSIGN(z0, creal(z0) - creal(z0base[threadIdx.x>>2]), cimag(z0) - cimag(z0base[threadIdx.x>>2])); //be careful with this use of COMPLEXASSIGN, remember that it is a macro
+            j=((boxnr<<2)+parentstart+(1<<(parentlevel<<1))+threadIdx.x)*(pshift+1);
+            for(i=0;i<pshift+1;i++) //read coefficient parameters
+                COMPLEXASSIGN(localcoeff[i], creal(that[j+i]), cimag(that[j+i]));
+            for(j=pshift;j>=2;j--) { //perform the Horner scheme
+                for(i=j;i<=pshift;i++) {
+                    COMPLEXADD(localcoeff[i], creal(z0)*creal(localcoeff[i-1])-cimag(z0)*cimag(localcoeff[i-1]), creal(z0)*cimag(localcoeff[i-1])+cimag(z0)*creal(localcoeff[i-1]));
+                }
+            }
+        }
+        if(potshift==0) {
+            tmp=z0;
+            COMPLEXSUB(localcoeff[1],(creal(localcoeff[0])*creal(tmp)-cimag(localcoeff[0])*cimag(tmp)),(creal(localcoeff[0])*cimag(tmp)+cimag(localcoeff[0])*creal(tmp)));
+            for(i=2;i<=pshift;i++) {
+               CUDAREAL dtmp=creal(z0)*cimag(tmp)+cimag(z0)*creal(tmp); //depending on the definition of COMPLEXASSIGN, a poorly designed macro will overwrite tmp at first step, and use new value in second stage (normally not the case, but this is to prevent future problems)
+               COMPLEXASSIGN(tmp,creal(tmp)*creal(z0)-cimag(tmp)*cimag(z0),dtmp);
+               COMPLEXSUB(localcoeff[i],(creal(localcoeff[0])*creal(tmp)-cimag(localcoeff[0])*cimag(tmp))*(1.0/i),(creal(localcoeff[0])*cimag(tmp)+cimag(localcoeff[0])*creal(tmp))*(1.0/i));
+            }
+        }
+        __syncthreads();
+        //calculate the sum of the for contributing boxes
+        if(boxnr+(threadIdx.x>>2)<(1<<(parentlevel<<1))) { /*safety check. For standard parameters, this should only be an issue for parentlevel=1 and 2, then, it should be a multiple of blockDim/4*/
+            //write results, here, each thread has its own box to write results to
+            localcoeff=(dcmplx*)&localcoeffs[(threadIdx.x&(~1))*(pshift+1)];
+            for(i=(threadIdx.x&1);i<=pshift;i+=2) {
+                COMPLEXADD(localcoeff[i],creal(localcoeff[i+pshift+1]),cimag(localcoeff[i+pshift+1]));
+            }
+        }
+        __syncthreads();
+        if(boxnr+(threadIdx.x>>2)<(1<<(parentlevel<<1))) { /*safety check. For standard parameters, this should only be an issue for parentlevel=1 and 2, then, it should be a multiple of blockDim/4*/
+            //write results, here, each thread has its own box to write results to
+            localcoeff=(dcmplx*)&localcoeffs[(threadIdx.x&(~3))*(pshift+1)];
+            j=(boxnr+(threadIdx.x>>2)+parentstart)*(pshift+1);
+            for(i=(threadIdx.x&3);i<=pshift;i+=4) {
+                COMPLEXADD(localcoeff[i],creal(localcoeff[i+2*(pshift+1)]),cimag(localcoeff[i+2*(pshift+1)]));
+                COMPLEXASSIGN(This[j+i], creal(localcoeff[i]), cimag(localcoeff[i]));
+            }
+        }
+    }
+}
+
+
+//performs m2m interaction using horner based scheme, with pre and post scaling
+__global__ void shift_m2m_cuda_horner_scaled(int parentlevel,int parentstart,int pshift,
+	       dcmplx *This,const dcmplx *that,const dcmplx *z,int potshift,CUDAREAL rminshift  DEBUGVECTORSTRING)
+{
+//     dcmplx localcoeff[PMAX];
+    dcmplx *localcoeff;
+    dcmplx z0,tmp,invr;
+    CUDAREAL rtmp,itmp;
+    __shared__ dcmplx z0base[(SHIFT_M2M_MAXTHREADS+3)/4];
+    int i,j;
+    for(int boxnr=blockIdx.x*blockDim.x/8;boxnr<(1<<(parentlevel<<1));boxnr+=gridDim.x*blockDim.x/8) { //loop over all boxes. One block takes care of blockDim.x/4 boxes
+        localcoeff=(dcmplx*)&localcoeffs[(threadIdx.x>>1)*(pshift+1)]; //two threads for each set of coefficients
+        if(threadIdx.x<blockDim.x/8&&threadIdx.x<(1<<(parentlevel<<1))) { /*only works if sizeof(dcmplx)/sizeof(float)<=4, which is the case for both double and float*/
+           z0base[threadIdx.x]=z[boxnr+parentstart+threadIdx.x];
+        }
+        __syncthreads();
+        if(boxnr+(threadIdx.x>>3)<(1<<(parentlevel<<1))) { /*safety check. For standard parameters, this should only be an issue for parentlevel = 1 - 3, then, it should be a multiple of blockDim/4*/
+            z0=z[(boxnr<<2)+parentstart+(1<<(parentlevel<<1))+threadIdx.x/2];
+            //calculate distances
+            COMPLEXASSIGN(z0, creal(z0) - creal(z0base[threadIdx.x>>3]), cimag(z0) - cimag(z0base[threadIdx.x>>3])); //be careful with this use of COMPLEXASSIGN, remember that it is a macro
+            j=((boxnr<<2)+parentstart+(1<<(parentlevel<<1))+threadIdx.x/2)*(pshift+1);
+            for(i=(threadIdx.x&1);i<pshift+1;i+=2) //read coefficient parameters
+                COMPLEXASSIGN(localcoeff[i], creal(that[j+i]), cimag(that[j+i]));
+            //safe calculation of 1/z0
+            if(fabs(creal(z0))>fabs(cimag(z0))) {
+               itmp=cimag(z0)*(1.0/creal(z0));
+               rtmp=creal(z0)+itmp*cimag(z0);
+               COMPLEXASSIGN(tmp,1.0/rtmp,-itmp*(1.0/rtmp));
+            }
+            else {
+               itmp=creal(z0)*(1.0/cimag(z0));
+               rtmp=cimag(z0)+itmp*creal(z0);
+               COMPLEXASSIGN(tmp,itmp*(1.0/rtmp),-1.0/rtmp);
+            }
+            COMPLEXASSIGN(invr,creal(tmp)*creal(tmp)-cimag(tmp)*cimag(tmp),creal(tmp)*cimag(tmp)*2);
+            if(fabs(creal(z0))<rminshift&&fabs(cimag(z0))<rminshift) { //if overflow is possible, run safe code, i.e. traditional horner shift
+                if(threadIdx.x&1) {
+                    for(j=pshift;j>=2;j--) { //perform the Horner scheme
+                        for(i=j;i<=pshift;i++) {
+                            COMPLEXADD(localcoeff[i], creal(z0)*creal(localcoeff[i-1])-cimag(z0)*cimag(localcoeff[i-1]), creal(z0)*cimag(localcoeff[i-1])+cimag(z0)*creal(localcoeff[i-1]));
+                        }
+                    }
+                    if(potshift==0) {
+                        tmp=z0;
+                        COMPLEXSUB(localcoeff[1],(creal(localcoeff[0])*creal(tmp)-cimag(localcoeff[0])*cimag(tmp)),(creal(localcoeff[0])*cimag(tmp)+cimag(localcoeff[0])*creal(tmp)));
+                        for(i=2;i<=pshift;i++) {
+                           CUDAREAL dtmp=creal(z0)*cimag(tmp)+cimag(z0)*creal(tmp); //depending on the definition of COMPLEXASSIGN, a poorly designed macro will overwrite tmp at first step, and use new value in second stage (normally not the case, but this is to prevent future problems)
+                           COMPLEXASSIGN(tmp,creal(tmp)*creal(z0)-cimag(tmp)*cimag(z0),dtmp);
+                           COMPLEXSUB(localcoeff[i],(creal(localcoeff[0])*creal(tmp)-cimag(localcoeff[0])*cimag(tmp))*(1.0/i),(creal(localcoeff[0])*cimag(tmp)+cimag(localcoeff[0])*creal(tmp))*(1.0/i));
+                        }
+                    }
+                }
+            }
+            else {
+                //perform scaling
+                if((threadIdx.x&1)==1) { //set up starting values for the two threads working on the same set of data
+                    itmp=creal(localcoeff[1])*cimag(tmp)+cimag(localcoeff[1])*creal(tmp);
+                    COMPLEXASSIGN(localcoeff[1], creal(localcoeff[1])*creal(tmp)-cimag(localcoeff[1])*cimag(tmp), itmp);
+                }
+                else {
+                    COMPLEXASSIGN(tmp, 1, 0);
+                }
+                for(j=2+(threadIdx.x&1);j<=pshift;j+=2) {
+                    itmp=creal(invr)*cimag(tmp)+cimag(invr)*creal(tmp);
+                    COMPLEXASSIGN(tmp, creal(invr)*creal(tmp)-cimag(invr)*cimag(tmp), itmp);
+                    itmp=creal(localcoeff[j])*cimag(tmp)+cimag(localcoeff[j])*creal(tmp);
+                    COMPLEXASSIGN(localcoeff[j], creal(localcoeff[j])*creal(tmp)-cimag(localcoeff[j])*cimag(tmp), itmp);
+                }
+                for(j=pshift;j>=2;j--) { //perform the Horner scheme
+                    for(i=j;i<=pshift;i++) {
+//                    COMPLEXADD(localcoeff[i], creal(localcoeff[i-1]), cimag(localcoeff[i-1]));
+                        ((double*)&localcoeff[i])[threadIdx.x&1]+=((double*)&localcoeff[i-1])[threadIdx.x&1];
+                    }
+                }
+            
+        
+                if(potshift==0) { //depending on logarithmic potential or not, an additional term may be necesarry
+                    //perform scaling
+                    tmp=z0;
+                    COMPLEXASSIGN(invr,creal(tmp)*creal(tmp)-cimag(tmp)*cimag(tmp),creal(tmp)*cimag(tmp)*2);
+                    if((threadIdx.x&1)==1) {
+                       COMPLEXSUB(localcoeff[1],creal(localcoeff[0]),cimag(localcoeff[0]));
+                       itmp=(creal(localcoeff[1])*cimag(tmp)+cimag(localcoeff[1])*creal(tmp));
+                       COMPLEXASSIGN(localcoeff[1],(creal(localcoeff[1])*creal(tmp)-cimag(localcoeff[1])*cimag(tmp)),itmp);
+                    }
+                    else {
+                        COMPLEXASSIGN(tmp,1,0);
+                    }
+                    for(j=2+(threadIdx.x&1);j<=pshift;j+=2) {
+                       itmp=creal(invr)*cimag(tmp)+cimag(invr)*creal(tmp); //depending on the definition of COMPLEXASSIGN, a poorly designed macro will overwrite tmp at first step, and use new value in second stage (normally not the case, but this is to prevent future problems)
+                       COMPLEXASSIGN(tmp,creal(tmp)*creal(invr)-cimag(tmp)*cimag(invr),itmp);
+                       COMPLEXSUB(localcoeff[j],creal(localcoeff[0])*(1.0/j),cimag(localcoeff[0])*(1.0/j));
+                       itmp=creal(localcoeff[j])*cimag(tmp)+cimag(localcoeff[j])*creal(tmp);
+                       COMPLEXASSIGN(localcoeff[j],creal(localcoeff[j])*creal(tmp)-cimag(localcoeff[j])*cimag(tmp),itmp);
+                    }
+                }
+                else {
+                    //perform scaling
+                    tmp=z0;
+                    COMPLEXASSIGN(invr,creal(tmp)*creal(tmp)-cimag(tmp)*cimag(tmp),creal(tmp)*cimag(tmp)*2);
+                    if((threadIdx.x&1)==1) {
+                       itmp=(creal(localcoeff[1])*cimag(tmp)+cimag(localcoeff[1])*creal(tmp));
+                       COMPLEXASSIGN(localcoeff[1],(creal(localcoeff[1])*creal(tmp)-cimag(localcoeff[1])*cimag(tmp)),itmp);
+                    }
+                    else {
+                        COMPLEXASSIGN(tmp,1,0);
+                    }
+                    for(j=2+(threadIdx.x&1);j<=pshift;j+=2) {
+                       itmp=creal(invr)*cimag(tmp)+cimag(invr)*creal(tmp); //depending on the definition of COMPLEXASSIGN, a poorly designed macro will overwrite tmp at first step, and use new value in second stage (normally not the case, but this is to prevent future problems)
+                       COMPLEXASSIGN(tmp,creal(tmp)*creal(invr)-cimag(tmp)*cimag(invr),itmp);
+                       itmp=creal(localcoeff[j])*cimag(tmp)+cimag(localcoeff[j])*creal(tmp);
+                       COMPLEXASSIGN(localcoeff[j],creal(localcoeff[j])*creal(tmp)-cimag(localcoeff[j])*cimag(tmp),itmp);
+                    }
+                }
+            }
+        }
+        __syncthreads();
+        //calculate the sum of the for contributing boxes
+        if(boxnr+(threadIdx.x>>3)<(1<<(parentlevel<<1))) { /*safety check. For standard parameters, this should only be an issue for parentlevel=1 and 2, then, it should be a multiple of blockDim/4*/
+            //write results, here, each thread has its own box to write results to
+            localcoeff=(dcmplx*)&localcoeffs[((threadIdx.x>>1)&(~1))*(pshift+1)];
+            for(i=(threadIdx.x&3);i<=pshift;i+=4) {
+                COMPLEXADD(localcoeff[i],creal(localcoeff[i+pshift+1]),cimag(localcoeff[i+pshift+1]));
+            }
+        }
+        __syncthreads();
+        //second part of the sum, and write results back to array
+        if(boxnr+(threadIdx.x>>3)<(1<<(parentlevel<<1))) { /*safety check. For standard parameters, this should only be an issue for parentlevel=1 and 2, then, it should be a multiple of blockDim/4*/
+            //write results, here, each thread has its own box to write results to
+            localcoeff=(dcmplx*)&localcoeffs[((threadIdx.x>>1)&(~3))*(pshift+1)];
+            j=(boxnr+(threadIdx.x>>3)+parentstart)*(pshift+1);
+            for(i=(threadIdx.x&7);i<=pshift;i+=8) {
+                COMPLEXADD(localcoeff[i],creal(localcoeff[i+2*(pshift+1)]),cimag(localcoeff[i+2*(pshift+1)]));
+                COMPLEXASSIGN(This[j+i], creal(localcoeff[i]), cimag(localcoeff[i]));
+            }
+        }
+    }
+}
+#endif //MULTIPOLEINITCUDA
+
+#define P2PMAXTHREADS 32
+#ifdef MULTIPOLESHIFTCUDA
+
+//number of threads should be a multiple of 4 (4 threads per interaction)
+
+//corresponds to shift_p2p in the CPU code, Moves potential expansions by using the Horner scheme
+__global__ void shift_p2p_cuda(int parentlevel,int parentstart,int pshift,
+	       dcmplx *This  DEBUGVECTORSTRING)
+{
+//     dcmplx localcoeff[PMAX];
+    dcmplx *localcoeff=(dcmplx*)&localcoeffs[threadIdx.x*(pshift+1)];
+    __shared__ dcmplx z0[P2PMAXTHREADS];
+    __shared__ dcmplx z0base[(P2PMAXTHREADS+3)/4];
+    int i,j;
+    for(int boxnr=blockIdx.x*blockDim.x/4;boxnr<(1<<(parentlevel<<1));boxnr+=gridDim.x*blockDim.x/4) { //loop over all boxes. One block takes care of blockDim.x/4 boxes
+        if(threadIdx.x<blockDim.x/4*sizeof(dcmplx)/sizeof(float)) { /*only works if sizeof(dcmplx)/sizeof(float)<=4, which is the case for both double and float*/
+           ((float*)z0base)[threadIdx.x] =tex1Dfetch(tz0,(boxnr+parentstart)*sizeof(dcmplx)/sizeof(float)+threadIdx.x); /*not really a problem if values outside the list would be fetched, since they are 0*/
+        }
+        __syncthreads();
+        if(boxnr+(threadIdx.x>>2)<(1<<(parentlevel<<1))) { /*safety check. For standard parameters, this should only be an issue for parentlevel=1 and 2, then, it should be a multiple of blockDim/4*/
+            for(i=0;i<sizeof(dcmplx)/sizeof(float);i++) //read position parameters
+                ((float*)&z0[threadIdx.x])[i] =tex1Dfetch(tz0, ((boxnr<<2)+parentstart+(1<<(parentlevel<<1))+threadIdx.x)*sizeof(dcmplx)/sizeof(float)+i);
+            //calculate distances
+            COMPLEXASSIGN(z0[threadIdx.x], creal(z0base[threadIdx.x>>2])-creal(z0[threadIdx.x]), cimag(z0base[threadIdx.x>>2])-cimag(z0[threadIdx.x]));
+            j=(boxnr+(threadIdx.x>>2)+parentstart)*(pshift+1);
+            for(i=0;i<pshift+1;i++) //read coefficient parameters
+                COMPLEXASSIGN(localcoeff[i], creal(This[j+i]), cimag(This[j+i]));
+            for(j=0;j<=pshift;j++) { //perform the Horner scheme
+                for(i=pshift-j;i<pshift;i++) {
+                    COMPLEXSUB(localcoeff[i], creal(z0[threadIdx.x])*creal(localcoeff[i+1])-cimag(z0[threadIdx.x])*cimag(localcoeff[i+1]), creal(z0[threadIdx.x])*cimag(localcoeff[i+1])+cimag(z0[threadIdx.x])*creal(localcoeff[i+1]));
+                }
+            }
+            //write results, here, each thread has its own box to write results to
+            j=((boxnr<<2)+parentstart+(1<<(parentlevel<<1))+threadIdx.x)*(pshift+1);
+            for(i=0;i<=pshift;i++) {
+                COMPLEXADD(This[j+i], creal(localcoeff[i]), cimag(localcoeff[i]));
+            }
+        }
+    }
+}
+//corresponds to shift_p2p in the CPU code, Moves potential expansions by using the Horner scheme with pre and post scaling
+__global__ void shift_p2p_cuda_horner_scaled(int parentlevel,int parentstart,int pshift,
+	       dcmplx *This,const dcmplx *z,CUDAREAL rminshift  DEBUGVECTORSTRING)
+{
+//     dcmplx localcoeff[PMAX];
+    dcmplx *localcoeff;
+    dcmplx z0,tmp,invr;
+    CUDAREAL rtmp,itmp;
+    __shared__ dcmplx z0base[(SHIFT_M2M_MAXTHREADS+3)/4];
+    int i,j;
+    for(int boxnr=blockIdx.x*blockDim.x/8;boxnr<(1<<(parentlevel<<1));boxnr+=gridDim.x*blockDim.x/8) { //loop over all boxes. One block takes care of blockDim.x/2 boxes
+        localcoeff=(dcmplx*)&localcoeffs[(threadIdx.x>>1)*(pshift+1)];
+        if(threadIdx.x<blockDim.x/8&&threadIdx.x<(1<<(parentlevel<<1))) {
+           z0base[threadIdx.x]=z[boxnr+parentstart+threadIdx.x];
+        }
+        __syncthreads();
+        if(boxnr+(threadIdx.x>>3)<(1<<(parentlevel<<1))) { /*safety check. For standard parameters, this should only be an issue for parentlevel = 1 - 3, then, it should be a multiple of blockDim/4*/
+            z0=z[(boxnr<<2)+parentstart+(1<<(parentlevel<<1))+threadIdx.x/2];
+            //calculate distances
+            COMPLEXASSIGN(z0,creal(z0base[threadIdx.x>>3]) - creal(z0),cimag(z0base[threadIdx.x>>3]) - cimag(z0)); //be careful with this use of COMPLEXASSIGN, remember that it is a macro
+            j=(boxnr+(threadIdx.x>>3)+parentstart)*(pshift+1);
+            for(i=(threadIdx.x&1);i<pshift+1;i+=2) //read coefficient parameters
+                COMPLEXASSIGN(localcoeff[i], creal(This[j+i]), cimag(This[j+i]));
+            tmp=z0;
+            COMPLEXASSIGN(invr,creal(tmp)*creal(tmp)-cimag(tmp)*cimag(tmp),creal(tmp)*cimag(tmp)*2);
+            if(fabs(creal(z0))<rminshift&&fabs(cimag(z0))<rminshift) { //if overflow is possible, run safe code i.e. traditional horner shift
+                if(threadIdx.x&1) {
+                    for(j=0;j<=pshift;j++) { //perform the Horner scheme
+                        for(i=pshift-j;i<pshift;i++) {
+                            COMPLEXSUB(localcoeff[i], creal(z0)*creal(localcoeff[i+1])-cimag(z0)*cimag(localcoeff[i+1]), creal(z0)*cimag(localcoeff[i+1])+cimag(z0)*creal(localcoeff[i+1]));
+                        }
+                    }
+                }
+            }
+            else { //use scaling
+                if((threadIdx.x&1)==1) { //initiate one thread to z0^2, the other to z0
+                    tmp=invr;
+                }
+                
+                //perform the scaling
+                itmp=creal(localcoeff[(threadIdx.x&1)])*cimag(tmp)+cimag(localcoeff[(threadIdx.x&1)])*creal(tmp);
+                COMPLEXASSIGN(localcoeff[(threadIdx.x&1)], creal(localcoeff[(threadIdx.x&1)])*creal(tmp)-cimag(localcoeff[(threadIdx.x&1)])*cimag(tmp), itmp);
+                for(j=2+(threadIdx.x&1);j<=pshift;j+=2) {
+                    itmp=creal(invr)*cimag(tmp)+cimag(invr)*creal(tmp);
+                    COMPLEXASSIGN(tmp, creal(invr)*creal(tmp)-cimag(invr)*cimag(tmp), itmp);
+                    itmp=creal(localcoeff[j])*cimag(tmp)+cimag(localcoeff[j])*creal(tmp);
+                    COMPLEXASSIGN(localcoeff[j], creal(localcoeff[j])*creal(tmp)-cimag(localcoeff[j])*cimag(tmp), itmp);
+                }
+                for(j=0;j<=pshift;j++) { //perform the Horner scheme
+                    for(i=pshift-j;i<pshift;i++) {
+                        ((double*)&localcoeff[i])[threadIdx.x&1]-=((double*)&localcoeff[i+1])[threadIdx.x&1];
+                    }
+                }
+                //safe calculation of 1/z0
+                if(fabs(creal(z0))>fabs(cimag(z0))) {
+                   itmp=cimag(z0)*(1.0/creal(z0));
+                   rtmp=creal(z0)+itmp*cimag(z0);
+                   COMPLEXASSIGN(tmp,1.0/rtmp,-itmp*(1.0/rtmp));
+                }
+                else {
+                   itmp=creal(z0)*(1.0/cimag(z0));
+                   rtmp=cimag(z0)+itmp*creal(z0);
+                   COMPLEXASSIGN(tmp,itmp*(1.0/rtmp),-1.0/rtmp);
+                }
+                COMPLEXASSIGN(invr,creal(tmp)*creal(tmp)-cimag(tmp)*cimag(tmp),creal(tmp)*cimag(tmp)*2);
+                if((threadIdx.x&1)==1) { //initiate one thread to z0^-2, the other to z0^-1
+                    tmp=invr;
+                }
+                //perform the scaling
+                itmp=creal(localcoeff[(threadIdx.x&1)])*cimag(tmp)+cimag(localcoeff[(threadIdx.x&1)])*creal(tmp);
+                COMPLEXASSIGN(localcoeff[(threadIdx.x&1)], creal(localcoeff[(threadIdx.x&1)])*creal(tmp)-cimag(localcoeff[(threadIdx.x&1)])*cimag(tmp), itmp);
+                for(j=2+(threadIdx.x&1);j<=pshift;j+=2) {
+                   itmp=creal(invr)*cimag(tmp)+cimag(invr)*creal(tmp); //depending on the definition of COMPLEXASSIGN, a poorly designed macro will overwrite tmp at first step, and use new value in second stage (normally not the case, but this is to prevent future problems)
+                   COMPLEXASSIGN(tmp,creal(tmp)*creal(invr)-cimag(tmp)*cimag(invr),itmp);
+                   itmp=creal(localcoeff[j])*cimag(tmp)+cimag(localcoeff[j])*creal(tmp);
+                   COMPLEXASSIGN(localcoeff[j],creal(localcoeff[j])*creal(tmp)-cimag(localcoeff[j])*cimag(tmp),itmp);
+                }
+            }
+        }
+        __syncthreads();
+        //write results
+        if(boxnr+(threadIdx.x>>3)<(1<<(parentlevel<<1))) { /*safety check. For standard parameters, this should only be an issue for parentlevel=1 and 2, then, it should be a multiple of blockDim/4*/
+            //write results, here, each thread has its own box to write results to
+            localcoeff=(dcmplx*)&localcoeffs[(threadIdx.x>>1)*(pshift+1)];
+            j=((boxnr<<2)+parentstart+(1<<(parentlevel<<1))+threadIdx.x/2)*(pshift+1);
+            for(i=(threadIdx.x&1);i<=pshift;i+=2) {
+                COMPLEXADD(This[j+i], creal(localcoeff[i]), cimag(localcoeff[i]));
+            }
+        }
+    }
+}
+
+
+#define M2PSMAXTHREADS 32
+#define M2PSSORTMAXTHREADS 32
+#define MAXM2PSINTERACTIONS 524288 //should a multiple of M2PSINTERACTIONSPERBLOCK
+// #define MAXM2PSINTERACTIONS 4
+// #if M2PSMAXTHREADS==32 //only tested value is 32. Check carefully the #if statements if another value is desired
+// #define M2PSINTERACTIONSPERBLOCK 4 //valid values are 2,4 and 8. 4 appears to be faster than 2 and 8 for normal Pmax=18. 2 can be useful to save memory
+// #endif
+// #define M2PSMAXP 40 //75 % of run time if 24 compared to 32
+
+// helper functions fo m2ps
+#if !defined(DYNAMICM2PS) && !defined(CUDAHORNERM2PS) 
+#define SETRISHIFTTMP(INDEX,ELEMENT) ri = (CUDAREAL *)&rpow[(ELEMENT)*(pshift+1)];\
+            shifttmp=pshift*4*(ELEMENT)+(INDEX)-1+pshift;
+#define M2PSBUILD(INDEX,R0REVERSE,ELEMENT,REELEMENT) if((INDEX)<=pshift) {\
+            re=ri[(REELEMENT*2)];\
+            im=ri[(REELEMENT*2)+1];\
+            Thisre=creal(coeff1[activeboxes[((ELEMENT)<<1)]*(pshift+1)+(INDEX)]);\
+            Thisim=cimag(coeff1[activeboxes[((ELEMENT)<<1)]*(pshift+1)+(INDEX)]);\
+            thatre=creal(coeff1[activeboxes[((ELEMENT)<<1)+1]*(pshift+1)+(INDEX)]);\
+            thatim=cimag(coeff1[activeboxes[((ELEMENT)<<1)+1]*(pshift+1)+(INDEX)]);\
+            ri[(INDEX)*2] = ri[(INDEX)*2-2*(R0REVERSE)]*re-ri[(INDEX)*2+1-2*(R0REVERSE)]*im;\
+            ri[(INDEX)*2+1] = ri[(INDEX)*2-2*(R0REVERSE)]*im+ri[(INDEX)*2+1-2*(R0REVERSE)]*re;\
+            rij2=ri[(INDEX)*2];\
+            rij21=ri[(INDEX)*2+1];\
+            pre = thatre*rij2-thatim*rij21;\
+            pim = thatre*rij21+thatim*rij2;\
+            wksp[shifttmp-pshift] = pre;\
+            wksp[shifttmp] = pim;\
+            pre = (-Thisre*rij2+Thisim*rij21)*(((signed int)((INDEX)&1)<<1)-1);\
+            pim = (-Thisre*rij21-Thisim*rij2)*(((signed int)((INDEX)&1)<<1)-1);\
+            wksp[shifttmp+pshift] = pre;\
+            wksp[shifttmp+pshift*2] = pim;\
+}
+#endif
+#ifndef DYNAMICM2PS
+// #define M2PSCHECKBOX 780
+// not tested for M2PSMAXP>M2PSMAXTHREADS
+/*suggested attempt: Try and build the full rpow matrix in a separate cuda step and 
+ * store in memory to save local memory space, and make the rpow calculation more parallell*/
+#define M2PSINTERACTIONSPERBLOCK 4 //valid values are 2,4 and 8. 4 appears to be faster than 2 and 8 for normal Pmax=18. 2 can be useful to save memory
+
+#ifdef CUDAHORNERM2PS
+#define M2PSINCLUDE "cudam2pshorner.h"
+#else
+#define M2PSINCLUDE "cudam2ps.h"
+#endif
+//For speed issues, this one is written as a template in the header file, and is included several times with different values for maximum coefficients and if it is logarithmic potential or not
+#ifdef DYNAMICHORNER
+#undef LOGM2PS
+extern __shared__ CUDAREAL wksp[];
+__global__ void shift_m2ps_cuda(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#define LOGM2PS
+__global__ void shift_m2ps_cuda_log(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#else
+#undef LOGM2PS
+#define M2PSMAXP 10
+__global__ void shift_m2ps_cuda_10(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 14
+__global__ void shift_m2ps_cuda_14(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 18
+__global__ void shift_m2ps_cuda_18(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+//     #include "cudam2ps.h"
+}
+#undef M2PSMAXP
+#define M2PSMAXP 24
+__global__ void shift_m2ps_cuda_24(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 32
+__global__ void shift_m2ps_cuda_32(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSINTERACTIONSPERBLOCK
+#define M2PSINTERACTIONSPERBLOCK 2
+#undef M2PSMAXP
+#define M2PSMAXP 40
+__global__ void shift_m2ps_cuda_40(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+
+#undef M2PSMAXP
+#define M2PSMAXP 48
+__global__ void shift_m2ps_cuda_48(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 56
+__global__ void shift_m2ps_cuda_56(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 64
+__global__ void shift_m2ps_cuda_64(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSINTERACTIONSPERBLOCK
+#define M2PSINTERACTIONSPERBLOCK 4 //valid values are 2,4 and 8. 4 appears to be faster than 2 and 8 for normal Pmax=18. 2 can be useful to save memory
+#define LOGM2PS
+#undef M2PSMAXP
+#define M2PSMAXP 10
+__global__ void shift_m2ps_log_cuda_10(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 14
+__global__ void shift_m2ps_log_cuda_14(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 18
+__global__ void shift_m2ps_log_cuda_18(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+//     #include "cudam2ps.h"
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 24
+__global__ void shift_m2ps_log_cuda_24(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 32
+__global__ void shift_m2ps_log_cuda_32(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSINTERACTIONSPERBLOCK
+#define M2PSINTERACTIONSPERBLOCK 2
+#undef M2PSMAXP
+#define M2PSMAXP 40
+__global__ void shift_m2ps_log_cuda_40(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 48
+__global__ void shift_m2ps_log_cuda_48(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 56
+__global__ void shift_m2ps_log_cuda_56(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#undef M2PSMAXP
+#define M2PSMAXP 64
+__global__ void shift_m2ps_log_cuda_64(int count,int pshift,
+	       dcmplx *coeff1,dcmplx *tmpcoeff,CUDAREAL* binomial  DEBUGVECTORSTRING)
+{
+    #include M2PSINCLUDE
+}
+#endif //!DYNAMICHORNER
+#endif //!DYNAMICM2PS
+#define SUMMAXP 128 //real limit
+#define BOXMAX 128 //not real limit, since the code will loop if too many elements
+#define M2PSSORTCHECKBOX 80
+//do not call with pshift+1>SUMMAXP
+
+//combines the results of the above function to one point, as the current m2ps interaction is unable to do this by itself, due to that the number of boxes interacting is unknown
+__global__ void shift_m2ps_cuda_sort(int begin,int end,int pshift,dcmplx* coeff,dcmplx* tmpcoeff DEBUGVECTORSTRING)
+{
+    __shared__ int boxlist[BOXMAX];
+    __shared__ CUDAREAL coeffsum[SUMMAXP*2]; //currently not necessary with shared, but for future improvements
+    __shared__ int fetchcoord[2];
+    int boxnr,i,j,k,itermax;
+    for(boxnr=blockIdx.x+begin;boxnr<end;boxnr+=gridDim.x) { //loop over the boxes, since this can be performed in several steps, loop from begin to end
+        if(threadIdx.x<2) {
+            fetchcoord[threadIdx.x]=tex1Dfetch(tsortboxstart,boxnr+threadIdx.x-begin); //the number of elements in the current interaction, this is to fetch both start and end in one call
+        }
+        for(j=threadIdx.x;j<pshift*2+2;j++) { //initialization
+            coeffsum[j]=0;
+        }
+        
+        for(i=fetchcoord[0];i<fetchcoord[1];i+=BOXMAX) { //loop over the interactions beloning to the current box
+            itermax=imin(BOXMAX,fetchcoord[1]-i);
+            for(j=threadIdx.x;j<itermax;j+=blockDim.x)
+                boxlist[j]=tex1Dfetch(tinteractionlist,i+j)*(pshift+1); //get positions of the coefficients that should be added
+            __syncthreads();
+            for(j=threadIdx.x;j<pshift*2+2;j+=blockDim.x) { //make the sum
+                for(k=0;k<itermax;k++) {
+                    coeffsum[j]+=((CUDAREAL*)&tmpcoeff[boxlist[k]])[j];
+                }
+            }
+            __syncthreads();
+                
+        }
+        __syncthreads();
+        //write results
+        for(j=threadIdx.x;j<pshift*2+2;j+=blockDim.x) {
+            ((CUDAREAL*)&coeff[boxnr*(pshift+1)])[j]+=coeffsum[j];
+        }
+    }
+}
+#endif
+
+//reorder functions. Four different versions exists, which takes 1, 2, 3 and for vectors for reordering
+#ifdef REORDERCUDA
+#define REORDERMAXTHREADS 256
+__global__ void reorder_cuda_1(CUDAREAL* output1,CUDAREAL* input1,int* index,int count)
+{
+    int localindex;
+    for(int i=blockDim.x * blockIdx.x + threadIdx.x;i<count;i+=blockDim.x*gridDim.x) {
+        localindex=index[i];
+        output1[i]=input1[localindex];
+    }
+}
+__global__ void reorder_cuda_2(CUDAREAL* output1,CUDAREAL* output2,CUDAREAL* input1,CUDAREAL* input2,int* index,int count)
+{
+    int localindex;
+    for(int i=blockDim.x * blockIdx.x + threadIdx.x;i<count;i+=blockDim.x*gridDim.x) {
+        localindex=index[i];
+        output1[i]=input1[localindex];
+        output2[i]=input2[localindex];
+    }
+}
+__global__ void reorder_cuda_3(CUDAREAL* output1,CUDAREAL* output2,CUDAREAL* output3,CUDAREAL* input1,CUDAREAL* input2,CUDAREAL* input3,int* index,int count)
+{
+    int localindex;
+    for(int i=blockDim.x * blockIdx.x + threadIdx.x;i<count;i+=blockDim.x*gridDim.x) {
+        localindex=index[i];
+        output1[i]=input1[localindex];
+        output2[i]=input2[localindex];
+        output3[i]=input3[localindex];
+    }
+}
+__global__ void reorder_cuda_4(CUDAREAL* output1,CUDAREAL* output2,CUDAREAL* output3,CUDAREAL* output4,CUDAREAL* input1,CUDAREAL* input2,CUDAREAL* input3,CUDAREAL* input4,int* index,int count)
+{
+    int localindex;
+    for(int i=blockDim.x * blockIdx.x + threadIdx.x;i<count;i+=blockDim.x*gridDim.x) {
+        localindex=index[i];
+        output1[i]=input1[localindex];
+        output2[i]=input2[localindex];
+        output3[i]=input3[localindex];
+        output4[i]=input4[localindex];
+    }
+}
+
+//as above, but reorders them in the opposite direction
+__global__ void reorder_cuda_1_inv(CUDAREAL* output1,CUDAREAL* input1,int* index,int count)
+{
+    int localindex;
+    for(int i=blockDim.x * blockIdx.x + threadIdx.x;i<count;i+=blockDim.x*gridDim.x) {
+        localindex=index[i];
+        output1[localindex]=input1[i];
+    }
+}
+__global__ void reorder_cuda_2_inv(CUDAREAL* output1,CUDAREAL* output2,CUDAREAL* input1,CUDAREAL* input2,int* index,int count)
+{
+    int localindex;
+    for(int i=blockDim.x * blockIdx.x + threadIdx.x;i<count;i+=blockDim.x*gridDim.x) {
+        localindex=index[i];
+        output1[localindex]=input1[i];
+        output2[localindex]=input2[i];
+    }
+}
+__global__ void reorder_cuda_3_inv(CUDAREAL* output1,CUDAREAL* output2,CUDAREAL* output3,CUDAREAL* input1,CUDAREAL* input2,CUDAREAL* input3,int* index,int count)
+{
+    int localindex;
+    for(int i=blockDim.x * blockIdx.x + threadIdx.x;i<count;i+=blockDim.x*gridDim.x) {
+        localindex=index[i];
+        output1[localindex]=input1[i];
+        output2[localindex]=input2[i];
+        output3[localindex]=input3[i];
+    }
+}
+__global__ void reorder_cuda_4_inv(CUDAREAL* output1,CUDAREAL* output2,CUDAREAL* output3,CUDAREAL* output4,CUDAREAL* input1,CUDAREAL* input2,CUDAREAL* input3,CUDAREAL* input4,int* index,int count)
+{
+    int localindex;
+    for(int i=blockDim.x * blockIdx.x + threadIdx.x;i<count;i+=blockDim.x*gridDim.x) {
+        localindex=index[i];
+        output1[localindex]=input1[i];
+        output2[localindex]=input2[i];
+        output3[localindex]=input3[i];
+        output4[localindex]=input4[i];
+    }
+}
+#endif
