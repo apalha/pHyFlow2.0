@@ -106,6 +106,8 @@ externCodeDirName = 'cpp' # define the directory where to store all compiled ext
 
 externCodeVortexPath = os.path.join(pythonSrcSourcePath,externCodeDirName,'vortex') # define the vortex library compiled external libraries root directory
                                                              
+externCodePanelPath = os.path.join(pythonSrcSourcePath,externCodeDirName,'panel') # define the panel library compiled eternal 
+
 #############################################################################
 
 
