@@ -27,7 +27,7 @@ Several different kernel implementations are implemented in one unified function
 import vortex
 
 # load NavierStokes modules
-import NavierStokes
+#import NavierStokes
 
 # load module options
 import options
