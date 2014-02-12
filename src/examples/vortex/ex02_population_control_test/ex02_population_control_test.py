@@ -38,7 +38,7 @@ overlap = 1.0                               # the overlap ration between the blo
 h = 1.0/numpy.sqrt(nBlobs)                  # the cell size to which each blob is associated to
                                             # we set h = sqrt(A/nBlobs), where A is the area inside
                                             # which blobs are randomly generated
-deltaTc = 0.1                               # the size of the time step, irrelevant for this example as no time stepping is done
+deltaTc = 0.03                              # the size of the time step, irrelevant for this example as no time stepping is done
 nu = 0.001                                  # the dinamic viscous constant, irrelevant for this example as no time stepping is done
 
 # the parameters
@@ -50,9 +50,9 @@ gMin = R_remove*h*h # all blobs located at a place with vorticity smaller than R
 gTotalMinVar = 10.0 # we set the total circulation variation to a large value such
                   # that it will not be limiting blob removal
 
-params = {'stepRedistribution':1, 'integrationMethod':'rk4',\
-          'computationMethod':('fmm','gpu'), 'stepPopulationControl':1,\
-          'gThreshold':(gMin,gTotalMinVar)}
+# the parameters
+blobControlParams = {'stepRedistribution':1,'stepPopulationControl':1,\
+                       'gThresholdLocal':0.5e-1,'gThresholdGlobal':1e-0}
 
 # generate the vortex blobs uniformly distributed in the square [0,1]x[0,1] and
 # circulation g = sqrt(x*x+y*y)
@@ -64,7 +64,8 @@ g = h*h*numpy.sqrt(x*x + y*y)
 wField = (x,y,g)                            # the vorticity field made up of the blobs coordinates and circulation
 
 # generate the blobs
-blobs = pHyFlow.vortex.VortexBlobs(wField,vInf,overlap,h,deltaTc,nu,parameters=params)
+blobs = pHyFlow.vortex.VortexBlobs(wField,vInf,nu,deltaTc,h,overlap,
+                                   blobControlParams=blobControlParams)
 
 # plot the original blobs
 pylab.scatter(blobs.x,blobs.y,c=blobs.g,edgecolor='none')

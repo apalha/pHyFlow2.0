@@ -107,7 +107,12 @@ class VortexBlobs(object):
         -----
         .. code-block:: python
         
-            VortexBlobs(wField,vInf,overlap,h,deltaTc,nu,parameters)
+            VortexBlobs(self,wField,vInf,nu,deltaTc,h,overlap,
+                        timeIntegrationParams={'method':'rk4'},
+                        blobControlParams={'stepRedistribution':1,'stepPopulationControl':1,
+                        'gThresholdLocal':1e-8,'gThresholdGlobal':1e-8},
+                        velocityComputationParams={'method':'fmm','hardware':'gpu'},
+                        diffusionParams={'method':'regrid_wee','c2':'optimized'})
             
         Parameters
         ----------
@@ -953,10 +958,6 @@ class VortexBlobs(object):
             raise TypeError('iBlobs must be of type int64 or bool, it is a %s.' % str(iBlobs.dtype))
 
 
-
-
-
-        
     def __check_wField(self,wField):
         """
             A function that reads the input wField given to self.__init__.
