@@ -588,59 +588,83 @@ class Panels(object):
         # Return list of panel strengths
         return sPanel
         
-        
     @property
-    def xCP(self):
+    def xCPLocal(self):
         """
-        The local :math:`x`-coordinates of the panel collocation points.
+        The local :math:`x`-coordinates of the panel collocation points,
+        split into sub-arrays according to the bodies.  
         """
-        return _numpy.copy(self.__xCP)
+        return self.__xCP
+        
         
     @property
     def xCPGlobal(self):
         """
         The global :math:`x`-coordinates of the panel collocation points.
+        
+        Note: 
+        
+           *Slower* function. This function contains a for-loop for the 
+            splitting.
         """
-        __xCPGlobal = _numpy.copy(self.__xyCP_global[0])
         
         xCPGlobal = []
         # Split the data
         for i in range(self.__nBodies):
             iS,iE = self.__index[i], self.__index[i+1]
-            xCPGlobal.append(__xCPGlobal[iS:iE])
+            xCPGlobal.append(self.__xyCP_global[0,iS:iE])
         
         # return the list of xCPGlobal
         return xCPGlobal
         
     @property
-    def yCP(self):
+    def xCPGlobalCat(self):
         """
-        The local :math:`y`-coordinates of the panel collocation points.
+        The global :math:`x`-coordinates of the panel collocation points.
         """
-        return _numpy.copy(self.__yCP)
-
+        return self.__xyCP_global[0]        
+        
+    @property
+    def yCPLocal(self):
+        """
+        The local :math:`y`-coordinates of the panel collocation points,
+        split into sub-arrays according to the bodies.  
+        """
+        return self.__yCP
+        
     @property
     def yCPGlobal(self):
         """
-        The hlobal :math:`y`-coordinates of the panel collocation points.
+        The global :math:`y`-coordinates of the panel collocation points.
+        
+        Note: 
+        
+           *Slower* function. This function contains a for-loop for the 
+            splitting.
         """
-        __yCPGlobal = _numpy.copy(self.__xyCP_global[1])
         
         yCPGlobal = []
         # Split the data
         for i in range(self.__nBodies):
             iS,iE = self.__index[i], self.__index[i+1]
-            yCPGlobal.append(__yCPGlobal[iS:iE])
+            yCPGlobal.append(self.__xyCP_global[1,iS:iE])
         
         # return the list of xCPGlobal
-        return yCPGlobal  
+        return yCPGlobal
         
     @property
-    def xPanel(self):
+    def yCPGlobalCat(self):
+        """
+        The global :math:`y`-coordinates of the panel collocation points.
+        """
+        return self.__xyCP_global[1] 
+        
+    @property
+    def xPanelLocal(self):
         """
         The local :math:`x`-coordinate of the panel edge points.
         
-            Note: It is a closed loop.
+        Note: It is a closed loop.
         """
         return _numpy.copy(self.__xPanel)
         
@@ -677,7 +701,7 @@ class Panels(object):
         
             Note: It is a open loop
         """
-        __yPanelGlobal = _numpy.copy(self.__xyPanelStart_global[1])
+        __yPanelGlobal = self.__xyPanelStart_global[1]
         
         yPanelGlobal = []
         # Split the data
@@ -692,7 +716,7 @@ class Panels(object):
         """
         The position of the reference ppoint of the given panel bodies.
         """
-        return _numpy.copy(self.__cmGlobal)
+        return self.__cmGlobal
         
     @property
     def thetaLocal(self):
@@ -700,33 +724,33 @@ class Panels(object):
         The rotational angles of the apnel bodies w.r.t to the global
         :math:`x`-axis.
         """
-        return _numpy.copy(self.__thetaLocal)
+        return self.__thetaLocal
         
     @property
     def nBodies(self):
         """
         Number of panel bodies.
         """
-        return _numpy.copy(self.__nBodies)            
+        return self.__nBodies
     
     @property
     def nPanels(self):
         """
         Number of panels in each panel body.
         """
-        return _numpy.copy(self.__nPanels)
+        return self.__nPanels
         
     @property
     def nPanelsTotal(self):
         """
         Number of panels in total.
         """
-        return _numpy.copy(self.__nPanelsTotal)    
+        return self.__nPanelsTotal   
 
     @property
     def A(self):
         """
         The panel self-induction matrix.
         """
-        return _numpy.copy(self.__A)
+        return self.__A
         
