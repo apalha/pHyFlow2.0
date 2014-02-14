@@ -8,6 +8,8 @@ import dolfin       # FEniCS/DOLFIN
 # Import packages
 import boundary
 
+from pHyFlow.navierStokes import options
+
 # Solver parameters
 dolfin.parameters["form_compiler"]["cpp_optimize"]          = True
 dolfin.parameters["krylov_solver"]["absolute_tolerance"]    = 1e-25
@@ -65,8 +67,7 @@ class solverBase(object):
         self.boundaryDomains =  dolfin.MeshFunction('size_t', self.mesh, boundaryDomains)
 
         # Determine boundary coordinates        
-        self.boundary_DOFCoordinates, self.boundary_VectorDOFIndex = boundary.locate_boundaryDOFs(self.mesh,self.boundaryDomains,3)     
-        
+        #self.boundary_DOFCoordinates, self.boundary_VectorDOFIndex = boundary.locate_boundaryDOFs(self.mesh,self.boundaryDomains,3)     
         # Solver global parameters
         self.hmin = dolfin.MPI.min(self.mesh.hmin()) # Minimum mesh size
     
@@ -113,6 +114,11 @@ class solverBase(object):
         # Define boundary conditions
         self.u1Boundary = dolfin.Function(self.V)
         self.bcNoSlip = dolfin.DirichletBC(self.V, dolfin.Constant((0.,0.)), self.boundaryDomains, noSlipID)
+        
+        # Determine boundary indices and boundary coordinates
+        #self.boundary_VectorDOFIndex = boundary.vectorDOF_boundaryIndex(self.V,self.boundaryDomains,options.ID_EXTERNAL_BOUNDARY)
+        self.boundary_VectorDOFIndex = boundary.vectorDOF_boundaryIndex(self.mesh,self.boundaryDomains,options.ID_EXTERNAL_BOUNDARY,2)
+        self.boundary_DOFCoordinates = boundary.vectorDOF_coordinates(self.mesh,self.V,self.boundary_VectorDOFIndex[0])
         
         # Define the pressure boundary conditions
         self.bcPressure = []
@@ -267,7 +273,7 @@ class solverBase(object):
         # Transfer the vertex values of the functions
         self.u1Boundary.vector()[self.boundary_VectorDOFIndex[0]] = vx
         self.u1Boundary.vector()[self.boundary_VectorDOFIndex[1]] = vy
-        
+
         # Exterior boundary condition
         self.bcExt = dolfin.DirichletBC(self.V, self.u1Boundary, self.boundaryDomains, extID)
         

@@ -158,17 +158,25 @@ vFile = dolfin.File(saveDir + "velocity.pvd", "compressed")
 pFile = dolfin.File(saveDir + "pressure.pvd", "compressed")
 wFile = dolfin.File(saveDir + "vorticity.pvd", "compressed")
 
-
-for i in range(5000):
+solver = NSDomain._NavierStokes__solver
+for i in range(50000):
 
     T = i*NSDomain.dtMax
 
-    print "Step = %g\tT = %g" % (i, T)
     NSDomain.evolve(vxBoundary,vyBoundary,cmGlobalNew,thetaGlobalNew,
                     cmDotGlobal,thetaGlobal)
-                
-    if i % 20 == 0:                
+    
+    diff_u = dolfin.norm(solver.u1) - dolfin.norm(solver.u0)            
+
+    if i % 200 == 0:                
         #dolfin.plot(dolfin.sqrt(dolfin.inner(NSDomain._solver.u1,NSDomain._solver.u1)),key='vNorm')         
         vFile << (NSDomain._NavierStokes__solver.u1, T)
         pFile << (NSDomain._NavierStokes__solver.p1, T)
         wFile << (NSDomain._NavierStokes__solver.vorticity(), T)
+
+        print "Step = %g\tT = %g" % (i, T)
+        print "Difference in velocity : %g" % diff_u    
+    
+    if diff_u <= 1e-10:
+        break
+    

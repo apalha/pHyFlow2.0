@@ -6,7 +6,7 @@ Functions related Navier-Stokes boundary
 import numpy
 import dolfin
 
-def vectorDOF_boundaryIndex(V,boundaryDomains,boundaryID):
+def vectorDOF_boundaryIndex(mesh,boundaryDomains,boundaryID,pOrder):
     r"""
     Function to locate vector DOF (Degrees of freedom) boundary index in the
     vector function space velocity field array.
@@ -30,10 +30,9 @@ def vectorDOF_boundaryIndex(V,boundaryDomains,boundaryID):
         
     Parameters
     ----------
-    V : dolfin.functions.functionspace.VectorFunctionSpace
-        the vector function space of the mesh representing a vector-valued 
-        finite element function space.
-    
+    mesh : dolfin.cpp.mesh
+           the dolfin mesh of the fluid domain.
+           
     boundaryDomains : dolfin.cpp.mesh.MeshFunctionSizet
                       A MeshFunction which assigns integer values to the 
                       edges of the mesh.
@@ -46,6 +45,9 @@ def vectorDOF_boundaryIndex(V,boundaryDomains,boundaryID):
                        - external boundary  :: 3
                        - pressure outlet    :: 4
                        
+    pOrder : int
+            the order of the finite element space of the vector function space.
+                       
     Returns
     -------
     xyIndices : numpy.ndarray(float64), shape (2,N_boundaryDOFs)
@@ -57,14 +59,22 @@ def vectorDOF_boundaryIndex(V,boundaryDomains,boundaryID):
     :License:       GNU GPL version 3 or any later version
     """
  
-    # Extract the boundary index values   
-    xyIndices = numpy.array(dolfin.DirichletBC(V,dolfin.Constant((0.,0.)),
-                                               boundaryDomains,boundaryID).get_boundary_values().keys())
-                                               
-    # Reshape (x,y)                                               
-    xyIndices = xyIndices.reshape(-1,2).T
+    # Temporary Function space, same order as vector function space
+    Q = dolfin.FunctionSpace(mesh,'CG',pOrder)
     
-    return xyIndices
+    # Extract the boundary index values   
+    iIndices = numpy.array(dolfin.DirichletBC(Q,dolfin.Constant(0.),
+                                              boundaryDomains,boundaryID).get_boundary_values().keys())
+                                               
+    # Determine the x,y Index in a p-order vector function.
+    # Assumption: the function space and vector function space are ordered
+    # similarly. Only that the vector function is twice as big because of the 
+    # the extra data.
+    # For n-D data: :math:`nIndex = iIndices*n + (n-1)`
+    xIndices = iIndices*2      # x index is the first data in the 2-D vector function
+    yIndices = iIndices*2 + 1  # y-index is the second data in the 2-D vector function
+    
+    return xIndices, yIndices
     
     
     
