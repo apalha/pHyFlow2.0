@@ -60,6 +60,7 @@ from pHyFlow.panel.base import panelSolver as _panelSolver
 
 # default parameters
 default_velocity_computation_params = {'method':'direct', 'hardware':'cpu'}
+
 class Panels(object):
     r"""
     The class containing all the functions related to the calculation of the
@@ -90,6 +91,7 @@ class Panels(object):
           loop. The origin of the body should be at (0,0).          
 
     yCP : list of ndarray (float64), shape(M,)    
+    
     xPanel : list of ndarray (float64), shape(M+1,)
     
     yPanel : list of ndarray (float64), shape(M+1,)

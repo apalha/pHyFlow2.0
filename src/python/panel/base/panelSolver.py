@@ -177,7 +177,7 @@ def inducedVelocity(strength,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
             
     xPanelStart : ndarray (float64), shape (M,)
                   the :math:`x`-coordinates of :math:`\mathbf{M}`panel corner
-                  *starting point* in `global coordinate system`. This
+                  *starting point* in `local coordinate system`. This
                   variable is split so that it can be used for multiple 
                   geometries.
 

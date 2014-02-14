@@ -1,5 +1,8 @@
 
-
+__doc__=r"""
+Testing single cylinder case. Compare the numerical result with
+analytical results.
+"""
 
 import pHyFlow
 import numpy as np
@@ -8,10 +11,6 @@ py.ion()
 import time
 
 
-"""
-Testing single cylinder case. Compare the numerical result with
-analytical results.
-"""
 
 #------------------------------------------------------------------------------
 # Free-stream flow
@@ -23,7 +22,7 @@ def externVel(x,y):
 #------------------------------------------------------------------------------
 # Cylinder A
 R       = 1.0   # Radius of cylinder
-nPanel  = 1000   # Number of panels
+nPanel  = 100   # Number of panels
 dPanel  = np.spacing(100) # Spacing between panel and colloc. point
 theta  = np.linspace(np.pi,-np.pi,nPanel+1) # Panel polar angles
 dtheta      = theta[1]-theta[0] # Angle spacing
