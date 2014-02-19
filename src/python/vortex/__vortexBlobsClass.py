@@ -256,6 +256,7 @@ class VortexBlobs(object):
         nu
         numBlobs
         overlap
+        plotVelocity
         sigma
         stepDiffusion
         stepPopulationControl
@@ -327,6 +328,8 @@ class VortexBlobs(object):
                     The overlap ratio between neighboring blobs. It is related to
                     the core size of the blob, `__sigma`, and to the spacing '__h' by
                     the expression :math:`\mathtt{overlap} = \frac{\mathtt{h}}{\mathtt{sigma}}`.
+        __plotVelocity : bool
+                         A flag that defines if velocity is to be plotted or not.
         __sigma : float64
                   The core size of the vortex blobs.
         __stepDiffusion : int
@@ -460,6 +463,24 @@ class VortexBlobs(object):
 
         # define the current time instant
         self.__t = 0.0
+
+        #--------------------------
+
+        #--------------------------
+        # define flags
+
+        self.plotVelocity = False
+
+        #--------------------------
+
+        #--------------------------
+        # perform redistribution and population control
+
+        if self.stepPopulationControl > 0: # only if population control is to be performed during time stepping
+            self.populationControl()
+
+        if self.stepRedistribution > 0: # only if redistribution is to be performed during time stepping
+            self.redistribute()
 
         #--------------------------
 
@@ -774,9 +795,19 @@ class VortexBlobs(object):
             self.__y = yBlobTemp
             self.__g = gBlobTemp
 
+
         # update the time counter
         self.__advanceTime()
 
+        # redistribution step
+        if self.__stepRedistribution != 0: # meaning that redistribution should be done
+            if (self.__tStep % self.__stepRedistribution) == 0: # if the time step is a multiple of the stepRedistribution perform redistribution
+                self.redistribute()
+
+        # population control step
+        if self.__stepPopulationControl != 0: # meaning that population control should be done
+            if (self.__tStep % self.__stepPopulationControl) == 0: # if the time step is a multiple of the stepPopulationControl perform population control
+                self.populationControl()
 
     def populationControl(self):
         r"""
@@ -2825,3 +2856,49 @@ class VortexBlobs(object):
     @hardware.deleter
     def hardware(self):
         raise AttributeError('hardware cannot be deleted by the user, user can only get and set the value of hardware.')
+
+
+    # set the property plotVelocity that defines if velocity is to be plotted at the blobs
+    @property
+    def plotVelocity(self):
+        """
+            The flag that defines if the induced velocity field at the blobs is to be plotted.
+
+            Usage
+            -----
+            .. code-block:: python
+
+                self.plotVelocity
+
+        """
+
+        return self.__plotVelocity
+
+    @plotVelocity.setter
+    def plotVelocity(self,plotVelocitynew):
+        """
+            Set a the plotVelocity flag
+
+            Usage
+            -----
+            .. code-block:: python
+
+                self.plotVelocity = plotVelocitynew
+
+            Parameters
+            ----------
+
+            plotVelocityNew : bool
+                              The new value for the plotVelocity flag.
+
+        """
+
+        if type(plotVelocitynew) != bool:
+            raise TypeError('plotVelocity must be of type bool. It is of type: %s' % str(type(plotVelocitynew)))
+
+        # update the flag
+        self.__plotVelocity = plotVelocitynew
+
+    @plotVelocity.deleter
+    def plotVelocity(self):
+        raise AttributeError('plotVelocity cannot be deleted by the user, user can only get and set the value of plotVelocity.')

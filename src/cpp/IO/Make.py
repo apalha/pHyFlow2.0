@@ -1,8 +1,6 @@
-"""Import vortex and N-S solver modules and options
-
-Several different kernel implementations are implemented in one unified function.
+"""Python Makefile to automate the build and installation of all IO modules
 """
-# Copyright (C) 2013 Artur Palha                                                                                                     
+# Copyright (C) 2014 Artur Palha                                                                                                     
 #                                                                                                                                   
 # This file is part of pHyFlow.                                                                                                      
 #                                                                                                                                   
@@ -19,18 +17,23 @@ Several different kernel implementations are implemented in one unified function
 # You should have received a copy of the GNU Lesser General Public License                                                          
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
-# First added:  2013-05-27                                                                                                          
-# Last changed: 2013-05-27
+# First added:  2014-02-19                                                                                                          
+# Last changed: 2013-02-19
 # -*- coding: utf-8 -*-
 
-# load vortex related modules
-import vortex
+import os
 
-# load module options
-import options
+# compile and install all external functions
 
-# load auxiliary modules aux
-import aux
+# Start by getting of list of the contents of this directory
+dirNames = os.listdir(os.curdir)
 
-# load input/output modules
-import IO
+# Loop over all the contents
+for dirName in dirNames:
+    # But restrict to the ones that are directories
+    if os.path.isdir(dirName):
+        # change to that directory and execute the Make.py file inside it
+        os.chdir(os.path.join(os.curdir,dirName))
+        execfile('Make.py')
+        # change back to the IO directory
+        os.chdir(os.path.join(rootSourcePath,'src',externCodeDirName,'IO'))
