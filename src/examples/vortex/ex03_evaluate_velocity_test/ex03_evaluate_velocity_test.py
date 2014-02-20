@@ -33,8 +33,8 @@ import time
 plot_flag = False
 
 # define the number of blobs
-nBlobs = 128*128#10000
-nPlotPoints = 128*128
+nBlobs = 256*256#10000
+nPlotPoints = 256*256
 
 # generate the input fields
 vInf = numpy.array([1.0, 0.0])              # the free stream velocity

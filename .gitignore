@@ -3,3 +3,7 @@
 *.so
 *.pyc
 .idea/
+*.vtu
+*.pvd
+*.xml.gz
+
