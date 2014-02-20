@@ -25,14 +25,14 @@ def externVel(x,y):
 # Cylinder A
 R       = 1.0   # Radius of cylinder
 nPanel  = 100   # Number of panels
-dPanel  = 0.01 # Spacing between panel and colloc. point
+dPanel  = np.spacing(100) # Spacing between panel and colloc. point
 theta  = np.linspace(np.pi,-np.pi,nPanel+1) # Panel polar angles
 dtheta      = theta[1]-theta[0] # Angle spacing
 r           = (R + dPanel) / np.cos(dtheta/2.0) # Radial location of the panel end points
 
 # Panel Coordinates in cartesian coordinates
-xPanel = r*np.cos(theta + dtheta/2)
-yPanel = r*np.sin(theta + dtheta/2)
+xPanel = r*np.cos(theta[:-1] - dtheta/2)
+yPanel = r*np.sin(theta[:-1] - dtheta/2)
 
 # Panel location
 cmGlobal = np.array([0.,0.])

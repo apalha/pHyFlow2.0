@@ -33,12 +33,8 @@ dtheta1  = theta1[1]-theta1[0] # Angle spacing
 r1       = (R1 + dPanel1) / np.cos(dtheta1/2.0) # Radial location of the panel end points
 
 # Panel Coordinates in cartesian coordinates
-xPanel1 = r1*np.cos(theta1 - dtheta1/2)
-yPanel1 = r1*np.sin(theta1 - dtheta1/2)
-
-# Panel Collocation Points
-xCP1 = R1*np.cos(theta1[:-1])
-yCP1 = R1*np.sin(theta1[:-1])
+xPanel1 = r1*np.cos(theta1[:-1] - dtheta1/2)
+yPanel1 = r1*np.sin(theta1[:-1] - dtheta1/2)
 
 # Panel location
 cmGlobal1 = np.array([0.,1.])
@@ -53,12 +49,8 @@ dtheta2  = theta2[1]-theta2[0] # Angle spacing
 r2       = (R2 + dPanel2) / np.cos(dtheta2/2.0) # Radial location of the panel end points
 
 # Panel Coordinates in cartesian coordinates
-xPanel2 = r2*np.cos(theta2 - dtheta2/2)
-yPanel2 = r2*np.sin(theta2 - dtheta2/2)
-
-# Panel Collocation Points
-xCP2 = R2*np.cos(theta2[:-1])
-yCP2 = R2*np.sin(theta2[:-1])
+xPanel2 = r2*np.cos(theta2[:-1] - dtheta2/2)
+yPanel2 = r2*np.sin(theta2[:-1] - dtheta2/2)
 
 # Panel location
 cmGlobal2 = np.array([-3.,-1.])
@@ -73,12 +65,8 @@ dtheta3  = theta3[1]-theta3[0] # Angle spacing
 r3       = (R3 + dPanel3) / np.cos(dtheta3/2.0) # Radial location of the panel end points
 
 # Panel Coordinates in cartesian coordinates
-xPanel3 = r3*np.cos(theta3 - dtheta3/2)
-yPanel3 = r3*np.sin(theta3 - dtheta3/2)
-
-# Panel Collocation Points
-xCP3 = R3*np.cos(theta3[:-1])
-yCP3 = R3*np.sin(theta3[:-1])
+xPanel3 = r3*np.cos(theta3[:-1] - dtheta3/2)
+yPanel3 = r3*np.sin(theta3[:-1] - dtheta3/2)
 
 # Panel location
 cmGlobal3 = np.array([3.,-1.])
@@ -90,12 +78,12 @@ thetaLocal3 = np.pi
 # Concatenate the geometries to list (for the input)
 
 # Multiple Cylinders
-xPanel      = [xPanel1,xPanel2,xPanel3]
-yPanel      = [yPanel1,yPanel2,yPanel3]
-xCP         = [xCP1,xCP2,xCP3]
-yCP         = [yCP1,yCP2,yCP3]
-cmGlobal    = [cmGlobal1, cmGlobal2, cmGlobal3]
-thetaLocal  = [thetaLocal1, thetaLocal2,thetaLocal3]
+panel = {'xPanel': [xPanel1,xPanel2,xPanel3],
+         'yPanel': [yPanel1,yPanel2,yPanel3],
+         'cmGlobal': [cmGlobal1, cmGlobal2, cmGlobal3],
+         'thetaLocal': [thetaLocal1, thetaLocal2,thetaLocal3],
+         'dPanel': [dPanel1,dPanel2,dPanel3]}
+         
 #------------------------------------------------------------------------------
 
 
@@ -104,8 +92,7 @@ thetaLocal  = [thetaLocal1, thetaLocal2,thetaLocal3]
 
 # Input method 1: Provide all the parameters
 # Initalize panelBody 
-panelBodies = pHyFlow.panel.Panels(externVel,xCP=xCP,yCP=yCP,xPanel=xPanel,yPanel=yPanel,
-                                   cmGlobal=cmGlobal,thetaLocal=thetaLocal)
+panelBodies = pHyFlow.panel.Panels(panel)
 
 #------------------------------------------------------------------------------
 
@@ -113,8 +100,14 @@ panelBodies = pHyFlow.panel.Panels(externVel,xCP=xCP,yCP=yCP,xPanel=xPanel,yPane
 #------------------------------------------------------------------------------
 # Solve for panel strengths (to satisfy no-slip b.c.)
 
+# Collocation points
+xCP,yCP = panelBodies.xCPGlobalCat, panelBodies.yCPGlobalCat
+
+# External velocity at collocation points
+vx,vy = externVel(xCP,yCP)
+
 # External Velocity : simple free-stream flow
-panelBodies.solve()
+panelBodies.solve(vx,vy)
 
 py.figure(1)
 py.imshow(panelBodies.A,interpolation='none')
@@ -144,7 +137,13 @@ py.title('Multi-body')
 xGrid,yGrid = np.meshgrid(np.linspace(-5,5,100),np.linspace(-3,3,50))
 
 # Calculate induced velocities
-vx,vy = panelBodies.evaluateVelocity(xGrid.flatten(), yGrid.flatten(), addExternVel=True)
+vxPanel,vyPanel = panelBodies.evaluateVelocity(xGrid.flatten(), yGrid.flatten())
+
+# Free-stream velocity
+vxInf, vyInf = externVel(xGrid.flatten(),yGrid.flatten())
+
+# Total velocity field
+vx,vy = vxPanel + vxInf, vyPanel+vyInf
 
 # Plot velocity field
 py.figure(2)
@@ -187,8 +186,15 @@ py.grid()
 py.legend()
 py.title('Multi-body to new position')
 
+
+# External velocity at collocation points
+vx,vy = externVel(xCP,yCP)
+
+# External Velocity : simple free-stream flow
+panelBodies.solve(vx,vy)
+
 # Solve for panel strengths (to satisfy no-slip b.c.)
-panelBodies.solve()
+panelBodies.solve(vx,vy)
 
 # Plot the velocity fields
                      
@@ -196,7 +202,13 @@ panelBodies.solve()
 xGrid,yGrid = np.meshgrid(np.linspace(-5,5,100),np.linspace(-3,3,50))
 
 # Calculate induced velocities
-vx,vy = panelBodies.evaluateVelocity(xGrid.flatten(), yGrid.flatten(), addExternVel=True)
+vxPanel,vyPanel = panelBodies.evaluateVelocity(xGrid.flatten(), yGrid.flatten())
+
+# Free-stream velocity
+vxInf, vyInf = externVel(xGrid.flatten(),yGrid.flatten())
+
+# Total velocity field
+vx,vy = vxPanel + vxInf, vyPanel+vyInf
 
 py.figure(5)
 py.contourf(xGrid,yGrid,np.sqrt(vx*vx+vy*vy).reshape(xGrid.shape))
@@ -211,7 +223,7 @@ py.show(block=True)
 
 #------------------------------------------------------------------------------
 # Save panel data
-panelBodies.save('./panelData')
+#panelBodies.save('./panelData')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------

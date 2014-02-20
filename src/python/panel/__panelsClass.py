@@ -941,7 +941,7 @@ class Panels(object):
             # Calculate the angle functions
             
             # Determine the length of the panels
-            Lxy = self.__xyPanelStart_global[:,iS:iE] - self.__xyPanelEnd_global[:,iS:iE]
+            Lxy = self.__xyPanelEnd_global[:,iS:iE] - self.__xyPanelStart_global[:,iS:iE]
             L   = _numpy.sqrt(_numpy.sum(Lxy*Lxy,axis=0))
             
             # Panel Angles
@@ -953,7 +953,7 @@ class Panels(object):
             self.__tang[:,iS:iE] = _numpy.vstack((self.__cosSinAlpha[0,iS:iE], self.__cosSinAlpha[1,iS:iE]))
             
             # Determine the collocation points (at the new position)
-            self.__xyCP_global[:,iS:iE] = 0.5*(self.__xyPanelEnd_global[:,iS:iE] + self.__xyPanelStart_global[:,iS:iE]) + self.__norm[:,iS:iE]*self.__dPanel[i]
+            self.__xyCP_global[:,iS:iE] = 0.5*(self.__xyPanelEnd_global[:,iS:iE] + self.__xyPanelStart_global[:,iS:iE]) - self.__norm[:,iS:iE]*self.__dPanel[i]
         
         
         
@@ -1159,7 +1159,7 @@ class Panels(object):
                 if data.shape[0] != 2:
                     raise ValueError('%s[%g] must have shape (%g,0). It has shape %s.') % (key, i, str((2,)), str(data.shape))
             # Set cmGlobal
-            self.__cmGlobal = var
+            self.__cmGlobal = _numpy.array(var)
             
         #----------------------------------------------------------------------                            
         # Set thetaLocal
@@ -1169,7 +1169,7 @@ class Panels(object):
                 if type(data) != float and type(data) != _numpy.float64:
                     raise TypeError("'%s[%g]' must be a numpy float. It is a %s" % (key,i,str(type(data))))
             # Set thetaLocal
-            self.__thetaLocal = var
+            self.__thetaLocal = _numpy.array(var)
             
 
     #--------------------------------------------------------------------------
@@ -1321,6 +1321,12 @@ class Panels(object):
                                                    * Note: Positive rotation is anti-clockwise.
                           """)
 
+    # tStep
+    tStep = property(fget = lambda self: self.__tStep,
+                     fset = __setError, fdel = __delError,
+                     doc = r"""tStep : float
+                                       the current step of the simulation
+                     """)
 
     # xCPGlobal
     xCPGlobal = property(fget = __xCPGlobal_get, fset=__setError, fdel = __delError)        

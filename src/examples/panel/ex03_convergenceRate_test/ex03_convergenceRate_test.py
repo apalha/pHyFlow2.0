@@ -26,28 +26,34 @@ def get_inducedVelocity_of_cylinder(nPanel,xEval,yEval):
     r       = (R + dPanel) / np.cos(dtheta/2.0) # Radial location of the panel end points
     
     # Panel Coordinates in cartesian coordinates
-    xPanel = [r*np.cos(theta - dtheta/2)]
-    yPanel = [r*np.sin(theta - dtheta/2)]
-    
-    # Panel Collocation Points
-    xCP = [R*np.cos(theta[:-1])]
-    yCP = [R*np.sin(theta[:-1])]
+    xPanel = r*np.cos(theta[:-1] - dtheta/2)
+    yPanel = r*np.sin(theta[:-1] - dtheta/2)
     
     # Panel location
-    cmGlobal = [np.array([0.,0.])]
-    thetaLocal = [0.]
+    cmGlobal = np.array([0.,0.])
+    thetaLocal = 0.
 
     # Initialize panelBody 
-    panelBodies = pHyFlow.panel.Panels(externVel,xCP=xCP,yCP=yCP,xPanel=xPanel,yPanel=yPanel,
-                                       cmGlobal=cmGlobal,thetaLocal=thetaLocal)
+    panelBodies = pHyFlow.panel.Panels(panel={'xPanel': [xPanel],
+                                              'yPanel': [yPanel],
+                                              'cmGlobal': [cmGlobal],
+                                              'thetaLocal': [thetaLocal],
+                                              'dPanel': [dPanel]})
+    
+    # Free-stream flow
+    vxInf,vyInf = externVel(panelBodies.xCPGlobalCat,panelBodies.yCPGlobalCat)
     
     # Solve panel body problem
-    panelBodies.solve()
+    panelBodies.solve(vxInf,vyInf)
     
     # Calculate induced velocities
-    vx,vy = panelBodies.evaluateVelocity(xEval, yEval, addExternVel=True)
+    vxPanel,vyPanel = panelBodies.evaluateVelocity(xEval, yEval)
     
-    return vx,vy
+    # Free-stream flow
+    vxInf,vyInf = externVel(xEval, yEval)
+
+    
+    return vxPanel+vxInf,vyPanel+vyInf
 #------------------------------------------------------------------------------
 
 
