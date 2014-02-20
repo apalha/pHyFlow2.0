@@ -2,10 +2,11 @@
 
 
 import pHyFlow
+import time
 import numpy as np
 import pylab as py
 py.ion()
-#import time
+
 
 
 """
@@ -24,18 +25,14 @@ def externVel(x,y):
 # Cylinder A
 R       = 1.0   # Radius of cylinder
 nPanel  = 100   # Number of panels
-dPanel  = np.spacing(100) # Spacing between panel and colloc. point
+dPanel  = 0.01 # Spacing between panel and colloc. point
 theta  = np.linspace(np.pi,-np.pi,nPanel+1) # Panel polar angles
 dtheta      = theta[1]-theta[0] # Angle spacing
 r           = (R + dPanel) / np.cos(dtheta/2.0) # Radial location of the panel end points
 
 # Panel Coordinates in cartesian coordinates
-xPanel = r*np.cos(theta - dtheta/2)
-yPanel = r*np.sin(theta - dtheta/2)
-
-# Panel Collocation Points
-xCP = R*np.cos(theta[:-1])
-yCP = R*np.sin(theta[:-1])
+xPanel = r*np.cos(theta + dtheta/2)
+yPanel = r*np.sin(theta + dtheta/2)
 
 # Panel location
 cmGlobal = np.array([0.,0.])
@@ -46,27 +43,34 @@ thetaLocal = 0.
 # Concatenate the geometries to list (for the input)
 
 # Single Cylinders
-xPanel = [xPanel]
-yPanel = [yPanel]
-xCP    = [xCP]
-yCP    = [yCP]
-cmGlobal = [cmGlobal]
-thetaLocal = [thetaLocal]
+# Panel data
+panel = {'xPanel'   : [xPanel],
+         'yPanel'   : [yPanel],
+         'cmGlobal' : [cmGlobal],
+         'thetaLocal': [thetaLocal],
+         'dPanel': [dPanel]}
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Initialize the panels
 
 # Initalize panelBody 
-panelBodies = pHyFlow.panel.Panels(externVel,xCP=xCP,yCP=yCP,xPanel=xPanel,yPanel=yPanel,
-                     cmGlobal=cmGlobal,thetaLocal=thetaLocal)
+panelBodies = pHyFlow.panel.Panels(panel)
 
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Solve for the panel strengths
 
-panelBodies.solve()
+# Collocation points
+xCP,yCP = panelBodies.xCPGlobalCat, panelBodies.yCPGlobalCat
+
+# External velocity at collocation points
+vx,vy = externVel(xCP,yCP)
+
+startTime = time.time()
+panelBodies.solve(vx,vy)
+print "\nTime to solve for panel strengths: %g seconds." % (time.time() - startTime)
 
 #------------------------------------------------------------------------------
 
@@ -77,17 +81,24 @@ panelBodies.solve()
 xGrid,yGrid = np.meshgrid(np.linspace(-2,2,100),np.linspace(-2,2,50))
 
 # Calculate induced velocities
-vx,vy = panelBodies.evaluateVelocity(xGrid.flatten(), yGrid.flatten(), addExternVel=True)
+vxPanel,vyPanel = panelBodies.evaluateVelocity(xGrid.flatten(), yGrid.flatten())
+
+# Free-stream velocity
+vxInf, vyInf = externVel(xGrid.flatten(),yGrid.flatten())
+
+# Total velocity field
+vx,vy = vxPanel + vxInf, vyPanel+vyInf
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Panel Global collocation points
-xCPGlobal, yCPGlobal = panelBodies.xCPGlobal[0], panelBodies.yCPGlobal[0]
+
+xCPGlobal, yCPGlobal = panelBodies.xCPGlobal, panelBodies.yCPGlobal
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Panel corner poitns
-xPanelGlobal, yPanelGlobal = panelBodies.xPanelGlobal[0], panelBodies.yPanelGlobal[0]
+xPanelGlobal, yPanelGlobal = panelBodies.xPanelGlobal, panelBodies.yPanelGlobal
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -119,7 +130,13 @@ Rinf    = 10.0
 xEval, yEval = 0.0 * np.ones(nPoints), np.linspace(R,Rinf,nPoints)
 
 # Calculate induced velocities on the y-axis
-vx,vy = panelBodies.evaluateVelocity(xEval, yEval, addExternVel=True)
+vxPanel,vyPanel = panelBodies.evaluateVelocity(xEval, yEval)
+
+# Free-stream velocity
+vxInf, vyInf = externVel(xEval,yEval)
+
+# Total velocity field
+vx,vy = vxPanel + vxInf, vyPanel+vyInf
 
 # Analytical equation
 vxAnalytical = externVel(xEval,yEval)[0]*( 1.0 + ((R**2)/(yEval**2)))
