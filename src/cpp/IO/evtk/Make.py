@@ -1,7 +1,6 @@
-""" 
-	Example scripts for the pHyFlow Python package
+"""Python Makefile to automate the build and installation of evtk
 """
-# Copyright (C) 2013 Artur Palha                                                                                                     
+# Copyright (C) 2014 Artur Palha                                                                                                     
 #                                                                                                                                   
 # This file is part of pHyFlow.                                                                                                      
 #                                                                                                                                   
@@ -18,25 +17,28 @@
 # You should have received a copy of the GNU Lesser General Public License                                                          
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
-# First added:  2013-06-26                                                                                                          
-# Last changed: 2013-07-22
+# First added:  2014-02-19                                                                                                          
+# Last changed: 2013-02-19
+# -*- coding: utf-8 -*-
 
-Reviews: 1- Added example 4 and 5 (2013-07-22).
+import os
+import shutil
 
-A list of example scripts showing the usage of pHyFlow are included.
+# build evtk
+os.system('python setup.py build')
 
-- vortex      (vortex particle examples)
-   - ex_01 (compute induced velocities)
-      . ex_01.py
+# copy evtk build directory into the python/IO directory
 
-   - ex_02 (compute induced vorticities)
-      . ex_02.py
+# first find the name of the directory with the compiled evtk
+directoriesBuild = os.listdir(os.path.join(os.curdir,'build'))
+# loop over the directories and find the one starting with lib
+for evtkDir in directoriesBuild:
+    if evtkDir[0:3] == 'lib':
+        break
 
-   - ex_03 (plot vorticities)
-      . ex_03.py
+evtkBuildPath = os.path.join(os.curdir,'build',evtkDir,'evtk')
 
-   - ex_04 (time evolution routines with two vortices)
-      . ex_04.py
+# then copy
+shutil.copytree(evtkBuildPath,os.path.join(libIOPath,'__evtk'))
 
-   - ex_05 (time evolution routines vortex blobs with remeshing)
-      . ex_05.py
+

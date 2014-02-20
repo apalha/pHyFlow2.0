@@ -102,6 +102,8 @@ libExamples = os.path.join(libRoot,'examples') # define the examples root direct
 
 libVortexPath = os.path.join(libRoot,'vortex') # define the vortex library root directory
 
+libIOPath = os.path.join(libRoot,'IO') # define the IO library root directory
+
 externCodeDirName = 'cpp' # define the directory where to store all compiled external libraries
 
 externCodeVortexPath = os.path.join(pythonSrcSourcePath,externCodeDirName,'vortex') # define the vortex library compiled external libraries root directory

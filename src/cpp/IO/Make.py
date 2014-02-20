@@ -1,7 +1,6 @@
-""" 
-	Example scripts for the vortex routines of pHyFlow Python package
+"""Python Makefile to automate the build and installation of all IO modules
 """
-# Copyright (C) 2013 Artur Palha                                                                                                     
+# Copyright (C) 2014 Artur Palha                                                                                                     
 #                                                                                                                                   
 # This file is part of pHyFlow.                                                                                                      
 #                                                                                                                                   
@@ -18,27 +17,23 @@
 # You should have received a copy of the GNU Lesser General Public License                                                          
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
-# First added:  2013-06-26                                                                                                          
-# Last changed: 2013-07-22
+# First added:  2014-02-19                                                                                                          
+# Last changed: 2013-02-19
+# -*- coding: utf-8 -*-
 
-Reviews: 1- Added example 4 and 5 (2013-07-22).
+import os
 
+# compile and install all external functions
 
-A list of example scripts showing the usage of vortex routines of pHyFlow are included.
+# Start by getting of list of the contents of this directory
+dirNames = os.listdir(os.curdir)
 
-
-- ex_01 (compute induced velocities)
-   . ex_01.py
-
-
-- ex_02 (compute induced vorticities)
-   . ex_02.py
-
-- ex_03 (plot vorticities)
-   . ex_03.py
-
-- ex_04 (time evolution routines with two vortices)
-   . ex_04.py
-
-- ex_05 (time evolution routines vortex blobs with remeshing)
-   . ex_05.py
+# Loop over all the contents
+for dirName in dirNames:
+    # But restrict to the ones that are directories
+    if os.path.isdir(dirName):
+        # change to that directory and execute the Make.py file inside it
+        os.chdir(os.path.join(os.curdir,dirName))
+        execfile('Make.py')
+        # change back to the IO directory
+        os.chdir(os.path.join(rootSourcePath,'src',externCodeDirName,'IO'))
