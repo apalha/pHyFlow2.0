@@ -39,6 +39,9 @@ for evtkDir in directoriesBuild:
 evtkBuildPath = os.path.join(os.curdir,'build',evtkDir,'evtk')
 
 # then copy
+if os.path.isdir(os.path.join(libIOPath,'__evtk')): # if the directory __evtk already exists delete it
+    shutil.rmtree(os.path.join(libIOPath,'__evtk'))
+
 shutil.copytree(evtkBuildPath,os.path.join(libIOPath,'__evtk'))
 
 

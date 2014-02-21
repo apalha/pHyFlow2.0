@@ -31,8 +31,7 @@ from distutils import dir_util
 
 moduleName = 'pHyFlow' # name of the module, used for root folder
 
-#libParent = '/media/DATAPART1/programs/lib/python' # root install directory
-libParent = '/home/lento/Documents/programs/tools/pHyFlow' # root install directory
+libParent = '/media/DATAPART1/programs/lib/python' # root install directory
 
 #############################################################################
 
