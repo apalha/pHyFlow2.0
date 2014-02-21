@@ -192,42 +192,42 @@ class ipcs(solverBase):
 
     def solve(self):
         """
-            Solve the problem to the next time step using the dirichlet
-            boundary condition. (Note: bcp is empty).
+        Solve the problem to the next time step using the dirichlet
+        boundary condition. (Note: bcp is empty).
+        
+        Usage
+        -----
+            Solver.solve(bcu, bcp)
             
-            Usage
-            -----
-                Solver.solve(bcu, bcp)
-                
-            Parameters
-            ----------
-                bcu     :: the no-slip boundary condition on the body boundary (2)
-                ---        and the dirichlet boundary condition on mesh exterior
-                           boundary (3).
-                           (type: )
-                           
-                bcp     :: the empty pressure boundary condition. Default = [].
-                ---        (type:)
-                           
-            Returns
-            -------
-                u0      :: the class representing the initial/old velocity field
-                --         in the vector function space V.
-                           (type: dolfin.functions.function.Function; single object)
-                           
-                u1      :: the class representing the new computed velocity field
-                --         function in the vector function space V.
-                           (type: dolfin.functions.function.Function; single object)
-                           
-                p0      :: the class representing the intial/old pressur field
-                --         in the function space Q.
-                           (type: dolfin.functions.function.Function; single object)
-                
-                p1      :: the class representing the new computed pressure field
-                --         in the function space Q.
-                           (type: dolfin.functions.function.Function; single object)
-                           
-            First added: 2013-07-26                           
+        Parameters
+        ----------
+            bcu     :: the no-slip boundary condition on the body boundary (2)
+            ---        and the dirichlet boundary condition on mesh exterior
+                       boundary (3).
+                       (type: )
+                       
+            bcp     :: the empty pressure boundary condition. Default = [].
+            ---        (type:)
+                       
+        Returns
+        -------
+            u0      :: the class representing the initial/old velocity field
+            --         in the vector function space V.
+                       (type: dolfin.functions.function.Function; single object)
+                       
+            u1      :: the class representing the new computed velocity field
+            --         function in the vector function space V.
+                       (type: dolfin.functions.function.Function; single object)
+                       
+            p0      :: the class representing the intial/old pressur field
+            --         in the function space Q.
+                       (type: dolfin.functions.function.Function; single object)
+            
+            p1      :: the class representing the new computed pressure field
+            --         in the function space Q.
+                       (type: dolfin.functions.function.Function; single object)
+                       
+        First added: 2013-07-26                           
         
         """
         
@@ -263,14 +263,3 @@ class ipcs(solverBase):
     def sigma(self, u, p, nu):
         "Return stress tensor."
         return 2.0*nu*self.epsilon(u) - p*dolfin.Identity(u.cell().d)
-
-
-#    def modify_dt(self):
-#        """
-#        If :math:`\\Delta t` is modified, need to pre-assemble the LHS of
-#        *tentative velocity* expression.
-#        """
-#        start = time.time()
-#        self.A1 = dolfin.assemble(self.a1)
-#        print "Time to assemble A1: " + str(time.time()-start)
-#        print 'a1 assembled to A1'
