@@ -36,7 +36,7 @@ ID_PRESSURE_OUTLET      = 4 # pressure outlet
 
 # NS Solvers
 SOLVER = {'default':'ipcs',             # Default solver
-          'solvers': ('chorin','ipcs')} # Available solvers
+          'available': ('chorin','ipcs')} # Available solvers
 
 # Partial differential equation solver parameters                            
 FORM_COMPILER = {'cpp_optimize': True}

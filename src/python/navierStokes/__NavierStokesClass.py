@@ -1,34 +1,45 @@
-"""
+#-*- coding: utf-8 -*-
+__doc__ = """
 
 NAVIERSTOKES
 =============
 
-The main class for the navier-stokes method. This class contains of the 
-functions related to the calculation of the panel method.
+The main class for the navier-stokes method. 
 
-Class structure
----------------
-navierSokes:
+* Note: No Turbulence scheme implemented (only laminar flow)
 
-#. __init__
-#. getCoordintes
-#. setVelocity
-#. setPressure
-#. getBoundaryCoordinates
-#. evolve
-#. getVorticity
-#. getMeshPosition
-#. getProbe
-#. plotVelocity
-#. plotPressure
-#. plotVorticity
-#. save
-#. saveVelocity 
-#. savePressure
-#. saveVorticity
+Description
+-----------
+This class wraps the naviers-stokes solver for time-stepping with a given
+dirichlet velocity boundary condition. However, the solver is also capable of 
+solving the problem with a pressure-outlet (neumann b.c.) if the dirichlet 
+velocity boundary condition at the exit is unknown.
+
+The wrapped NS solver is Finite Element Method Solver for incompressible 
+**laminar** fluid. This means that no turbulence scheme is implemented. The
+
+Methodology
+-----------
+1. Define the NS problem by inputing the parameters of the geometry, the fluid,
+   the solver and the probe mesh. 
+
+2. Retrive the boundary coordinates of the FE mesh.
+
+3. Determine the dirichlet boundary condition at those node.
+
+4. Use the dirichlet b.c, new mesh position (and velocity) to evolve the problem.
+
+5. [hybrid] Retrive the vorticity data from the probes.   
+
+6. Repeat.  
+
+Implemented NS Algorithms
+-------------------------
+- Chorin projection scheme (i.e Non-Incremental pressure correction)
+- Incremental pressure correction scheme (ipcs)
 
 :First Added:   2013-12-10
-:Last Modified: 2013-12-27                                                             
+:Last Modified: 2014-02-21                         
 :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
 :License:       GNU GPL version 3 or any later version
 """
@@ -50,24 +61,15 @@ navierSokes:
 #   You should have received a copy of the GNU Lesser General Public License                                                          
 #   along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.    
 
+__all__ = ['NavierStokes']
+
 # External packages
-#import dolfin
 import fenicstools as _fenicstools
 import numpy as _numpy
-import copy as _copy
 
 # Import pHyFlow
-#from pHyFlow import options
-import base as _base
-
-__all__ = ['NavierStokes','solverType','fluidID','noSlipID','extID']
-
-# Default settings: Constants
-solverType  = 'ipcs'
-fluidID     = 1
-noSlipID    = 2
-extID       = 3
-
+from pHyFlow.navierStokes import base as _base
+from pHyFlow.navierStokes import nsOptions as _nsOptions
 
 class NavierStokes(object):
     r"""
@@ -78,61 +80,152 @@ class NavierStokes(object):
     -----
     .. code-block:: python
     
-        NSDomain = navierStokes(initFile='filePath/fileName.npz')
-        
-    or
-    
-    .. code-block:: python
-
-        NSDomain = navierStokes(mesh=mesh, boundaryDomains=boundaryDomains,
-                                cmGlobal=cmGlobal, thetaGlobal=thetaGlobal,
-                                uMax=uMax, nu=nu, cfl=cfl, 
-                                origin=np.array([x0,y0]), L=np.array([Lx,Ly]),
-                                N=np.array([nx,ny]))
+        NSDomain = NavierStokes(geometry = {'mesh': meshFile,
+                                            'boundaryDomains': boundaryDomainsFile,
+                                            'cmGlobal': cmGlobal,
+                                            'thetaLocal': thetaLocal},
+                                probeGrid = {'origin': origin,
+                                             'L': L
+                                             'N': N}
+                                uMax=uMax,nu=nu,cfl=cfl,deltaT,
+                                solverParams={'solver':'ipcs')
         
     Parameters
     ----------
-    initFile : str
-        the filename of the file containing all the parameters to 
-        re-initialize the class.
-
-    or
+    geometry : dict    
+               dictionary containing {'mesh','boundaryDomains','cmGlobal',
+               'thetaLocal'} parameters of the geometry.
                
-    mesh : str
-        the mesh data filename.
-   
-    boundaryDomains : str
-        the boundary mesh domain filename.
-                  
-    cmGlobal : ndarray *(float64)*, shape *(2,)*
-        the :math:`x,y` position of the mesh domain in global coordinates.
-        
-    thetaGlobal : float64
-        the rotational angle :math:`\theta` of the mesh domain in global
-        coordinates.
-        
-    uMax : float64
-        the maximum fluid velocity :math:`U_{max}`.
-        
-    nu : float64
-        the fluid kinematic viscosity :math:`\nu`.
-        
-    cfl : float64
-        the :math:`CFL` stability parameter.
-        
-    origin : ndarray *(float64)*, shape *(2,)*
-        the :math:`x,y` coordinate of the origin of the probe mesh origin.
-        
-    L : ndarray *(float64)*, shape *(2,)*
-        the width and the height :math:`L_x,L_y` of the probe mesh.
+               'mesh' : str
+                        the mesh data filename (.xml.gz) generated by a
+                        FE mesh generateor (GMSH) and converted to XML format.
+                      
+               'boundaryDomains' : str
+                                   the facet boundary domain mesh data file 
+                                   location. The facet boundary file should be
+                                   marked (int format) according to 
+                                   .. py:module:: pHyFlow.navierStokes.nsOptions
+                                   as shown below:
+                                 
+                                   (1) : Fluid Domain
+                                   (2) : No-Slip boundary
+                                   (3) : External dirichlet boundary
+                                   (4) : [optional] Pressure outlet.
+
+                                   * Note: Pressure outlet is optional.
+                                 
+               'cmGlobal' : numpy.ndarray(float64), shape (2,)
+                            the :math:`x,y` position of the mesh local reference
+                            point (0.,0.) in the global coordinates.
+                          
+               'thetaLocal' : float
+                              the local rotational angle :math:`\theta` of the 
+                              mesh domain. Therefore, the rotation will be done
+                              about local reference point (0.,0.), i.e cmGlobal 
+                              in the global coordinate system.
+                            
+    probeGrid : dict
+                dictionary containing all the parameters of the probe grid for
+                extracting the vorticity data.                             
+
+                'origin' : numpy.ndarray(float64), shape (2,)
+                           the :math:`x,y` coordinate of the origin of the probe 
+                           mesh in the **local** coordinate system of the fluid
+                           mesh.
+                         
+                'L' : numpy.ndarray(float64), shape (2,)
+                      the width :math:`L_x` and the height :math:`L_y` of the 
+                      probe mesh.
                 
-    N : ndarray *(float64)*, shape *(2,)*
-        the number of probes in the :math:`x,y` direction.
+                'N' : numpy.ndarray(float64), shape (2,)
+                      the number of probes :math:`N_x,N_y` in the :math:`x,y` 
+                      direction.
+        
+    uMax : float
+           the maximum fluid velocity :math:`U_{max}`.
+        
+    nu : float
+         the fluid kinematic viscosity :math:`\nu`.
+        
+    cfl : float
+          the :math:`CFL` stability parameter. For explicit time-stepping,
+          :math:`CFL\le1`
+        
+    solverParams : dict
+                   dictionary file containing all the solver parameters.
+                   
+                   'solver' : str
+                              type of NS solver that should used to solve
+                              the incompressible laminar problem. Available
+                              solver can be found in .. py:module:: pHyFlow.navierStokes.nsOptions:
+                              
+                              'ipcs' : [default] Incremental pressure-correction scheme
+                              'chorin': Chorin projection scheme (non-incremental)
         
     
     Attribute
     ---------
-    -
+    dtMax
+    
+    
+    __boundaryDomainsFile : str
+                            the facet boundary domain mesh data file location.                 
+    
+    __cfl : float
+            the :math:`CFL` stability parameter.
+
+    __cmGlobal : numpy.ndarray(float64), shape (2,)
+                 the :math:`x,y` position of the mesh local reference point 
+                 (0.,0.) in the global coordinates.
+                 
+    __meshFile : str
+                 the mesh data filename (.xml.gz) generated by a FE mesh 
+                 generateor (GMSH) and converted to XML format.
+                        
+    __nu : float
+           the fluid kinematic viscosity :math:`\nu`.
+    
+    __probeGrid_L : numpy.ndarray(float64), shape (2,)
+                    the width :math:`L_x` and the height :math:`L_y` of the 
+                    probe mesh.
+    
+    __probeGrid_N : numpy.ndarray(float64), shape (2,)
+                    the number of probes :math:`N_x,N_y` in the :math:`x,y` 
+                    direction.
+    
+    __probeGrid_origin : numpy.ndarray(float64), shape (2,)
+                         the :math:`x,y` coordinate of the origin of the probe 
+                         mesh in the **local** coordinate system of the fluid
+                         mesh.
+                         
+    __probes : fenicstools.Probes.Probes
+               the `probe` class containing all the information to `eval`
+               the vorticity function at the probe grid coordinates.
+    
+    __solver : pHyFlow.navierStokes.base.solverBase
+               the NS solver class containing all the information to solver
+               the incompressible laminar navier-stoke problems to the given
+               input geometry, fluid and solver parameters.
+
+    __solverParams : dict
+                     dictionary file containing all the solver parameters.
+                     'solver' : str
+                                type of NS solver that should used to solve
+                                the incompressible laminar problem.
+    
+    __thetaLocal : float
+                   the local rotational angle :math:`\theta` of the mesh domain.
+                   Therefore, the rotation will be done about local reference 
+                   point (0.,0.), i.e cmGlobal in the global coordinate system.
+
+    __uMax : float
+             the maximum fluid velocity :math:`U_{max}`.
+
+    __xyProbes : numpy.ndarray(float64), shape (__probeGrid_N[0], __probeGrid_N[1])
+                 the mesh grid of probes generted by the parameters of the
+                 probe. The probe mesh grid origin at **__probeGrid_origin**,
+                 with length **__probeGrid_L** with **__probeGrid_N** probes
+                 is :math:`x,y` direction.
     
     Methods
     -------
@@ -146,13 +239,14 @@ class NavierStokes(object):
 
     getVorticity
 
-    getMeshPosition
-
-    getProbe
+    getProbeGrid
     
-    Returns
-    -------
-    -
+   
+
+    :First Added:   2013-12-10
+    :Last Modified: 2014-02-21                         
+    :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
+    :License:       GNU GPL version 3 or any later version   
    
     """
     """
@@ -160,56 +254,84 @@ class NavierStokes(object):
     ---------
     2013-12-10, Lento Manickathan
         - First added
-
+        
+    2014-02-21, Lento Manickathan
+        - Documentation update
+        - new boundary search algorithm
+        - thetaGlobal changed to thetaLocal
 
     """
     
-    def __init__(self,initFile=None,**kwargs):
+    def __init__(self,geometry,probeGrid,uMax,nu,cfl,deltaT='max',
+                 solverParams={'solver':_nsOptions.SOLVER['default']}):
         
         
-        # Assign Initializing file
-        self.__set('initFile', initFile)
-        
-        # If init file is not given, explicitly define the parameters
-        if self.__initFile is None:
-            inputData = _copy.deepcopy(kwargs) # Make deep copy
-        # If init file is given
-        else:
-            inputData = _numpy.load(self._initFile) # Load the file
+        #---------------------------------------------------------------------
+        # Check/Set input parameters
             
         # Initialize the parameters
-        self.__set('cmGlobal', inputData['cmGlobal']) # Global reference coordinates
-        self.__set('thetaGlobal',inputData['thetaGlobal']) # Local rotation angle
-        self.__set('uMax',inputData['uMax']) # Maximum velocity
-        self.__set('nu',inputData['nu']) # Kinematic viscosity
-        self.__set('cfl',inputData['cfl']) # CFL number
-        self.__set('origin',inputData['origin']) # probe mesh grid origin
-        self.__set('L',inputData['L']) # probe mesh grid length
-        self.__set('N',inputData['N']) # number of probes in x-y direction
-
-        
+        self.__set('geometry', geometry)
+        self.__set('probeGrid', probeGrid)
+        self.__set('uMax', uMax)
+        self.__set('nu',nu)            
+        self.__set('cfl',cfl)  
+        self.__set('solverParams', solverParams)          
+            
+        #---------------------------------------------------------------------
         # Choose the solver: (Chorin or other solvers)
         # - Various Navier-stokes solving algorithms can be imported. All the
         # algorithms should be stored in './solvers'. The solver is then
         # imported in as part of this module into -> 'self.solver'.
-        if solverType == 'chorin':
-            self.__solver = _base.chorin(inputData['mesh'],inputData['boundaryDomains'],
+        if self.__solverParams['solver'] == 'chorin':
+            self.__solver = _base.chorin(self.__meshFile,self.__boundaryDomainsFile,
                                        self.__nu,self.__cfl,self.__uMax)
-        elif solverType == 'ipcs':
-            self.__solver = _base.ipcs(inputData['mesh'],inputData['boundaryDomains'],
+        elif self.__solverParams['solver'] == 'ipcs':
+            self.__solver = _base.ipcs(self.__meshFile,self.__boundaryDomainsFile,
                                        self.__nu,self.__cfl,self.__uMax)
         else:
-            raise NotImplemented('Solver type not implemented or unknown !!')
+            raise NotImplementedError('Solver type not implemented or unknown !!')
             
+        #---------------------------------------------------------------------
+
+        #---------------------------------------------------------------------
+        # Update mesh position
+
+        # The rotating is done around the local reference point (0.,0.)
+        dThetaLocal = self.__thetaLocal - 0.0 # new - old angle
+        self.__solver.rotateMesh(dThetaLocal) # rotate by dThetaLocal
+
+        #---------------------------------------------------------------------
+
+        #---------------------------------------------------------------------            
         # Define the probe grid
-        self.__xyProbes = _numpy.meshgrid(_numpy.linspace(0,self.__L[0],self.__N[0]) + self.__origin[0],
-                                          _numpy.linspace(0,self.__L[1],self.__N[1]) + self.__origin[1])
+        self.__xyProbes = _numpy.meshgrid(_numpy.linspace(0,self.__probeGrid_L[0],
+                                                          self.__probeGrid_N[0]) + self.__probeGrid_origin[0],
+                                          _numpy.linspace(0,self.__probeGrid_L[1],
+                                                          self.__probeGrid_N[1]) + self.__probeGrid_origin[1])
                      
         # Initialize the probes                     
         self.__probes = _fenicstools.Probes(_numpy.append(self.__xyProbes[0].reshape(-1,1),
                                                           self.__xyProbes[1].reshape(-1,1),axis=1).flatten(),
                                             self.__solver.X)
+        #---------------------------------------------------------------------
                                             
+        #---------------------------------------------------------------------                                            
+        # Define and initialize the time step counters and absolute time
+
+        # assign the delta T        
+        self.__set('deltaT',deltaT)
+
+        # define the time step counter
+        self.__tStep = 0
+        
+        # define the current time
+        self.__t = 0.0
+        
+        
+                                            
+        #---------------------------------------------------------------------
+                                            
+                                                    
             
 
     def getCoordinates(self):
@@ -217,7 +339,11 @@ class NavierStokes(object):
         Function get all the coordinates of the velocity function space
         :math:`\mathbf{V}`. With the returned coordinates, one cold calculate
         the velocity field in the navier-stokes domain.
-                
+        
+        The function acquires the DOF coordinates of the vector function space
+        by running FEniCS internal function to tabulate all the coordinates.
+        This will be in the local coordinate sytem and the will be transformed
+        to global coordinate system by **cmGlobal**.
                 
         Usage
         -----
@@ -231,29 +357,42 @@ class NavierStokes(object):
         
             xy = getCoordinates()
         
+        Parameters
+        ----------
+        None
         
         Returns
         -------
-        xyCoordinates : ndarray *(float64)*, shape *(2,nDOFs)*
-            the :math:`x,y`-coordinates of the vector function space 
-            :math:`\mathbf{V}` dofs.
+        xyCoordinates : numpy.ndarray(float64), shape (2,N_DOFs)
+                        the global :math:`x,y`-coordinates of the vector 
+                        function space  :math:`\mathbf{V}` dofs :math:`N_{DOFs}}`.
+            
+        Attribute
+        ---------
+        None changed.
                       
         :First Added:   2013-12-18
-        :Last Modified: 2013-12-19
-        :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
+        :Last Modified: 2014-02-21
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version               
         """
         
-        # return dof coordinates of the vector function space
-        # x,y 1D array
-        return self.__solver.V.dofmap().tabulate_all_coordinates(self.__solver.mesh).reshape(-1,2).T[:,::2]
+        # Retrive the dof coordinates of the vector function space (local coordinate system)
+        xyLocal = self.__solver.V.dofmap().tabulate_all_coordinates(self.__solver.mesh).reshape(-1,2).T[:,::2]
+        
+        # update to global coordiante system
+        xyGlobal = xyLocal + self.__cmGlobal.reshape(2,-1) 
+        
+        # Return the dof coordiantes (global coordinate system)        
+        return xyGlobal
         
 
 
     def setVelocity(self,vx,vy):
         r"""
-        Function to replace the current `(initial)` velocity Field.
-        
+        Function to replace the current `(initial)` velocity Field. The input
+        requires the :math:`x,y` component of the velocity at the vector
+        function space dof coordiantes from .. py:module:: getCoordinates
         
         Usage
         -----
@@ -264,25 +403,27 @@ class NavierStokes(object):
         
         Parameters
         ----------
-        vx : ndarray *(float64)*, shape *(nDOFs,)*
-            the :math:`x`-component of the velocity at the vector function
-            space :math:`\mathbf{V}` DOFs.
+        vx : numpy.ndarray(float64), shape (nDOFs,)
+             the :math:`x`-component of the velocity at the vector function
+             space :math:`\mathbf{V}` DOFs from .. py:module:: getCoordinates.
                      
-        vy : ndarray *(float64)*, shape *(nDOFs,)*
-            the :math:`y`-component of the velocity at the vector function
-            space :math:`\mathbf{V}` DOFs.
+        vy : numpy.ndarray(float64), shape (nDOFs,)
+             the :math:`y`-component of the velocity at the vector function
+             space :math:`\mathbf{V}` DOFs from .. py:module:: getCoordinates.
         
-        
-        Assigns
+        Returns
         -------
-        vNew : ndarray *(float64)*, shape *(2,nDOFs)*
-            the :math:`x,y` velocity at the vector function space 
-            :math:`\mathbf{V}` DOFs. 
+        None
         
+        Attribute
+        ----------
+        __solver.u1.vector : numpy.ndarray(float64), shape (2,nDOFs)
+                             the :math:`x,y` velocity at the vector function space 
+                             :math:`\mathbf{V}` DOFs.
         
         :First Added:   2013-12-18
-        :Last Modified: 2013-12-19
-        :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
+        :Last Modified: 2014-02-21
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version        
         """
         
@@ -296,9 +437,19 @@ class NavierStokes(object):
         
     def getBoundaryCoordinates(self):
         """
-        Returns the boundary DOF coordinates :math:`x,y_{boundary}` of the 
-        vector function space :math:`\mathbf{V}`.
+        Returns the *global* boundary DOF coordinates :math:`x,y_{boundary}` of 
+        the vector function space :math:`\mathbf{V}`, where the dirichlet
+        velocity boundary condition should be applied.
         
+        The boundary coordinates is located with the help of the 
+        **boundaryDomains** mesh function. The dirichlet velocity boundary
+        DOF coordinates is found by a internal FEniCS search initialization
+        of the module.
+        
+        The Dirichlet boundary is ID is found in 
+        .. py:module:: pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY
+        
+            External boundary: 3
         
         Usage
         -----
@@ -312,96 +463,136 @@ class NavierStokes(object):
         
             xyBoundary = getBoundaryCoordinates()
             
+        Parameters
+        ----------
+        None
             
         Returns
         -------
-        xyBoundary : ndarray *(float64)*, shape *(2,nDOFs)*
-            the :math:`x,y` coordinates of the dirichlet boundary where the
-            external velocity is applied.
+        xyBoundary : numpy.ndarray(float64), shape (2,nDOFs)
+                     the global :math:`x,y` coordinates of the dirichlet boundary
+                      where the external velocity is applied.
         
+        Attributes
+        ----------
+        None changed.
         
         :First Added:   2013-12-18
-        :Last Modified: 2013-12-18
+        :Last Modified: 2014-02-21
         :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version    
         """
         
-        # Get the boundary coordinates of the mesh
-        return self.__solver.boundary_DOFCoordinates
+        # Get the boundary coordinates of the mesh (local coordinate system)
+        xyLocal = self.__solver.boundary_DOFCoordinates
+        
+        # in the global coordinate system
+        xyGlobal = xyLocal + self.__cmGlobal.reshape(2,-1)
+        
+        # returnt the boundary coordinates
+        return xyGlobal
         
         
 
-    def evolve(self,vx,vy,cm,theta,cmDot,thetaDot):
+    def evolve(self,vxBoundary,vyBoundary,cmGlobal,thetaLocal,cmDotGlobal,
+               thetaDotLocal):
         r"""
         Function to evolve the Navier-Stokes by one step with the :math:`x,y`
         velocity boundary conditions at the navier-stokes dirichlet boundary.
+        
+        The dirichlet boundary is identified by 
+        .. py:module:: pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY
+        in the **boundaryDomains**. The coordinate of the dirichlet boundary
+        can be obtained from .. py:module:: getBoundaryCoordinates
+        
         The function will calculate the new velocity and the pressure fields.
         
-        To be implemented:
-            The new mesh position is used to update the mesh position, whereas
-            the current mesh velocity is used to calculate the modified
-            convection term to take in account of the rigid mesh motion.
+        * Note : [to be implemented] Moving mesh.
             
         
         Usage
         -----
         .. code-block:: python
         
-            evolve(vx,vy,cm,theta,cmDot,thetaDot)
+            evolve(vxBoundary,vyBoundary,cmGlobal,thetaLocal,cmDotGlobal,
+                   thetaDotLocal)
         
         Parameters
         ----------
-        vx : ndarray *(float64)*, shape *(nDOFs,)*
-            the :math:`x` component of the dirichlet velocity boundary
-            condition at the navierstokes DOF boundaries.
+        vxBoundary : numpy.ndarray(float64), shape (nDOFs,)
+                     the :math:`x` component of the dirichlet velocity boundary
+                     condition at the navierstokes DOF boundaries.
 
-        vy : ndarray *(float64)*, shape *(nDOFs,)*
-            the :math:`y` component of the dirichlet velocity boundary
-            condition at the navierstokes DOF boundaries.                                  
+        vyBoundary : numpy.ndarray(float64), shape (nDOFs,)
+                     the :math:`y` component of the dirichlet velocity boundary
+                     condition at the navierstokes DOF boundaries.                                  
         
-        cm : ndarray *(float64)*, shape *(2,)*
-            the new :math:`x,y` mesh position of the navierStokes domain.
+        cmGlobal : numpy.ndarray(float64), shape (2,)
+                   the new :math:`x,y` mesh position of the navierStokes domain.
+                   * Note: Note implemented yet. Does not update the position.
         
-        theta : float64
-            the new mesh rotational angle :math:`\theta`.
+        thetaLocal : float
+                     the new mesh rotational angle :math:`\theta`.
+                     * Note: Note implemented yet. Does not update the position.
         
-        cmDot : ndarray *(float64)*, shape *(2,)*
-            the current :math:`x,y` mesh velocity.
+        cmDotGlobal : numpy.ndarray(float64), shape (2,)
+                      the current :math:`x,y` mesh velocity.
+                      * Note: Note implemented yet. Does not update the position.
         
-        thetaDot : float64
-            the current mesh rotational velocity :math:`\dot{\theta}`. 
-                   
-        Assigns
-        -------
-        vField : 
-            the new velocity field
-                
-        pField : 
-            the new pressure field
-        
+        thetaDotGlobal : float
+                         the current mesh rotational velocity :math:`\dot{\theta}`. 
+                         * Note: Note implemented yet. Does not update the position.
+                         
         Returns
         -------
-        -
+        None.
         
+        Attribute
+        ---------
+        __solver : 
+                    time steps the solver and updates the parameters of the
+                    solver.
+                    
+                    __solver.bcVelocity : list
+                                          update the velocity b.c
+                                            
+                    __solver.u0, __solver.u1 : dolfin.function
+                                               update the new and old velocity
+                                               function.
+                    __solver.p0, __solver.p1 : dolfin.function
+                                               update the new and old pressure
+                                               function.
+                
         
         :First Added:   2013-12-19
-        :Last Modified: 2013-12-19
-        :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version   
+        :Last Modified: 2014-02-21
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version 
+        
         """
+        # update the mesh position [Not Implemented]
+        #dThetaLocal = thetaLocal - self.__thetaLocal # new - old
+        #self.__solver.rotateMesh(dThetaLocal)        
         
         # Set boundary conditions
-        self.__solver.boundaryConditions(vx,vy)
+        self.__solver.boundaryConditions(vxBoundary,vyBoundary)
         
         # Solve the navier-stokes problem
         self.__solver.solve()
+        
+        # update the time
+        self.__advanceTime()
+        
+        # update the parameters [Not Implemented]
+        #self.__thetaLocal = thetaLocal
+        #self.__cmGlobal = cmGlobal
         
 
 
     def getVorticity(self):
         r"""
-        Function to evaluat ethe vorticity at the probe coordinates defined by
-        the probe mesh
+        Function to evaluate the vorticity at the probe coordinates defined by
+        the probe grid mesh.
         
         Usage
         -----
@@ -411,33 +602,35 @@ class NavierStokes(object):
             
         Parameters
         ----------
-        -        
-        
-        Assigns
-        -------
-        -
+        None        
         
         Returns
         -------
-        wGrid : ndarray *(float64)*, shape *(NxProbes,NyProbes)*
-            the vorticity :math:`\omega` at the  probe grid coordinates in the
-            navier-stokes domain.
+        wGrid : numpy.ndarray(float64), shape (NxProbes,NyProbes)
+                the vorticity :math:`\omega` at the  probe grid coordinates
+                 in the navier-stokes domain.
+                 
+        Attributes
+        ----------
+        __probes : 
+                   clear the old probed data and re-probe the vorticity
+                   function space.
         
         :First Added:   2013-12-22
-        :Last Modified: 2013-12-22
-        :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
+        :Last Modified: 2014-02-21
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version   
         """
         
-        # Remove old data
+        # Remove old vorticity data
         if self.__probes.number_of_evaluations() > 0:
             self.__probes.clear()
         
         # Probe the data
         self.__probes(self._solver.vorticity())
         
-        # Return the data
-        return self.__probes.array().reshape(self.__N)
+        # Return the data as the shape Nx,Ny of Probes
+        return self.__probes.array().reshape(self.__probeGrid_N)
         
         
         
@@ -459,43 +652,88 @@ class NavierStokes(object):
             
         Parameters
         ----------
-        -
-        
-        Assigns
-        -------
-        -
+        metaData : bool
+                   The boolean status where only metaData should be returned
+                   or the complete probe grid mesh coordinates.
         
         Returns
         -------
-        metadata=True
-            origin : ndarray *(float64)*, shape *(2,)*
-                the :math:`x,y` coordinate of the origin of the probe mesh
-                origin.
+        metadata : True
+                   origin : numpy.ndarray(float64), shape (2,)
+                            the :math:`x,y` coordinate of the origin of the
+                            probe mesh origin.
              
-            L : ndarray *(float64)*, shape *(2,)*
-                the width and the height :math:`L_x,L_y` of the probe mesh.
+                   L : numpy.ndarray(float64), shape (2,)
+                       the width :math:`L_x` and the height :math:`L_y` of the 
+                       probe mesh.
+    
+                   N : numpy.ndarray(float64), shape (2,)
+                       the number of probes :math:`N_x,N_y` in the :math:`x,y` 
+                       direction.
                 
-            N : ndarray *(float64)*, shape *(2,)*
-                the number of probes in the :math:`x,y` direction.
-                
-        metadata=False
-            xProbes : ndarray *(float64)*, shape *(NxProbes,NyProbes)*
-                the :math:`x` coordinate of the probe mesh.
+        metadata : False
+                   xProbes : numpy.ndarray(float64), shape (NxProbes,NyProbes)
+                             the :math:`x` coordinate of the probe mesh.
                       
-            yProbes : ndarray *(float64)*, shape *(NxProbes,NyProbes)*
-                the :math:`y` coordinate of the probe mesh.
+                   yProbes : numpy.ndarray (float64), shape (NxProbes,NyProbes)
+                             the :math:`y` coordinate of the probe mesh.
+        
+        Attributes
+        ----------
+        None changed.
         
         :First Added:   2013-12-22
-        :Last Modified: 2013-12-22
-        :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
+        :Last Modified: 2014-02-21
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version                      
         """
+        
         # Return only the metadata
         if metadata:
-            return self.__origin, self.__L, self.__N
-        # Return the x,y coordinates
+            return self.__probeGrid_origin, self.__probeGrid_L, self.__probeGrid_N
+
+        # Return the x,y coordinates of the probe mesh grid.
         else:
             return self.__xyProbes
+        
+        
+        
+    def __advanceTime(self):
+        """
+        Function to advance the time.
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            __advanceTime()
+            
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        None returned.
+        
+        Attribute
+        ---------
+        __tStep : int
+                  the current time step
+                  
+        __t : float
+              the current time instant
+              
+        :First Added:   2014-02-21
+        :Last Modified: 2014-02-21
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version              
+        """        
+        # advance tStep
+        self.__tStep += 1
+        
+        # advance t
+        self.__t += self.__solver.deltaT
         
         
         
@@ -503,131 +741,194 @@ class NavierStokes(object):
         """
         Function to check the input parameters
         """
-        
-        # Check/Set init file
-        if varName == 'initFile':
-            if type(var) == str or var == None:
-                self.__initFile = var
-            else:
-                raise TypeError('initFile must be a str. It is %s' % str(type(var)))
-        
-        elif varName == 'cmGlobal':
-            if type(var) != _numpy.ndarray:
-                raise TypeError('%s must be a numpy ndarray. It is %s.' % (varName, str(type(var))))
-            if var.shape != (2,):
-                raise ValueError('%s must have shape (%g,0). It has shape %s.' % (varName, 2, str(var.shape)))
-            self.__cmGlobal = var
-        
-        elif varName == 'thetaGlobal':
-            if type(var) != float and type(var) != _numpy.float64:
-                raise TypeError('%s must be a float. It is %s.' % (varName, str(type(var))))
-            self.__thetaGlobal = var
+        #---------------------------------------------------------------------
+        # Check/set geometry data
+        if varName == 'geometry':
+            if type(var['mesh']) != str:
+                raise TypeError("geometry['mesh'] must be of type str. It is %s." % type(var['mesh']))
             
+            if type(var['boundaryDomains']) != str:
+                raise TypeError("geometry['boundaryDomains'] must be of type str. It is %s." % type(var['boundaryDomains']))
+                     
+            if type(var['cmGlobal']) != _numpy.ndarray:
+                raise TypeError("geometry['cmGlobal'] must be a numpy ndarray. It is %s." % str(type(var['cmGlobal'])))
+            if var['cmGlobal'].shape != (2,):
+                raise ValueError("%geometry['cmGlobal'] must have shape (2,). It has shape %s." % str(var['cmGlobal'].shape))
+            
+            if type(var['thetaLocal']) != float and type(var['thetaLocal']) != _numpy.float64:
+                raise TypeError("geometry['thetaLocal'] must be a float. It is %s." % str(type(var['thetaLocal'])))
+            
+            self.__meshFile = var['mesh']
+            self.__boundaryDomainsFile = var['boundaryDomains']
+            self.__cmGlobal = var['cmGlobal']
+            self.__thetaLocal = var['thetaLocal']
+        
+        #---------------------------------------------------------------------
+        
+        #---------------------------------------------------------------------
+        # Check probegrid parameters
+        elif varName == 'probeGrid':
+            if type(var['origin']) != _numpy.ndarray:
+                raise TypeError("probeGrid['origin'] must be a numpy ndarray. It is %s." % str(type(var['origin'])))
+            if var['origin'].shape != (2,):
+                raise ValueError("probeGrid['origin']  must have shape (2,). It has shape %s." % str(var['origin'].shape))
+            
+            if type(var['L']) != _numpy.ndarray:
+                raise TypeError("probeGrid['L'] must be a numpy ndarray. It is %s." % str(type(var['L'])))
+            if var['L'].shape != (2,):
+                raise ValueError("probeGrid['L] must have shape (2,). It has shape %s." % str(var['L'].shape))
+            
+            if type(var['N']) != _numpy.ndarray:
+                raise TypeError("probeGrid['N'] must be a numpy ndarray. It is %s." % str(type(var['N'])))
+            if var['N'].shape != (2,):
+                raise ValueError("probeGrid['N'] must have shape (2,). It has shape %s." % str(var['N'].shape))
+            
+            self.__probeGrid_origin = var['origin']
+            self.__probeGrid_L = var['L']
+            self.__probeGrid_N = var['N']
+        
+        #---------------------------------------------------------------------                
+
+        #---------------------------------------------------------------------                
+        # Check uMax
         elif varName == 'uMax':
             if type(var) != float and type(var) != _numpy.float64:
-                raise TypeError('%s must be a float. It is %s.' % (varName, str(type(var))))
-            self.__uMax = var
+                raise TypeError('uMax must be a float. It is %s.' % str(type(var)))
             
+            self.__uMax = var
+        
+        #---------------------------------------------------------------------
+
+        #---------------------------------------------------------------------            
         elif varName == 'nu':
             if type(var) != float and type(var) != _numpy.float64:
-                raise TypeError('%s must be a float. It is %s.' % (varName, str(type(var))))
+                raise TypeError('nu must be a float. It is %s.' % str(type(var)))
             self.__nu = var
-            
+
+        #---------------------------------------------------------------------
+
+        #---------------------------------------------------------------------        
         elif varName == 'cfl':
             if type(var) != float and type(var) != _numpy.float64:
-                raise TypeError('%s must be a float. It is %s.' % (varName, str(type(var))))
-            self.__cfl = var
-            
-        elif varName == 'origin':
-            if type(var) != _numpy.ndarray:
-                raise TypeError('%s must be a numpy ndarray. It is %s.' % (varName, str(type(var))))
-            if var.shape != (2,):
-                raise ValueError('%s must have shape (%g,0). It has shape %s.' % (varName, 2, str(var.shape)))
-            self.__origin = var
-            
-        elif varName == 'L':
-            if type(var) != _numpy.ndarray:
-                raise TypeError('%s must be a numpy ndarray. It is %s.' % (varName, str(type(var))))
-            if var.shape != (2,):
-                raise ValueError('%s must have shape (%g,0). It has shape %s.' % (varName, 2, str(var.shape)))
-            self.__L = var
-            
-        elif varName == 'N':
-            if type(var) != _numpy.ndarray:
-                raise TypeError('%s must be a numpy ndarray. It is %s.' % (varName, str(type(var))))
-            if var.shape != (2,):
-                raise ValueError('%s must have shape (%g,0). It has shape %s.' % (varName, 2, str(var.shape)))
-            self.__N = var
+                raise TypeError('cfl must be a float. It is %s.' % str(type(var)))
+            self.__cfl = var        
 
+        #---------------------------------------------------------------------
+
+        #---------------------------------------------------------------------        
+        elif varName == 'solverParams':
+            if var['solver'] not in _nsOptions.SOLVER['available']:
+                raise ValueError(r"solverParams['solver'] must be in [%s]. It is %s" % (_nsOptions.SOLVER['available'],var['solver'])) 
+            self.__solverParams = var
+
+        #---------------------------------------------------------------------            
+
+        #---------------------------------------------------------------------
+        # Set delta T
+        elif varName == 'deltaT':
+            if type(var) == str:
+                if var != 'max':
+                    raise TypeError("unknown string parameter: %s. Use 'max'." % var)
+                    
+            elif type(var) != float and type(var) != _numpy.float64:
+                raise TypeError('cfl must be a float. It is %s.' % str(type(var)))
+                
+            # Set the time-step    
+            self.__solver.set_deltaT(var)
             
 
-    @property
-    def cmGlobal(self):
-        r"""
-        The :math:`x,y` position of the geometry reference point in the global
-        coordinate system.
-        """                
-        return _numpy.copy(self.__cmGlobal)
+        #---------------------------------------------------------------------
 
-    @property
-    def thetaGlobal(self):
-        r"""
-        The rotational angle (:math:`rad`) of the geometry in global coordinate
-        system.
-        """
-        return _numpy.copy(self.__thetaGlobal)
+
+    #--------------------------------------------------------------------------            
+    # Generic set error function
+    def __setError(self,setVar):
+        raise AttributeError('Cannot be manually set !')
         
-    @property
-    def uMax(self):
-        r"""
-        The maximum fluid velocity :math:`U_{max}`. It is used to determine the
-        maximum time step size :math:`\Delta t_{max}`.
-        """
-        return _numpy.copy(self.__uMax)
+    # Generic del error function
+    def __delError(self):
+        raise AttributeError('Cannot be manually deleted !')
+    #--------------------------------------------------------------------------        
+        
+
+    #--------------------------------------------------------------------------       
+    # Attributes
+
+    # Time step size
+    deltaT = property(fget = lambda self: self.__solver.deltaT,
+                      fset = lambda self, deltaTNew: self.__set('deltaT',deltaTNew),
+                      fdel = __delError,
+                      doc = r"""
+                      deltaT : float
+                               the time step size :math:`\Delta t`.""")
+
+    # Time step  max
+    deltaTMax = property(fget = lambda self: self.__solver.deltaTMax,
+                         fset = __setError, fdel = __delError,
+                         doc = r"""
+                         dtMax : float64
+                                 The maximum allowable time step size.""")
+                                 
+    # cfl number                                 
+    cfl = property(fget = lambda self: self.__cfl,
+                     fset = __setError, fdel = __delError,
+                     doc = r"""
+                     cfl : float64
+                           the :math:`CFL` stability parameter.""")        
+
+    # cm global coordinates                     
+    cmGlobal = property(fget = lambda self: self.__cmGlobal,
+                        fset = __setError, fdel = __delError,
+                        doc = r"""
+                        cmGlobal : numpy.ndarray(float64), shape (2,)
+                                   the :math:`x,y` position of the mesh local 
+                                   reference point (0.,0.) in the global 
+                                   coordinates.""")
+                           
+    # minimum cell size                           
+    hMin = property(fget = lambda self: self.__solver.hmin,
+                    fset = __setError, fdel = __delError,
+                    doc = r"""
+                    hMin : float
+                           the minimum mesh cell size.""")                                     
+                     
+    # local theta                     
+    thetaLocal = property(fget = lambda self: self.__thetaLocal,
+                          fset = __setError, fdel = __delError,
+                          doc = r"""
+                          thetaLocal : float
+                                       the local rotational angle :math:`\theta`
+                                       of the mesh domain. Therefore, the 
+                                       rotation will be done about local 
+                                       reference  point (0.,0.), i.e cmGlobal 
+                                       in the global coordinate system.""")  
+                   
+    # maximum fluid velocity                   
+    uMax  = property(fget = lambda self: self.__uMax,
+                     fset = __setError, fdel = __delError,
+                     doc = r"""
+                     uMax : float
+                            the maximum fluid velocity :math:`U_{max}`""")  
+                            
+    # viscosity                            
+    nu  = property(fget = lambda self: self.__uMax,
+                   fset = __setError, fdel = __delError,
+                   doc = r"""
+                   nu : float
+                        the fluid kinematic viscosity :math:`\nu`.""")
+               
+    # solver parameters               
+    solverParams = property(fget = lambda self: self.__uMax,
+                            fset = __setError, fdel = __delError,
+                            doc = r"""
+                            solverParams : dict
+                                           dictionary file containing all the 
+                                           solver parameters.
+                                           'solver' : str
+                                                      type of NS solver that 
+                                                      should used to solve
+                                                      the incompressible laminar
+                                                      problem.""")
+
+          
     
-    @property
-    def nu(self):
-        r"""
-        The fluid kinematic viscosity :math:`\nu`. For the incompressible ns
-        problem, denisty is assumed to be :math:`\rho=1`.
-        """
-        return _numpy.copy(self.__nu)
-        
-    @property
-    def cfl(self):
-        """
-        The CFL stability parameter. If explicit time marching scheme, the CFL
-        should satisfy :math`CFL < 0`:
-        """
-        return _numpy.copy(self.__cfl)        
-        
-    @property
-    def origin(self):
-        r"""
-        The :math:`x,y` coordinate of the origin of the the probe grid.
-        """
-        return _numpy.copy(self.__origin)
-
-    @property
-    def L(self):
-        r"""
-        The :math:`x,y` size of the probe grid.
-        """
-        return _numpy.copy(self.__L)
-
-    @property
-    def N(self):
-        r"""
-        The :math:`x,y` number of probe grid nodes.
-        """
-        return _numpy.copy(self.__N)
-        
-    @property
-    def dtMax(self):
-        r"""
-        The maximum allowable time step size :math:`\Delta t_{max}` 
-        """
-        return _numpy.copy(self.__solver.dtMax)
-        
-        
-        

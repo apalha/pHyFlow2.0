@@ -8,22 +8,17 @@ import dolfin       # FEniCS/DOLFIN
 # Import packages
 import boundary
 
-from pHyFlow.navierStokes import options
+from pHyFlow.navierStokes import nsOptions as nsOptions
 
 # Solver parameters
-dolfin.parameters["form_compiler"]["cpp_optimize"]          = True
-dolfin.parameters["krylov_solver"]["absolute_tolerance"]    = 1e-25
-dolfin.parameters["krylov_solver"]["relative_tolerance"]    = 1e-12
-dolfin.parameters["krylov_solver"]["monitor_convergence"]   = False
-dolfin.parameters["allow_extrapolation"]                    = True
-dolfin.set_log_active(False)
+dolfin.parameters["form_compiler"]["cpp_optimize"]          = nsOptions.FORM_COMPILER['cpp_optimize']
+dolfin.parameters["krylov_solver"]["absolute_tolerance"]    = nsOptions.KRYLOV_SOLVER['absolute_tolerance']
+dolfin.parameters["krylov_solver"]["relative_tolerance"]    = nsOptions.KRYLOV_SOLVER['relative_tolerance']
+dolfin.parameters["krylov_solver"]["monitor_convergence"]   = nsOptions.KRYLOV_SOLVER['monitor_convergence']
+dolfin.parameters["allow_extrapolation"]                    = nsOptions.ALLOW_EXTRAPOLATION
+dolfin.set_log_active(nsOptions.SET_LOG_ACTIVE)
 
-__all__ = ['solverBase','fluidID','noSlipID','extID']
-
-# Navier-Stokes solver constants
-fluidID  = 1
-noSlipID = 2
-extID    = 3
+__all__ = ['solverBase']
 
 class solverBase(object):
     r"""
@@ -65,6 +60,8 @@ class solverBase(object):
             
         # Get the boundaryDomain from the location
         self.boundaryDomains =  dolfin.MeshFunction('size_t', self.mesh, boundaryDomains)
+        
+        self.cmLocal = dolfin.Point() # (0,0,0.)
 
         # Determine boundary coordinates        
         #self.boundary_DOFCoordinates, self.boundary_VectorDOFIndex = boundary.locate_boundaryDOFs(self.mesh,self.boundaryDomains,3)     
@@ -73,7 +70,9 @@ class solverBase(object):
     
         # Calculate the maximum dt (that satisfies the CFL condition)
         # :math:`\Delta t_{max} = CFL \cdot \frac{{\Delta h_{min}}^2}{U_{max} \cdot \left( \nu + \Delta h_{min} \cdot U_{max}\right)}`
-        self.dtMax = (cfl*self.hmin**2) / (uMax*(nu + self.hmin*uMax))            
+        self.cfl = cfl
+        self.uMax = uMax
+        self.deltaTMax = (self.cfl*self.hmin**2) / (self.uMax*(nu + self.hmin*uMax))            
         
         # Define function spaces
         self.V = dolfin.VectorFunctionSpace(self.mesh,'CG',2)# Velocity: vector function space
@@ -97,7 +96,7 @@ class solverBase(object):
         self.p0 = dolfin.Function(self.Q)
         self.p1 = dolfin.Function(self.Q)
         
-        self.k  = dolfin.Constant(self.dtMax)
+        self.k  = dolfin.Constant(self.deltaTMax)
         self.f  = dolfin.Constant((0.,0.)) # Right-Hand side (Source terms)
         self.nu = dolfin.Constant(nu)
     
@@ -113,19 +112,23 @@ class solverBase(object):
         
         # Define boundary conditions
         self.u1Boundary = dolfin.Function(self.V)
-        self.bcNoSlip = dolfin.DirichletBC(self.V, dolfin.Constant((0.,0.)), self.boundaryDomains, noSlipID)
+        self.bcNoSlip = dolfin.DirichletBC(self.V, dolfin.Constant((0.,0.)), self.boundaryDomains, nsOptions.ID_NOSLIP_BOUNDARY)
         
         # Determine boundary indices and boundary coordinates
         #self.boundary_VectorDOFIndex = boundary.vectorDOF_boundaryIndex(self.V,self.boundaryDomains,options.ID_EXTERNAL_BOUNDARY)
-        self.boundary_VectorDOFIndex = boundary.vectorDOF_boundaryIndex(self.mesh,self.boundaryDomains,options.ID_EXTERNAL_BOUNDARY,2)
+        self.boundary_VectorDOFIndex = boundary.vectorDOF_boundaryIndex(self.mesh,self.boundaryDomains,nsOptions.ID_EXTERNAL_BOUNDARY,2)
         self.boundary_DOFCoordinates = boundary.vectorDOF_coordinates(self.mesh,self.V,self.boundary_VectorDOFIndex[0])
         
         # Define the pressure boundary conditions
-        self.bcPressure = []
-        
+        if nsOptions.ID_PRESSURE_OUTLET in self.boundaryDomains.array():
+            # If the boundary domain has pressure outlet
+            self.bcPressure = [dolfin.DirichletBC(self.Q, dolfin.Constant(0.), self.boundaryDomains, nsOptions.ID_PRESSURE_OUTLET)]
+        else:
+            # If there is no pressure outlet
+            self.bcPressure = []
         
     
-    def modify_dt(self):
+    def set_deltaT(self,deltaT):
         r"""
         Update the time-step when modified. If :math:`\Delta t` is modified,
         the LHS of the *tentative velocity* expression needs to be updated.
@@ -143,10 +146,24 @@ class solverBase(object):
         ...
 
         :First Added:   2013-12-18
-        :Last Modified: 2013-12-18
+        :Last Modified: 2014-02-21
         :Copyright:     Copyright (C) 2013 Lento Manickathan, Artur Palha, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version                
         """
+        if deltaT == 'max':
+            self.deltaT = self.deltaTMax
+            
+        elif deltaT > self.deltaTMax:
+            raise ValueError("""Time step 'deltaT = %g' is larger than the
+                             maximum allowable time step 'deltaTMax = %g', at
+                             CFL = %g""" % (deltaT, self.deltaTMax, self.cfl))
+                             
+        else:
+            self.deltaT = deltaT
+            
+        # Assign the delta T to k 
+        self.k.assign(self.deltaT)
+            
         # Re-assemble the LHS
         self.A1 = dolfin.assemble(self.a1)
         
@@ -275,7 +292,14 @@ class solverBase(object):
         self.u1Boundary.vector()[self.boundary_VectorDOFIndex[1]] = vy
 
         # Exterior boundary condition
-        self.bcExt = dolfin.DirichletBC(self.V, self.u1Boundary, self.boundaryDomains, extID)
+        self.bcExt = dolfin.DirichletBC(self.V, self.u1Boundary, self.boundaryDomains, nsOptions.ID_EXTERNAL_BOUNDARY)
         
         # Collect all the boundary conditions
         self.bcVelocity = [self.bcNoSlip, self.bcExt]
+
+
+    def rotateMesh(self,thetaLocal):
+        """
+        Rotate the mesh around the local cm point.
+        """
+        self.mesh.rotate(thetaLocal,2,self.cmLocal)
