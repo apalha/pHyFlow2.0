@@ -21,9 +21,9 @@
 # Last changed: 2013-12-19
 
 # import all modules
+from solverBase import *
 from ipcs import *
 from chorin import *
-from solverBase import *
 import boundary
 
 

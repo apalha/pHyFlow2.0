@@ -1,167 +1,261 @@
 #-*- coding: utf-8 -*-
-__doc__ = """ Navier-Stokes solver: Incremental Pressure-Correction Scheme.
+__doc__ = """Navier-Stokes solver: Incremental Pressure-Correction Scheme.
 
-DESCRIPTION:
-    ..baadasdasdad..
+Description
+-----------
+
+The solve the linear system of equations DOLFIN (PETSc) Krylov solver is
+used with absolute and relative tolerance of 1E-25 and 1E-12 respectively.
+To solve the velocity system, the equations where solved using GMRES
+with ILU preconditioning [1]_ [2]_. 
+
+The projection step (Darcy problem)  for :math:`u_h^n, u_h^n` is as follows,
+
+.. math::
+
+    \frac{u_h^n-u_h^*}{k_n} + \nabla p_h^n = 0,
+    
+    \nabla \cdot \left(u_h^n\right) = 0
+    
+which reduces to the poisson problem,
+   
+.. math::
+
+    -\Delta p_h^n = \frac{-\nabla \cdot \left( u_h^*\right)}{k_n}                                                     
+    
+References
+----------
+.. [1] Valen-sendstad, B. K., Logg, A., Mardal, K., Narayanan, H., & Mortensen, 
+        M. (2012). Automated Solution of Differential Equations by the Finite 
+        Element Method. (A. Logg, K.-A. Mardal, & G. Wells, Eds.), 
+        84. doi:10.1007/978-3-642-23099-8
+            Chapter 21: A comparison of finite element schemes for the 
+            incompressible Navier–Stokes equations.
+                Section 21.3.1: Chorin's Projection Method
+    
+.. [2] Program structure:
+       Kristian Valen-Sendstad <kvs@simula.no, 
+       Anders Logg <logg@simula.no> 
 
     
-    The solve the linear system of equations DOLFIN (PETSc) Krylov solver is
-    used with absolute and relative tolerance of 1E-25 and 1E-12 respectively.
-    To solve the velocity system, the equations where solved using GMRES
-    with ILU preconditioning. 
-    
-        Projection step (Darcy problem for u_h^n, u_h^n):
-    
-             ^n    ^*               
-            u_h - u_h     __  ^n
-            ---------  +  \/ p_h  =  0,
-               k_n 
-                          
-                      __     ^n
-                      \/ . (u_h)  =  0
-                                       
-        reduces to the poisson problem:
-       
-                                      __     ^*
-                          .   ^n    - \/ . (u_h)
-                       - /_\ p_h  =   ----------
-                                          k_n
-                                                         
-    
-ALGORITHM:
-    1) .
-    2) .
-    3) .
-
-REFERENCE:
-    Valen-sendstad, B. K., Logg, A., Mardal, K., Narayanan, H., & Mortensen, 
-    M. (2012). Automated Solution of Differential Equations by the Finite 
-    Element Method. (A. Logg, K.-A. Mardal, & G. Wells, Eds.), 
-    84. doi:10.1007/978-3-642-23099-8
-        Chapter 21: A comparison of finite element schemes for the 
-        incompressible Navier–Stokes equations.
-            Section 21.3.1: Chorin's Projection Method
-    
-    Program structure:
-        Kristian Valen-Sendstad <kvs@simula.no, 
-        Anders Logg <logg@simula.no> 
-        
-        and 
-        Supervisor: Artur Palha <a.palha@tudelft.nl>
-    
-            
-Author      :   %s
-First added :   %s           
-Copyright   :   %s
-Licence     :   %s        
+:First Added:   2013-12-18
+:Last Modified: 2014-02-21
+:Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+:Licence:       GNU GPL version 3 or any later version 
 """
-
-__author__      = "Lento Manickathan <l.manickathan@student.tudelft.nl>"
-__date__        = "2013-07-26"
-__copyright__   = "Copyright (C) 2013 " + __author__
-__license__     = "GNU GPL version 3 or any later version"
-__doc__         %= (__author__, __date__, __copyright__ , __license__)
-
 
 # External module
 import dolfin
 
 # Import solver base class
-from solverBase import solverBase
-
+from pHyFlow.navierStokes.base import solverBase
 
 __all__ = ['ipcs']
 
 class ipcs(solverBase):
-    def __init__(self,mesh,boundaryDomains,nu,cfl,uMax):
-        """       
-            Initialize the solver specific parameters (for the ipcs scheme).
-            
-            Usage
-            -----
-                Solver.initialize(mesh, nu, dt, f)
-                
-            Parameters
-            ----------
-                mesh    :: the geometry mesh data file location.
-                ----       (type: dolfin.cpp.Mesh; single object)
-                
-                nu      :: the fluid kinematic viscosity.
-                --         (type: dolfin.functions.constant; singe object)
-                
-                dt      :: the time step size.
-                --         (type: dolfin.functions.constant; singe object)
-                
-                f       :: the Right-Hand side of the Navier-Stokes equation,
-                -          i.e the source terms. Default = (0.0,0.0).
-                           (type: dolfin.functions.constant; singe object)
-                           
-            Returns
-            -------
-                V       :: the vector function space of the mesh representing
-                -          a vector-valued finite element function space.
-                           (type: dolfin.functions.functionspace.VectorFunctionSpace; single object)
-                
-                Q       :: the function space of the mesh representing a 
-                -          finite element function space.
-                           (type: dolfin.functions.functionspace.FunctionSpace; single object)
-                           
-                u0      :: the class representing the initial/old velocity field
-                --         in the vector function space V. Default = zeros.
-                           (type: dolfin.functions.function.Function; single object)
-                           
-                u1      :: the class representing the new computed velocity field
-                --         function in the vector function space V. Default = zeros.
-                           (type: dolfin.functions.function.Function; single object)
-                           
-                p0      :: the class representing the intial/old pressur field
-                --         in the function space Q. Default = zeros.
-                           (type: dolfin.functions.function.Function; single object)
-                
-                p1      :: the class representing the new computed pressure field
-                --         in the function space Q. Default = zeros.
-                           (type: dolfin.functions.function.Function; single object)
-                        
-            First added: 2013-07-15
-        """
+    r"""
+    Navier-Stokes IPCS solver class for solving the navier-stokes incompressible
+    laminar problem.
         
-        # Call the parent init
+    Usage
+    -----
+    .. code-block:: python
+    
+        NSSolver = ipcs(mesh,boundaryDomains,nu,cfl,uMax)
+                 
+    Parameters
+    ----------
+    mesh : str
+           the mesh data filename (.xml.gz) generated by a FE mesh generateor 
+           (GMSH) and converted to XML format.
+           
+    boundaryDomains : str
+                      the facet boundary domain mesh data file location. The 
+                      facet boundary file should be marked (int format) 
+                      according to .. py:module:: pHyFlow.navierStokes.nsOptions
+                      as shown below:
+                                
+                      (1) : Fluid Domain
+                      (2) : No-Slip boundary
+                      (3) : External dirichlet boundary
+                      (4) : [optional] Pressure outlet.
+    
+                      * Note: Pressure outlet is optional.
+                      
+    nu : float
+         the fluid kinematic viscosity :math:`\nu`.
+         
+    cfl : float
+          the :math:`CFL` stability parameter. For explicit time-stepping,
+          :math:`CFL\le1`  
+    
+    uMax : float
+           the maximum fluid velocity :math:`U_{max}`.
+    
+    Attributes
+    ----------
+    a1 : ufl.form.Form
+         the LHS of the tentative velocity expression
+    
+    a2 : ufl.form.Form
+         the LHS of the pressure correction expression
+         
+    a3 : ufl.form.Form
+         the LHS of the velocity correction expression
+    
+    A1 : dolfin.cpp.la.Matrix
+         the assembled LHS of the tentative velocity expression
+         
+    A2 : dolfin.cpp.la.Matrix
+         the assembled LHS of the pressure correction expression
+         
+    A3 : dolfin.cpp.la.Matrix
+         the assembled LHS of the velocity correction expression.
+         
+    aVort : ufl.form.Form
+            LHS of the variational form of vorticity            
+            
+    AVort : dolfin.cpp.la.Matrix
+            Assembled LHS of the variation form of vorticity
+            
+    bcExt : dolfin.fem.bcs.DirichletBC
+            The dirichlet velocity b.c at the external boundary domain (3).
+    
+    bcPressure : list
+                 The list of pressure boundary condition.
+                 * Note: empty is there is no pressure outlet.
+                 
+    bcNoSlip : dolfin.fem.bcs.DirichletBC
+               The dirichlet velocity b.c at the no-slip boundary wall (2).
+               
+    bcVelocity : list
+                 List of dirichlet boundary conditions.
+                 
+    beta : dolfin.functions.constant.Constant
+           term to remove boundary stress term if problem is periodic.
+                                         
+    boundary_DOFCoordinates : numpy.ndarray(float64), shape (2,nDOFs)
+                              array of external dirichlet boundary coordinates.
+    
+    boundary_VectorDOFIndex : numpy.ndarray(int64), shape (2,nDOFs)
+                              array of indices of the external dirichlet 
+                              boundary DOF in the velocity vector function 
+                              space.
+    
+    boundaryDomains : dolfin.cpp.mesh.MeshFunctionSizet
+                      mesh function defining the boundary domains in the mesh.
+                      
+    bVort : ufl.form.Form
+            RHS of the variational form of vorticity.
+            
+    cmLocal : dolfin.cpp.mesh.Point
+              the local reference point of rotation.
+              
+    deltaT : float
+             the time step size.
+             
+    deltaTMax : float
+                the maximum allowable time step size.
+                
+    f : dolfin.functions.constant.Constant
+        the RHS of the navierstokes problem (source terms)
+    
+    F1 : ufl.form.Form
+         the tentative velocity expression.    
+       
+    hmin : float
+           the minimum mesh cell size. 
+    
+    k : dolfin.functions.constant.Constant
+        the time step size dolfin constant.
+    
+    L1 : ufl.form.Form
+         the RHS of the tentative velocity expression.
+         
+    L2 : ufl.form.Form
+         the RHS of the pressure correction expression.
+         
+    L3 : ufl.form.Form
+         the RHS of the velocity correction expression.
+         
+    mesh : dolfin.cpp.mesh.mesh
+           the fluid mesh class
+    
+    n : ufl.geometry.FacetNormal
+        the geometry facet normal
+    
+    p : dolfin.functions.function.Argument
+        the navierstokes variational from pressure trial function
+    
+    p0 : dolfin.functions.function.Function
+         the old pressure field
+    
+    p1 : dolfin.functions.function.Function
+         the current pressure field
+         
+    q : dolfin.functions.function.Argument
+        the pressure term test function.
+        
+    Q : dolfin.functions.functionspace.FunctionSpace
+        the pressure function space
+    
+    solverName : str
+                 the name of the solver. 
+                 
+    u : dolfin.functions.function.Argument
+        the ns variational form velocity trial function
+        
+    U : ufl.tensors.ComponentTensor
+        the linear interpolation of the old and the current velocity.         
+        
+    u0 : dolfin.functions.functions.Function
+         the old velocity field
+         
+    u1 : dolfin.functions.functions.Function
+         the current velocity field
+         
+    u1Boundary : dolfin.functions.function.Function
+                 the current dirichlet boundary velocity field
+                 
+    uMax : float
+           the maximum fluid velocity
+           
+    v : dolfin.functions.functions.Argument
+        the velocity test function
+        
+    V : dolfin.functions.functionspace.VectorFunctionSpace
+        the velocity vector function space
+    
+    w : dolfin.functions.function.Function
+        the vorticity trial function
+        
+    x : dolfin.functions.functions.Argument
+        the vorticity test function
+        
+    X : dolfin.functions.functionspace.FunctionSpace
+        the vorticity function space
+    
+        
+    :First Added:   2013-12-18
+    :Last Modified: 2014-02-21
+    :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+    :Licence:       GNU GPL version 3 or any later version        
+    """
+    def __init__(self,mesh,boundaryDomains,nu,cfl,uMax):
+
+        
+        # Call the parent init (the init in solverBase)
         super(ipcs,self).__init__(mesh,boundaryDomains,nu,cfl,uMax)
         
         self.solverName = 'ipcs'
         
         # Define function space
-        #       The function spaces that are used for solving are the 
-        #       vector function space 'V' (with 2 degree) for the velocity and
-        #       function space 'Q' (with 1 degree) for the pressure. Both the
-        #       function spaces belongs to the 'Lagrange'/'Continuous Galerkin' 
-        #       element family.
-        #        self.V  = dolfin.VectorFunctionSpace(mesh, "CG", 2)
-        #        self.Q  = dolfin.FunctionSpace(mesh, "CG", 1)
-        self.DG = dolfin.FunctionSpace(self.mesh, "DG", 0)
+        #self.DG = dolfin.FunctionSpace(self.mesh, "DG", 0)
 
         # Remove boundary stress term if problem is periodic.
         self.beta = dolfin.Constant(1) # Problem for us is not periodic
                 
-        # Define test and trial functions
-        #       Initializing the test and the trial functions for the velocity,
-        #       pressure respectively.
-        #        self.v = dolfin.TestFunction(self.V)
-        #        self.q = dolfin.TestFunction(self.Q)
-        #        self.u = dolfin.TrialFunction(self.V)
-        #        self.p = dolfin.TrialFunction(self.Q)
-        
-        # Define functions
-        #        self.us = dolfin.Function(self.V)   # Tentative velocity 
-        #        self.u0 = dolfin.Function(self.V)   # Initial velocity before the time step
-        #        self.u1 = dolfin.Function(self.V)   # Calculated velocity after the time step
-        #        self.p0 = dolfin.Function(self.Q)   # Initial pressure before the time step
-        #        self.p1 = dolfin.Function(self.Q)   # Calculated pressure after the time step         
-        #        self.k  = dt                        # time-step
-        #        self.f  = f                         # RHS (source-terms) [Default = 0]
-        #        self.nu = nu                        # fluid viscosity
-        
-        self.n  = dolfin.FacetNormal(self.mesh) #TODO: will this cause problem?????????
+        self.n  = dolfin.FacetNormal(self.mesh) 
         
         # Tentative velocity step
         self.U  = 0.5*(self.u0 + self.u)
@@ -186,49 +280,45 @@ class ipcs(solverBase):
         self.A2 = dolfin.assemble(self.a2)
         self.A3 = dolfin.assemble(self.a3)
         
-        #return self.V, self.Q, self.u0, self.u1, self.p0, self.p1
-
-
+        
 
     def solve(self):
         """
         Solve the problem to the next time step using the dirichlet
-        boundary condition. (Note: bcp is empty).
+        boundary condition.
         
         Usage
         -----
-            Solver.solve(bcu, bcp)
+        .. code-block:: python
+        
+            solve()
             
         Parameters
         ----------
-            bcu     :: the no-slip boundary condition on the body boundary (2)
-            ---        and the dirichlet boundary condition on mesh exterior
-                       boundary (3).
-                       (type: )
-                       
-            bcp     :: the empty pressure boundary condition. Default = [].
-            ---        (type:)
+        None
                        
         Returns
         -------
-            u0      :: the class representing the initial/old velocity field
-            --         in the vector function space V.
-                       (type: dolfin.functions.function.Function; single object)
-                       
-            u1      :: the class representing the new computed velocity field
-            --         function in the vector function space V.
-                       (type: dolfin.functions.function.Function; single object)
-                       
-            p0      :: the class representing the intial/old pressur field
-            --         in the function space Q.
-                       (type: dolfin.functions.function.Function; single object)
-            
-            p1      :: the class representing the new computed pressure field
-            --         in the function space Q.
-                       (type: dolfin.functions.function.Function; single object)
-                       
-        First added: 2013-07-26                           
+        None returned.
         
+        Attributes
+        ----------
+        p0 : dolfin.functions.function.Function
+             the old pressure field
+    
+        p1 : dolfin.functions.function.Function
+             the current pressure field
+        
+        u0 : dolfin.functions.functions.Function
+             the old velocity field
+         
+        u1 : dolfin.functions.functions.Function
+             the current velocity field
+                                          
+        :First Added:   2013-07-26        
+        :Last Modified: 2014-02-21
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version    
         """
         
         # Previously computed solution is now the old pressure, velocity fields u0 <- u1, p0 <- p1
@@ -236,9 +326,9 @@ class ipcs(solverBase):
         self.p0.assign(self.p1) # replace p0 with p1 
 
         # Compute tentative velocity step
-        b = dolfin.assemble(self.L1)                                # assemble the RHS
-        [bc.apply(self.A1, b) for bc in self.bcVelocity]                        # apply the velocity b.c
-        dolfin.solve(self.A1, self.u1.vector(), b, "gmres", "default")  # solve (u1)
+        b = dolfin.assemble(self.L1) # assemble the RHS
+        [bc.apply(self.A1, b) for bc in self.bcVelocity] # apply the velocity b.c
+        dolfin.solve(self.A1, self.u1.vector(), b, "gmres", "default") # solve (u1)
 
         # Pressure correction
         b = dolfin.assemble(self.L2)
@@ -253,6 +343,8 @@ class ipcs(solverBase):
         dolfin.solve(self.A3, self.u1.vector(), b, "gmres", 'default')
         
         
+    #-------------------------------------------------------------------------
+    # Additional terms of the NS equations.
         
     def epsilon(self, u):
         "Return symmetric gradient."

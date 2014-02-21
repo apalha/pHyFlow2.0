@@ -41,6 +41,7 @@ SOLVER = {'default':'ipcs',             # Default solver
 # Partial differential equation solver parameters                            
 FORM_COMPILER = {'cpp_optimize': True}
 
+# Krylov solver parameters
 KRYLOV_SOLVER = {'absolute_tolerance':  1e-25,
                  'relative_tolerance':  1e-12,
                  'monitor_convergence': False}
