@@ -29,6 +29,9 @@ import vortex
 # load panel related modules
 import panel
 
+# load vortex-panel related modules
+import vortexPanel
+
 # load NavierStokes modules
 import navierStokes
 
