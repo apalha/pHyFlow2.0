@@ -300,7 +300,7 @@ def pointsToVTK(path, x, y, z, scalars=None,vectors=None):
                      Keys should be the names of the variable stored in each array.
                      All arrays must have the same number of elements and equal to the number
                      of points.
-	    vectors: dictionary with vector variables associated to each point.
+	        vectors: dictionary with vector variables associated to each point.
                      Keys should be the names of the variable stored in each array.
                      All arrays must have the same number of elements and equal to the number
                      of points. The vector variables are tuples of numpy.array. Can be 2D or 3D.
