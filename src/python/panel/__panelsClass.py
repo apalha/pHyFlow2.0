@@ -137,15 +137,15 @@ class Panels(object):
                      the :math:`x`-coordinate of the :math:`\mathbf{M}` panel
                      corners. The coordinates are defined in the local
                      coordinates system with the reference point being (0,0).
-                     * Note: Do not close the loop (i.e no need to repeat
-                     the start point.)
+                     
+                     * Note: Close the loop 
                      
             yPanel : list of numpy.ndarray(float64), N list of shape (M,)
                      the :math:`y`-coordinate of the :math:`\mathbf{M}` panel
                      corners. The coordinates are defined in the local
                      coordinates system with the reference point being (0,0).
-                     * Note: Do not close the loop (i.e no need to repeat
-                     the start point.) 
+                     
+                     * Note: Close the loop
                      
             cmGlobal : list of numpy.ndarray(float64), N list of shape (2,) 
                        the :math:`x,y` global coordinates of the local panel
@@ -364,8 +364,6 @@ class Panels(object):
                 the :math:`x`-coordinate of the :math:`\mathbf{M}` panel
                 corners. The coordinates are defined in the local
                 coordinates system with the reference point being (0,0).
-                * Note: Do not close the loop (i.e no need to repeat
-                the start point.)
                 
     __xyCP_global : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
                     the :math:`x,y` global coordinate of the collocation point.
@@ -382,8 +380,6 @@ class Panels(object):
                the :math:`x`-coordinate of the :math:`\mathbf{M}` panel
                corners. The coordinates are defined in the local
                coordinates system with the reference point being (0,0).
-               * Note: Do not close the loop (i.e no need to repeat
-               the start point.)
         
 
     Methods
@@ -934,8 +930,8 @@ class Panels(object):
             xyPanelNew = _numpy.dot(self.__rotMat[i], _numpy.vstack((x,y))) + self.__cmGlobal[i].reshape(2,1)
             
             # Separate and concatenate the (start) and (end) points of the panels
-            self.__xyPanelStart_global[:,iS:iE]  = xyPanelNew[:,:]
-            self.__xyPanelEnd_global[:,iS:iE]    = _numpy.hstack((xyPanelNew[:,1:],xyPanelNew[:,0].reshape(-1,1)))
+            self.__xyPanelStart_global[:,iS:iE]  = xyPanelNew[:,:-1]
+            self.__xyPanelEnd_global[:,iS:iE]    = xyPanelNew[:,1:]
             
             #------------------------------------------------------------------
             # Calculate the angle functions
@@ -1066,8 +1062,8 @@ class Panels(object):
             # Determine number of panels
             self.__nPanels = _numpy.zeros(self.__nBodies,dtype=int)
             for i,xPanel in enumerate(var['xPanel']):
-                self.__nPanels[i] = xPanel.shape[0]
-            
+                self.__nPanels[i] = xPanel.shape[0] - 1
+                
             # Iterate through all the parameters
             for key, panelParm in var.iteritems():
                 
@@ -1083,8 +1079,8 @@ class Panels(object):
                         if type(data) != _numpy.ndarray:
                             raise TypeError("'%s[%g]' must be a numpy ndarray." % (key,i,str(type(data))))
                         # Check data shape    
-                        if data.shape[0] != self.__nPanels[i]:
-                            raise ValueError('%s[%g] must have shape (%g,0). It has shape %s.') % (key, i, str((self.__nPanels[i],)), str(data.shape))
+                        if (data.shape[0] - 1) != self.__nPanels[i]:
+                            raise ValueError('%s[%g] must have shape %s. It has shape %s.' % (key, i, str((self.__nPanels[i],)), str(data.shape)))
                     
                     elif key == 'cmGlobal':
                         # Check data type
@@ -1092,7 +1088,7 @@ class Panels(object):
                             raise TypeError("'%s[%g]' must be a numpy ndarray. It is a %s" % (key,i,str(type(data))))
                         # Check data shape    
                         if data.shape[0] != 2:
-                            raise ValueError('%s[%g] must have shape (%g,0). It has shape %s.') % (key, i, str((2,)), str(data.shape))
+                            raise ValueError('%s[%g] must have shape %s. It has shape %s.'% (key, i, str((2,)), str(data.shape)))
 
                     elif key == 'dPanel' or key == 'thetaLocal':
                         # Check data type
@@ -1157,7 +1153,7 @@ class Panels(object):
                     raise TypeError("'%s[%g]' must be a numpy ndarray. It is a %s" % (key,i,str(type(data))))
                 # Check data shape    
                 if data.shape[0] != 2:
-                    raise ValueError('%s[%g] must have shape (%g,0). It has shape %s.') % (key, i, str((2,)), str(data.shape))
+                    raise ValueError('%s[%g] must have shape %s. It has shape %s.') % (key, i, str((2,)), str(data.shape))
             # Set cmGlobal
             self.__cmGlobal = _numpy.array(var)
             
@@ -1230,7 +1226,8 @@ class Panels(object):
         # Split the data
         for i in range(self.__nBodies):
             iS,iE = self.__index[i], self.__index[i+1]
-            xPanelGlobal.append(self.__xyPanelStart_global[0,iS:iE])
+            #xPanelGlobal.append(self.__xyPanelStart_global[0,iS:iE])
+            xPanelGlobal.append(_numpy.hstack((self.__xyPanelStart_global[0,iS:iE],self.__xyPanelStart_global[0,iS])))
             
         return xPanelGlobal
 
@@ -1264,7 +1261,8 @@ class Panels(object):
         # Split the data
         for i in range(self.__nBodies):
             iS,iE = self.__index[i], self.__index[i+1]
-            yPanelGlobal.append(self.__xyPanelStart_global[1,iS:iE])
+            #yPanelGlobal.append(self.__xyPanelStart_global[1,iS:iE])
+            yPanelGlobal.append(_numpy.hstack((self.__xyPanelStart_global[1,iS:iE],self.__xyPanelStart_global[1,iS])))
             
         return yPanelGlobal     
       

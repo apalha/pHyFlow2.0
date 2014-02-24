@@ -33,8 +33,8 @@ dtheta1  = theta1[1]-theta1[0] # Angle spacing
 r1       = (R1 + dPanel1) / np.cos(dtheta1/2.0) # Radial location of the panel end points
 
 # Panel Coordinates in cartesian coordinates
-xPanel1 = r1*np.cos(theta1[:-1] - dtheta1/2)
-yPanel1 = r1*np.sin(theta1[:-1] - dtheta1/2)
+xPanel1 = r1*np.cos(theta1 - dtheta1/2)
+yPanel1 = r1*np.sin(theta1 - dtheta1/2)
 
 # Panel location
 cmGlobal1 = np.array([0.,1.])
