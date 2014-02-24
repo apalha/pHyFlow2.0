@@ -2206,53 +2206,46 @@ class VortexBlobs(object):
 
 
     
-    def _diffuse(self):
+    def __diffusion(self):
         """
         diffusion
         """        
-        # diffusion step
-        if self.__stepDiffusion != 0: # corresponds to nu = 0.0, therefore no diffusion is to be computed
-            if (self.__tStep % self.__stepDiffusion) == 0: # if the time step is a multiple of the stepDiffusion perform diffusion
+        # select the diffusion method to use
+        if self.__diffusionParams['method'] == 'regrid_wee':
+            # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
+            # on regrid of the blobs into a grid that
+            # does not need to have a node at the point [0.0, 0.0], for that it
+            # uses the original grid placement of particles to redistribute them.
+            # in here it is assumed that the redistribution grid always contains the
+            # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
+            # yBounds variables are computes in order to redistribute particles
+            # into a grid that contains the point [0.0, 0.0]. Essentially, the
+            # redistribution is done into the following initial grid:
+            #
+            #       -------------------------
+            #       |       |       |       |
+            #       |   X   |   X   |   X   |
+            #       |  (3)  |  (7)  |  (11) |
+            #       -------------------------
+            #       |       |       |      O|
+            #       |   X   |   X   |   X   |
+            #       |  (2)  |  (6)  |  (10) |
+            #       -------------------------
+            #       |       |       |       |
+            #       |   X   |   X   |   X   |
+            #       |  (1)  |  (5)  |  (9)  |
+            #       -------------------------
+            #
+            # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
+            # terms appear.
+            xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+            yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
 
-                # select the diffusion method to use
-                if self.__diffusionParams['method'] == 'regrid_wee':
-                    # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
-                    # on regrid of the blobs into a grid that
-                    # does not need to have a node at the point [0.0, 0.0], for that it
-                    # uses the original grid placement of particles to redistribute them.
-                    # in here it is assumed that the redistribution grid always contains the
-                    # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
-                    # yBounds variables are computes in order to redistribute particles
-                    # into a grid that contains the point [0.0, 0.0]. Essentially, the
-                    # redistribution is done into the following initial grid:
-                    #
-                    #       -------------------------
-                    #       |       |       |       |
-                    #       |   X   |   X   |   X   |
-                    #       |  (3)  |  (7)  |  (11) |
-                    #       -------------------------
-                    #       |       |       |      O|
-                    #       |   X   |   X   |   X   |
-                    #       |  (2)  |  (6)  |  (10) |
-                    #       -------------------------
-                    #       |       |       |       |
-                    #       |   X   |   X   |   X   |
-                    #       |  (1)  |  (5)  |  (9)  |
-                    #       -------------------------
-                    #
-                    # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
-                    # terms appear.
-                    xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
-                    yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
-
-                    # perform diffusion and store the results directly in the object
-                    self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
-                                                                     self.__x,self.__y,self.__g,
-                                                                     self.__sigma,xBounds,yBounds,
-                                                                     overlap=self.__overlap)
-
-        # Else don't diffuse.
-
+            # perform diffusion and store the results directly in the object
+            self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
+                                                             self.__x,self.__y,self.__g,
+                                                             self.__sigma,xBounds,yBounds,
+                                                             overlap=self.__overlap)
 
     #----------------------------------------------------
     # Definition of properties

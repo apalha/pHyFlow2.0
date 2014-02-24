@@ -29,4 +29,5 @@ Define vortex-panel options
 """
 
 
-
+PANEL_STRENGTH_UPDATE = {'default': 'constant',
+                         'available': ('constant', 'varying')}
