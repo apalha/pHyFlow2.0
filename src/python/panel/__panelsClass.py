@@ -109,7 +109,7 @@ from scipy.sparse.linalg import bicgstab as _bicgstab
 # Import pHyFlow options
 from pHyFlow.panel.base import panelSolver as _panelSolver
 from pHyFlow.panel import panelOptions as _panelOptions
-
+import time
 
 class Panels(object):
     r"""
@@ -641,17 +641,15 @@ class Panels(object):
         # Assign the new body location
         self.__set('thetaLocal', thetaLocal)
         self.__set('cmGlobal', cmGlobal)
-        
+
         # Update the rotational matrix
         self.__updateRotMat()
-        
+
         # Update the panel coordinates and angles
         self.__updateCoordinates()
-        
+
         # Re-assemble the influence matrix A
-        self.__assembleInfluenceMatrix() 
-        
-        
+        self.__assembleInfluenceMatrix()
         
     def solve(self,vxExternel,vyExternel):
         """
@@ -932,7 +930,7 @@ class Panels(object):
             
             # New global panel coordinates
             xyPanelNew = _numpy.dot(self.__rotMat[i], _numpy.vstack((x,y))) + self.__cmGlobal[i].reshape(2,1)
-            
+
             # Separate and concatenate the (start) and (end) points of the panels
             self.__xyPanelStart_global[:,iS:iE]  = xyPanelNew[:,:]
             self.__xyPanelEnd_global[:,iS:iE]    = _numpy.hstack((xyPanelNew[:,1:],xyPanelNew[:,0].reshape(-1,1)))

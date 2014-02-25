@@ -29,7 +29,7 @@ from distutils import dir_util
 #############################################################################
 # User defined installation parameters
 
-moduleName = 'pHyFlow' # name of the module, used for root folder
+moduleName = 'pHyFlow' # name of the # module, used for root folder
 
 libParent = '/media/DATAPART1/programs/lib/python' # root install directory
 
