@@ -9,6 +9,7 @@ import pHyFlow
 
 import numpy as np
 import pylab as py
+import time
 py.ion()
 
 #------------------------------------------------------------------------------
@@ -24,7 +25,7 @@ def externVel(x,y):
 #------------------------------------------------------------------------------
 # Define geometries
 
-# Cylinder A
+# Cylinder 1 (Radius = 1, nPanels = 100)    
 R1       = 1.0   # Radius of cylinder
 nPanel1  = 100   # Number of panels
 dPanel1  = np.spacing(100) # Spacing between panel and colloc. point
@@ -36,11 +37,14 @@ r1       = (R1 + dPanel1) / np.cos(dtheta1/2.0) # Radial location of the panel e
 xPanel1 = r1*np.cos(theta1 - dtheta1/2)
 yPanel1 = r1*np.sin(theta1 - dtheta1/2)
 
-# Panel location
-cmGlobal1 = np.array([0.,1.])
-thetaLocal1 = 0.
-    
-# Cylinder B
+# Make the cylinder and append the parameters to a dictionary.
+cylinder1Data = {'xPanel' : r1*np.cos(theta1 - dtheta1/2),
+                 'yPanel' : r1*np.sin(theta1 - dtheta1/2),
+                 'cmGlobal'   : np.array([0.,1.]),
+                 'thetaLocal' : 0.,
+                 'dPanel' : np.spacing(100)}
+
+# Cylinder 2 (Radius = 0.5, nPanels = 50)      
 R2       = 0.5   # Radius of cylinder
 nPanel2  = 50   # Number of panels
 dPanel2  = np.spacing(100) # Spacing between panel and colloc. point
@@ -48,15 +52,14 @@ theta2   = np.linspace(np.pi,-np.pi,nPanel2+1) # Panel polar angles
 dtheta2  = theta2[1]-theta2[0] # Angle spacing
 r2       = (R2 + dPanel2) / np.cos(dtheta2/2.0) # Radial location of the panel end points
 
-# Panel Coordinates in cartesian coordinates
-xPanel2 = r2*np.cos(theta2[:-1] - dtheta2/2)
-yPanel2 = r2*np.sin(theta2[:-1] - dtheta2/2)
-
-# Panel location
-cmGlobal2 = np.array([-3.,-1.])
-thetaLocal2 = np.pi/2.
+# Make the cylinder and append the parameters to a dictionary.
+cylinder2Data = {'xPanel' : r2*np.cos(theta2 - dtheta2/2),
+                 'yPanel' : r2*np.sin(theta2 - dtheta2/2),
+                 'cmGlobal'   : np.array([-3.,-1.]),
+                 'thetaLocal' : np.pi/2.,
+                 'dPanel' : np.spacing(100)}
     
-# Cylinder C
+# Cylinder 3 (Radius = 2.0, nPanels = 200)
 R3       = 2.0   # Radius of cylinder
 nPanel3  = 200   # Number of panels
 dPanel3  = np.spacing(100) # Spacing between panel and colloc. point
@@ -64,35 +67,31 @@ theta3   = np.linspace(np.pi,-np.pi,nPanel3+1) # Panel polar angles
 dtheta3  = theta3[1]-theta3[0] # Angle spacing
 r3       = (R3 + dPanel3) / np.cos(dtheta3/2.0) # Radial location of the panel end points
 
-# Panel Coordinates in cartesian coordinates
-xPanel3 = r3*np.cos(theta3[:-1] - dtheta3/2)
-yPanel3 = r3*np.sin(theta3[:-1] - dtheta3/2)
-
-# Panel location
-cmGlobal3 = np.array([3.,-1.])
-thetaLocal3 = np.pi
-
-#------------------------------------------------------------------------------
+# Make the cylinder and append the parameters to a dictionary.
+cylinder3Data = {'xPanel' : r3*np.cos(theta3 - dtheta3/2),
+                 'yPanel' : r3*np.sin(theta3 - dtheta3/2),
+                 'cmGlobal'   : np.array([3.,-1.]),
+                 'thetaLocal' : np.pi,
+                 'dPanel' : np.spacing(100)}
 
 #------------------------------------------------------------------------------
-# Concatenate the geometries to list (for the input)
 
-# Multiple Cylinders
-panel = {'xPanel': [xPanel1,xPanel2,xPanel3],
-         'yPanel': [yPanel1,yPanel2,yPanel3],
-         'cmGlobal': [cmGlobal1, cmGlobal2, cmGlobal3],
-         'thetaLocal': [thetaLocal1, thetaLocal2,thetaLocal3],
-         'dPanel': [dPanel1,dPanel2,dPanel3]}
-         
 #------------------------------------------------------------------------------
+# Append all the geometries for a multi-body panel solver
 
+# For now, only a single cylinder
+geometries = {'cylinderNormal':cylinder1Data,
+              'cylinderSmall' :cylinder2Data,
+              'cylinderLarge' :cylinder3Data}
+
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Initialize the panels
 
 # Input method 1: Provide all the parameters
-# Initalize panelBody 
-panelBodies = pHyFlow.panel.Panels(panel)
+# Initalize panelBody
+panelBodies = pHyFlow.panel.Panels(geometries=geometries)
 
 #------------------------------------------------------------------------------
 
@@ -101,7 +100,7 @@ panelBodies = pHyFlow.panel.Panels(panel)
 # Solve for panel strengths (to satisfy no-slip b.c.)
 
 # Collocation points
-xCP,yCP = panelBodies.xCPGlobalCat, panelBodies.yCPGlobalCat
+xCP,yCP = panelBodies.xyCPGlobalCat
 
 # External velocity at collocation points
 vx,vy = externVel(xCP,yCP)
@@ -122,8 +121,7 @@ py.show(block=True)
 
 # Plot the body                  
 py.figure(2)
-[py.plot(x,y,'ko') for x,y in zip(panelBodies.xCPGlobal,panelBodies.yCPGlobal)]
-[py.plot(x,y,'b.-') for x,y in zip(panelBodies.xPanelGlobal,panelBodies.yPanelGlobal)]
+[py.plot(x,y,k+'.-',label=geoName) for x,y,geoName,k in zip(panelBodies.xyPanelGlobal[0],panelBodies.xyPanelGlobal[1],panelBodies.geometryKeys,['b','g','k'])]
 py.axis([-10,10,-10,10])
 py.grid()
 py.legend()
@@ -165,33 +163,34 @@ py.show(block=True)
 #------------------------------------------------------------------------------
 # Update panel locations
 # New positions 
-cmGlobalNew = [np.array([0.,0.]), np.array([3.,0.]), np.array([-4.,0.])]
-thetaLocalNew = [0.,0.,0.]
 
+cmGlobalNew = {'cylinderNormal': np.array([0.,0.]),
+               'cylinderSmall' : np.array([3.,0.]),
+               'cylinderLarge' : np.array([-4.,0.])}
 
+thetaLocalNew = {'cylinderNormal': 0.,
+                 'cylinderSmall' : 0.,
+                 'cylinderLarge' : 0.}
 # update panel body
-panelBodies.updateBody(cmGlobalNew,thetaLocalNew)
 
-print "Move to multi-body to new position"
-print "[xA,yA] = %s\n[xB,yB] = %s\n[xC,yC] = %s\n" % (str(cmGlobalNew[0]),str(cmGlobalNew[1]),str(cmGlobalNew[2]))        
+startTime = time.time()
+panelBodies.updateBody(cmGlobalNew,thetaLocalNew)
+print "Time to move to new postion: %g seconds." % (time.time() - startTime)
 
 
 # Plot the body                  
 py.figure(5)
-[py.plot(x,y,'ko') for x,y in zip(panelBodies.xCPGlobal,panelBodies.yCPGlobal)]
-[py.plot(x,y,'b.-') for x,y in zip(panelBodies.xPanelGlobal,panelBodies.yPanelGlobal)]
+#[py.plot(x,y,'ko') for x,y in zip(panelBodies.xCPGlobal,panelBodies.yCPGlobal)]
+#[py.plot(x,y,'b.-') for x,y in zip(panelBodies.xPanelGlobal,panelBodies.yPanelGlobal)]
+[py.plot(x,y,k+'.-',label=geoName) for x,y,geoName,k in zip(panelBodies.xyPanelGlobal[0],panelBodies.xyPanelGlobal[1],panelBodies.geometryKeys,['b','g','k'])]
 py.axis('scaled')
 py.axis([-5,5,-3,3])
 py.grid()
 py.legend()
 py.title('Multi-body to new position')
 
-
 # External velocity at collocation points
 vx,vy = externVel(xCP,yCP)
-
-# External Velocity : simple free-stream flow
-panelBodies.solve(vx,vy)
 
 # Solve for panel strengths (to satisfy no-slip b.c.)
 panelBodies.solve(vx,vy)
@@ -216,17 +215,17 @@ py.colorbar()
 
 # Plot velocity field
 py.figure(5)
-py.quiver(xGrid.flatten(),yGrid.flatten(),vx,vy,scale=100.0)
+py.quiver(xGrid.flatten(),yGrid.flatten(),vx,vy,scale=50.0)
 py.show(block=True)
 
 #------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# Save panel data
-#panelBodies.save('./panelData')
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# Initialize panel problem from save file
-#pBody = panels(externVel, initFile='./panelData.npz')
-#------------------------------------------------------------------------------    
+#
+##------------------------------------------------------------------------------
+## Save panel data
+##panelBodies.save('./panelData')
+##------------------------------------------------------------------------------
+#
+##------------------------------------------------------------------------------
+## Initialize panel problem from save file
+##pBody = panels(externVel, initFile='./panelData.npz')
+##------------------------------------------------------------------------------    
