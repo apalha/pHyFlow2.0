@@ -58,47 +58,7 @@ from pHyFlow.vortex import VortexBlobs as _VortexBlobs
 from pHyFlow.vortex.base.induced import velocity as _blobs_velocity
 from pHyFlow.panel import Panels as _Panels
 
-class my_property(object):
-    """
-    class doc
-    """
-    def __init__(self,getter,doc):
-        self.getter = getter
-        self.doc = doc
-    def __doc__(self):
-        return self.doc
-    def __get__(self, instance, owner):
-        """
-        doc
-        """
-        return self.getter(instance)
-    def __set__(self, instance, value):
-        raise AttributeError('Not possible!')
-    def __delete__(self, instance):
-        raise AttributeError('Not possible !')        
-
-def simple_decorator(decorator):
-    '''This decorator can be used to turn simple functions
-    into well-behaved decorators, so long as the decorators
-    are fairly simple. If a decorator expects a function and
-    returns a function (no descriptors), and if it doesn't
-    modify function attributes or docstring, then it is
-    eligible to use this. Simply apply @simple_decorator to
-    your decorator and it will automatically preserve the
-    docstring and function attributes of functions to which
-    it is applied.'''
-    def new_decorator(f):
-        g = decorator(f)
-        g.__name__ = f.__name__
-        g.__doc__ = f.__doc__
-        g.__dict__.update(f.__dict__)
-        return g
-    # Now a few lines needed to make simple_decorator itself
-    # be a well-behaved decorator.
-    new_decorator.__name__ = decorator.__name__
-    new_decorator.__doc__ = decorator.__doc__
-    new_decorator.__dict__.update(decorator.__dict__)
-    return new_decorator
+   
 
 class VortexPanel(object):
     r"""
@@ -621,8 +581,8 @@ class VortexPanel(object):
     # Define properties
             
     # Time-step
-    test = my_property(getter = lambda self: self.blobs.tStep,
-                       doc = "Documentation...")
+    #    test = my_property(getter = lambda self: self.blobs.tStep,
+    #                       doc = "Documentation...")
         
     tStep = property(fget = lambda self: self.blobs.tStep,
                      fset = __setError,
@@ -630,13 +590,7 @@ class VortexPanel(object):
                      doc  = r"""tStep : int
                                         the current time step 
                      """)
-    
-    @simple_decorator
-    def test2(self):
-        """
-        doc
-        """
-        return 1
+            
     # Current time t
     t = property(fget = lambda self: self.blobs.t)
     
