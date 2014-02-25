@@ -111,7 +111,6 @@ from pHyFlow.aux.customDecorators import simpleGetProperty
 from pHyFlow.panel.base import panelSolver as _panelSolver
 from pHyFlow.panel import panelOptions as _panelOptions
 
-
 class Panels(object):
     r"""
     Panel method solver for defining the no-through-flow boundary condition of
@@ -611,14 +610,15 @@ class Panels(object):
         # Assign the new body location
         self.__set('thetaLocal', thetaLocal)
         self.__set('cmGlobal', cmGlobal)
-        
+
         # Update the rotational matrix
         self.__updateRotMat()
-        
+
         # Update the panel coordinates and angles
         self.__updateCoordinates()
-        
+
         # Re-assemble the influence matrix A
+
         self.__assembleInfluenceMatrix()     
 
 

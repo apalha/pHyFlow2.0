@@ -28,8 +28,6 @@ Reviews:
 
 """
 
-import lxml.etree as lET
-from evtk.hl import pointsToVTK
 import time
 import numpy
 import os

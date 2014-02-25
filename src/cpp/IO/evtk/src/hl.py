@@ -37,64 +37,93 @@ import numpy as np
 def _addDataToFile(vtkFile, cellData=None, pointData=None):
     # Point data
     if pointData <> None:
-	# the scalars and vectors have to be separated because the
+        # the scalars and vectors have to be separated because the
         # data has to be open for both scalars and vectors. Otherwise,
         # at the second time vtkFile.openData is invoked the previous
         # data is deleted
         if pointData['scalars'] <> None:
-	    keysScalars = pointData['scalars'].keys()
-	else:
-            keysScalars = [None]
-        
-	if pointData['vectors'] <> None:
-            keysVectors = pointData['vectors'].keys()
+            keysPointScalars = pointData['scalars'].keys()
         else:
-            keysVectors = [None]
-		
-        vtkFile.openData("Point", scalars = keysScalars[0], vectors = keysVectors[0])
+                keysPointScalars = [None]
         
-	if pointData['scalars'] <> None:
-	    for key in keysScalars:
+        if pointData['vectors'] <> None:
+            keysPointVectors = pointData['vectors'].keys()
+        else:
+            keysPointVectors = [None]
+		
+        vtkFile.openData("Point", scalars = keysPointScalars[0], vectors = keysPointVectors[0])
+        
+        if pointData['scalars'] <> None:
+            for key in keysPointScalars:
                 data = pointData['scalars'][key]
                 vtkFile.addData(key, data)
             
 	    
-	if pointData['vectors'] <> None:
-	    for key in keysVectors:
+        if pointData['vectors'] <> None:
+            for key in keysPointVectors:
                 data = pointData['vectors'][key]
                 vtkFile.addData(key, data)
 
-	vtkFile.closeData("Point")
+        vtkFile.closeData("Point")
 
     # Cell data
     if cellData <> None:
-        keys = cellData.keys()
-        vtkFile.openData("Cell", scalars = keys[0])
-        for key in keys:
-            data = cellData[key]
-            vtkFile.addData(key, data)
+        # the scalars and vectors have to be separated because the
+        # data has to be open for both scalars and vectors. Otherwise,
+        # at the second time vtkFile.openData is invoked the previous
+        # data is deleted
+        if cellData['scalars'] <> None:
+            keysCellsScalars = cellData['scalars'].keys()
+        else:
+            keysCellsScalars = [None]
+
+        if cellData['vectors'] <> None:
+            keysCellsVectors = cellData['vectors'].keys()
+        else:
+            keysCellsVectors = [None]
+
+        vtkFile.openData("Cell", scalars = keysCellsScalars[0], vectors = keysCellsVectors[0])
+
+        if cellData['scalars'] <> None:
+            for key in keysCellsScalars:
+                data = cellData['scalars'][key]
+                vtkFile.addData(key, data)
+
+
+        if cellData['vectors'] <> None:
+            for key in keysCellsVectors:
+                data = cellData['vectors'][key]
+                vtkFile.addData(key, data)
+
         vtkFile.closeData("Cell")
 
 def _appendDataToFile(vtkFile, cellData=None, pointData=None):
     # Append data to binary section
     if pointData <> None:
         if pointData['scalars'] <> None:
-	    keys = pointData['scalars'].keys()
+            keys = pointData['scalars'].keys()
             for key in keys:
                 data = pointData['scalars'][key]
                 vtkFile.appendData(data)
         
-	if pointData['vectors'] <> None:
+        if pointData['vectors'] <> None:
             keys = pointData['vectors'].keys()
             for key in keys:
                 data = pointData['vectors'][key]
                 vtkFile.appendData(data)
         
     if cellData <> None:
-        keys = cellData.keys()
-        for key in keys:
-            data = cellData[key]
-            vtkFile.appendData(data)
+        if cellData['scalars'] <> None:
+            keys = cellData['scalars'].keys()
+            for key in keys:
+                data = cellData['scalars'][key]
+                vtkFile.appendData(data)
+
+        if cellData['vectors'] <> None:
+            keys = cellData['vectors'].keys()
+            for key in keys:
+                data = cellData['vectors'][key]
+                vtkFile.appendData(data)
 
 def _requiresLargeVTKFileSize(vtkFileType, numPoints, numCells, pointData=None, cellData=None):
     """
@@ -130,26 +159,42 @@ def _requiresLargeVTKFileSize(vtkFileType, numPoints, numCells, pointData=None, 
     """
     sum = 0
     if pointData <> None:
-	if pointData['scalars'] <> None:
-	    # do the counting for scalar data
+        if pointData['scalars'] <> None:
+            # do the counting for scalar data
             keys = pointData['scalars'].keys()
             for key in keys:
                 data = pointData['scalars'][key]
                 sum = sum + data.size*data.dtype.itemsize
 
-	if pointData['vectors'] <> None:
-	    # do the counting for vector data
+        if pointData['vectors'] <> None:
+            # do the counting for vector data
             keys = pointData['vectors'].keys()
             for key in keys:
                 data = pointData['vectors'][key]
-	        for vectorComponent in range(len(data)): # loop over the components of the vectors
-	            sum = sum + data[vectorComponent].size*data[vectorComponent].dtype.itemsize
+                for vectorComponent in range(len(data)): # loop over the components of the vectors
+                    sum = sum + data[vectorComponent].size*data[vectorComponent].dtype.itemsize
 
     if cellData <> None:
-        keys = cellData.keys()
-        for key in keys:
-            data = cellData[key]
-            sum = sum + data.size*data.dtype.itemsize
+        # keys = cellData.keys()
+        # for key in keys:
+        #     data = cellData[key]
+        #     sum = sum + data.size*data.dtype.itemsize
+
+
+        if cellData['scalars'] <> None:
+            # do the counting for scalar data
+            keys = cellData['scalars'].keys()
+            for key in keys:
+                data = cellData['scalars'][key]
+                sum = sum + data.size*data.dtype.itemsize
+
+        if cellData['vectors'] <> None:
+            # do the counting for vector data
+            keys = cellData['vectors'].keys()
+            for key in keys:
+                data = cellData['vectors'][key]
+                for vectorComponent in range(len(data)): # loop over the components of the vectors
+                    sum = sum + data[vectorComponent].size*data[vectorComponent].dtype.itemsize
    
     if vtkFileType == "VtkUnstructuredGrid":
         sum = sum + numPoints*3*8 + numCells*8*8
@@ -345,4 +390,94 @@ def pointsToVTK(path, x, y, z, scalars=None,vectors=None):
 
     w.save()
     return w.getFileName()
+
+
+def linesToVTK(path, x, y, z, scalars=None):
+    """
+        Export line and associated data as an unstructured grid.
+
+        PARAMETERS:
+            path: name of the file without extension where data should be saved.
+            x, y, z: 1D arrays with coordinates of the points that make up the line.
+                     The points given go along the line.
+            scalars: dictionary with scalar variables associated to each segment
+                     of the line.
+                     Keys should be the names of the variable stored in each array.
+                     All arrays must have the same number of elements and equal to the number
+                     of panels (number of points - 1).
+
+        RETURNS:
+            Full path to saved file.
+
+    """
+
+    assert(x.size == y.size == z.size)
+    nPoints = x.size
+    nLines = nPoints-1
+
+    # create some temporary arrays to write the topology of the grid
+
+    # generate the connectivity of the grid
+    # this array specifies the points in each line segment (each cell)
+    # this is done in the following way considering the line:
+    #  P1      P2      P3      P4
+    #   X-------X-------X-------X
+    #
+    #      L1      L2      L3
+    #
+    # connectivity will then be:
+    #   [1 2 2 3 3 4], since cell L1 has points 1 and 2, cell L2 chas points 2 and 3, etc.
+    connectivity = np.zeros(2*nLines,dtype = 'int32')
+    connectivity[0::2] = np.arange(0,nPoints-1)
+    connectivity[1::2] = np.arange(1,nPoints)
+
+    # generate the offsets of the grid
+    # this array specifies where the start of each cell is in the connectivity array
+    # taking the previous example we have that cell 1 starts at 0 (this is not
+    # specified because cell 1 always starts at 0), cell 2 starts at 2, cell 3
+    # starts at 4 and then the last number is the size of the connectivity grid + 1
+    offsets = np.arange(2,2*nLines+1,2,dtype = 'int32')
+
+    # generate the array of cell types
+    cell_types = np.empty(nLines, dtype = 'uint8')
+    cell_types[:] = VtkLine.tid
+
+    # determine if a large file should be generated or not
+    largeFileFlag = _requiresLargeVTKFileSize("VtkUnstructuredGrid", numPoints = nPoints, numCells = nLines, pointData = None, cellData = {'scalars':scalars,'vectors':None})
+
+    # open the vtk file to start adding the data
+    # the line is a vtk unstructure grid with two points
+    w = VtkFile(path, VtkUnstructuredGrid, largeFileFlag)
+    # open the grid to add the mesh
+    w.openGrid()
+    w.openPiece(ncells = nLines, npoints = nPoints)
+
+    # add the meta data of the points
+    w.openElement('Points')
+    w.addData('points',(x,y,z))
+    w.closeElement("Points")
+
+    # add the meta data of the cells
+    w.openElement("Cells")
+    w.addData("connectivity", connectivity)
+    w.addData("offsets", offsets)
+    w.addData("types", cell_types)
+    w.closeElement("Cells")
+
+    # add the metada of the cell data
+    _addDataToFile(w, cellData = {'scalars': scalars, 'vectors': None}, pointData = None)
+
+    # finish metadata input
+    w.closePiece()
+    w.closeGrid()
+
+    # add the points data to the end of the xml file
+    w.appendData( (x,y,z) )
+    # add the connectivity, offsets and cell type data to the end of the xml file
+    w.appendData(connectivity).appendData(offsets).appendData(cell_types)
+    # add the actual data to the end of the xml file
+    _appendDataToFile(w,cellData={'scalars': scalars, 'vectors': None}, pointData = None)
+
+    # save the vtk xml file
+    w.save()
 

@@ -39,9 +39,11 @@ __all__ = ['File']
 
 import lxml.etree as _lET
 from __evtk.hl import pointsToVTK as _pointsToVTK
+from __evtk.hl import linesToVTK as _linesToVTK
 import numpy as _numpy
 import os as _os
 from pHyFlow.vortex.__vortexBlobsClass import VortexBlobs as _VortexBlobs
+from pHyFlow.panel.__panelsClass import Panels as _Panels
 
 
 class File:
@@ -114,15 +116,13 @@ class File:
         else:
             raise ValueError('File must be of type .pvd, it is of type: %s.' % self.__extension)
 
-        # generate the pvd file xml tree
-
-        # the pvd file is an xml file which start with a VTK element and then
-        # a collection element
-        self.__root = _lET.Element('VTKFile',type='Collection',version='0.1')
-        self.__collection = _lET.SubElement(self.__root,'Collection')
+        # initialize the root and collection variables
+        self.__root = None # for now both are None because no object has been associated to the file
+        self.__collection =  None
 
         # initialize the time step
         self.__tStep = 0
+
 
     def __updatePVD(self,dataObject):
         r"""
@@ -157,17 +157,56 @@ class File:
         if hasattr(dataObject,'t'): # if it has use the time stamp of the object
             timestep = ('%.6f' % dataObject.t) # get the string representing the current time instant
         else: # if not use the internal time step of the file
-            timestep = self.__tStep
+            timestep = ('%d' % self.__tStep)
 
-        # add the filename of the current time step to the PVD file
-        _lET.SubElement(self.__collection,'DataSet',timestep=timestep,group='',part='0',file=self.__filename + ('%09d' % self.__tStep) + '.vtu')
+        # determine the type of dataObject and save it accordingly
 
-        # generate the xml tree
-        pvdTree = _lET.ElementTree(self.__root)
-        pvdTree.write(self.__filename_path_full,pretty_print=True,xml_declaration=False,encoding=None)
+        if isinstance(dataObject,_VortexBlobs): # it is a vortex blob, therefore save vorticity and velocity if option is set
+            if self.__root == None:
+                # generate the pvd file xml tree
+                # the pvd file is an xml file which start with a VTK element and then
+                # a collection element
+                self.__root = _lET.Element('VTKFile',type='Collection',version='0.1')
+                self.__collection = _lET.SubElement(self.__root,'Collection')
+
+            # add the filename of the current time step to the PVD file
+            _lET.SubElement(self.__collection,'DataSet',timestep=timestep,group='',part='0',file=self.__filename + ('%09d' % self.__tStep) + '.vtu')
+
+            # generate the xml tree
+            pvdTree = _lET.ElementTree(self.__root)
+            pvdTree.write(self.__filename_path_full,pretty_print=True,xml_declaration=False,encoding=None)
+
+        elif isinstance(dataObject,_Panels): # it is a panel body, therefore save circulation
+            if self.__root == None:
+                # generate the pvd file xml tree
+                # the pvd file is an xml file which start with a VTK element and then
+                # a collection element
+
+                # initialize the root and collection arrays in order to store the root and collection associated to each
+                # panel body
+                self.__root = []
+                self.__collection = []
+
+                # add the vtk file to each of the bodies' pvd files
+                for body in range(0,dataObject.nBodies):
+                    self.__root.append(_lET.Element('VTKFile',type='Collection',version='0.1'))
+                    self.__collection.append(_lET.SubElement(self.__root[body],'Collection'))
+
+            # add the filename of the current time step to the PVD file
+            for body,bodyName in enumerate(dataObject.geometryKeys): # loop over all the panel bodies
+                _lET.SubElement(self.__collection[body],'DataSet',timestep=timestep,group='',part='0',file=self.__filename + ('_%s_%09d' % (bodyName,self.__tStep)) + '.vtu')
+
+                # generate the xml tree
+                pvdTree = _lET.ElementTree(self.__root[body])
+                pvdTree.write(self.__filename_path + ('_%s' % bodyName) + self.__extension,pretty_print=True,xml_declaration=False,encoding=None)
+
+        else:
+            raise TypeError('Only dataObjects of type pHyFlow.vortex.VortexBlobs or pHyFlow.panel.Panels can be plotted.')
+
 
         # update the current time step and time instant
         self.__tStep += 1
+
 
     def __saveVTU(self,dataObject):
         r"""
@@ -206,8 +245,12 @@ class File:
             else: # do not plot the velocity
                 _pointsToVTK(self.__filename_path+('%09d' % self.__tStep), dataObject.x, dataObject.y, _numpy.zeros(dataObject.x.shape), scalars={"g": dataObject.g}, vectors=None)
 
+        elif isinstance(dataObject,_Panels): # it is a panel body, therefore save circulation
+            for body,bodyName in enumerate(dataObject.geometryKeys): # loop over all the panel bodies
+                _linesToVTK(self.__filename_path + ('_%s_%09d' % (bodyName,self.__tStep)), dataObject.xyPanelGlobal[0][body], dataObject.xyPanelGlobal[1][body], _numpy.zeros(dataObject.nPanels[body]+1), scalars={"g": dataObject.sPanel[body]})
         else:
             raise TypeError('Only dataObjects of type pHyFlow.vortex.VortexBlobs can be plotted.')
+
 
     def __lshift__(self,dataObject):
         r"""
