@@ -26,8 +26,6 @@ py.ion()
 vInf = np.array([0.0,0.0]) # the free stream velocity
 
 
-nTimeSteps = 20 # evolve the blobs for nTimeSteps
-
 #------------------------------------------------------------------------------
 
 
@@ -60,32 +58,29 @@ blobs_varying = pHyFlow.vortex.VortexBlobs(wField,vInf,nu,deltaTc,h,overlap,
 #------------------------------------------------------------------------------
                                    
 #------------------------------------------------------------------------------
-# Initilize the panels
-
-R = 1
-nPanels = 50
-dPanel  = np.spacing(100)
-theta   = np.linspace(np.pi,-np.pi,nPanels+1) # Panel polar angles
+# Define the panel geometries
+    
+# Cylinder (Radius =1, nPanels = 100)    
+R       = 1.0   # Radius of cylinder
+nPanel  = 100   # Number of panels
+dPanel  = np.spacing(100) # Spacing between panel and colloc. point
+theta   = np.linspace(np.pi,-np.pi,nPanel+1) # Panel polar angles, to define them.
 dtheta  = theta[1]-theta[0] # Angle spacing
 r       = (R + dPanel) / np.cos(dtheta/2.0) # Radial location of the panel end points
 
-# Panel location
-
-# Define the panel data
-panelData = dict(xPanel = [r*np.cos(theta[:-1] - dtheta/2)],
-                 yPanel = [r*np.sin(theta[:-1] - dtheta/2)],
-                 cmGlobal = [np.array([0.,0.])],
-                 thetaLocal = [0.],
-                 dPanel = [np.spacing(100)])
+# Make the cylinder and append the parameters to a dictionary.
+cylinderData = {'xPanel' : r*np.cos(theta - dtheta/2),
+                'yPanel' : r*np.sin(theta - dtheta/2),
+                'cmGlobal'   : np.array([0.,0.]),
+                'thetaLocal' : 0.,
+                'dPanel' : np.spacing(100)}
+                
+# For now, only a single cylinder
+geometries = {'cylinder':cylinderData}
 
 # Generete the panels
-panels = pHyFlow.panel.Panels(panelData)
-panels_varying = pHyFlow.panel.Panels(panelData)
-
-xPanel, yPanel = panels.xPanelGlobalCat, panels.yPanelGlobalCat
-xCP,yCP = panels.xCPGlobalCat, panels.yCPGlobalCat
-normX,normY = panels._Panels__norm[0], panels._Panels__norm[1]
-
+panels = pHyFlow.panel.Panels(geometries=geometries)
+panels_varying = pHyFlow.panel.Panels(geometries=geometries)
 #------------------------------------------------------------------------------                                   
                                    
                                    
@@ -98,6 +93,10 @@ vortexPanel = pHyFlow.vortexPanel.VortexPanel(blobs,panels,
 vortexPanel_varyingStrength = pHyFlow.vortexPanel.VortexPanel(blobs_varying,panels_varying,
                                               couplingParams={'panelStrengthUpdate':'varying'})                                              
 
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Plot velocity field
 x,y  = np.meshgrid(np.linspace(-4,4,50),np.linspace(-2,2,10))
 vortexPanel.panels.solve(vInf[0],vInf[1])
 vx,vy = vortexPanel.panels.evaluateVelocity(x.flatten(),y.flatten())
@@ -108,11 +107,14 @@ vx,vy = vortexPanel.panels.evaluateVelocity(x.flatten(),y.flatten())
 # Plot 
 
 py.figure(1)
-#py.clf()
+py.title('Comparison of panel strength updating')
 py.quiver(x.flat,y.flat,vx+vInf[0],vy+vInf[1])
-py.scatter(blobs.x,blobs.y,c='b',edgecolor='none',label='blobs')
-py.plot(xPanel, yPanel,'b.-',label='panel')
-py.plot(xCP,yCP,'r.',label='colloc. points')
+py.scatter(vortexPanel.blobs.x,vortexPanel.blobs.y,c='r',edgecolor='none',label='blobs [constant]')
+py.scatter(vortexPanel_varyingStrength.blobs.x,vortexPanel_varyingStrength.blobs.y,c='k',edgecolor='none',label='blobs [varying]')
+[py.plot(x,y,k+'-',label=geoName) for x,y,geoName,k in zip(vortexPanel.panels.xyPanelGlobal[0],
+                                                            vortexPanel.panels.xyPanelGlobal[1],
+                                                            vortexPanel.panels.geometryKeys,['b','g','k'])]
+py.legend()                                                            
 py.grid(True)
 py.axis('scaled')
 py.axis([-4,4,-2,2])

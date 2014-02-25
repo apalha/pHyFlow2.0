@@ -186,12 +186,13 @@ class VortexPanel(object):
         :License:       GNU GPL version 3 or any later version   
         """
         # Determine the induced velocity due to blobs + panels + free-stream.
-        vx,vy =self.blobs.evaluateVelocity(xTarget,yTarget) \
-                        + self.panels.evaluateVelocity(xTarget,yTarget) \
-                        + self.vInf.reshape(2,-1)
+        vx,vy = self.blobs.evaluateVelocity(xTarget,yTarget) \
+                            + self.panels.evaluateVelocity(xTarget,yTarget) \
+                            + self.vInf.reshape(2,-1)
         
         # return the induced velocity
         return vx,vy
+                
                 
     def evolve(self):
         r"""
@@ -269,7 +270,7 @@ class VortexPanel(object):
         # Diffusion Step : diffuse vortex blobs
         if self.blobs.stepDiffusion != 0: # corresponds to nu = 0.0, therefore no diffusion is to be computed
             if (self.tStep % self.blobs.stepDiffusion) == 0: # if the time step is a multiple of the stepDiffusion perform diffusion
-                self.blobs._diffusion()
+                self.blobs._VortexBlobs__diffusion()
 
         # update the time counter
         self._advanceTime()
@@ -375,7 +376,7 @@ class VortexPanel(object):
             xBlob, yBlob, gBlob = self.blobs.x, self.blobs.y, self.blobs.g 
             
             # Make references to panel collocation points (where no-slip b.c. is enforced.)
-            xCP, yCP = self.panels.xCPGlobalCat, self.panels.yCPGlobalCat
+            xCP, yCP = self.panels.xyCPGlobalCat
         
             # Runge-Kutta Butcher Tablaeu:
             #  
