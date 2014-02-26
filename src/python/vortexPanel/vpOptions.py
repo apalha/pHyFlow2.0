@@ -1,6 +1,8 @@
-"""This module handles all Navier-Stokes grid operations in Python.
+r"""
+Define vortex-panel options
 """
-# Copyright (C) 2013 Lento Manickathan                                                                                                     
+##############################################################################
+# Copyright (C) 2014 Lento Manickathan
 #                                                                                                                                   
 # This file is part of pHyFlow.                                                                                                      
 #                                                                                                                                   
@@ -17,13 +19,15 @@
 # You should have received a copy of the GNU Lesser General Public License                                                          
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
-# First added:  2013-12-19
-# Last changed: 2013-12-19
+# First added:  2014-02-21                                                                                                          
+# Last changed: 2014-02-21
+# -*- coding: utf-8 -*-
+##############################################################################
 
-# import all modules
-from solverBase import *
-from ipcs import *
-from chorin import *
-import boundary
+"""    
+
+"""
 
 
+PANEL_STRENGTH_UPDATE = {'default': 'constant',
+                         'available': ('constant', 'varying')}

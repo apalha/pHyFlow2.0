@@ -1,8 +1,6 @@
-r"""
-Define navier-stokes options
+"""This module handles all vortex-panel operations.
 """
-##############################################################################
-# Copyright (C) 2014 Lento Manickathan
+# Copyright (C) 2014 Lento Manickathan                                                                                                     
 #                                                                                                                                   
 # This file is part of pHyFlow.                                                                                                      
 #                                                                                                                                   
@@ -19,33 +17,10 @@ Define navier-stokes options
 # You should have received a copy of the GNU Lesser General Public License                                                          
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
-# First added:  2014-02-20                                                                                                          
-# Last changed: 2014-02-20
-# -*- coding: utf-8 -*-
-##############################################################################
+# First added:  2013-12-19
+# Last changed: 2013-12-19
 
-"""    
+# import all modules
 
-"""
 
-# Fluid/Boundary Domain integer ID
-ID_FLUID_DOMAIN         = 1 # the fluid domain
-ID_NOSLIP_BOUNDARY      = 2 # no-slip boundary
-ID_EXTERNAL_BOUNDARY    = 3 # external boundary (where dirichlet b.c is applied)
-ID_PRESSURE_OUTLET      = 4 # pressure outlet
-
-# NS Solvers
-SOLVER = {'default':'ipcs',             # Default solver
-          'solvers': ('chorin','ipcs')} # Available solvers
-
-# Partial differential equation solver parameters                            
-FORM_COMPILER = {'cpp_optimize': True}
-
-KRYLOV_SOLVER = {'absolute_tolerance':  1e-25,
-                 'relative_tolerance':  1e-12,
-                 'monitor_convergence': False}
-
-ALLOW_EXTRAPOLATION = True
-
-SET_LOG_ACTIVE = False 
 

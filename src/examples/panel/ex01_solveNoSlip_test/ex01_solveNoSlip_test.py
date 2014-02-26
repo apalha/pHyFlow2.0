@@ -20,40 +20,30 @@ def externVel(x,y):
 #------------------------------------------------------------------------------
     
 #------------------------------------------------------------------------------
-# Cylinder A
+# Define the panel geometries
+    
+# Cylinder (Radius =1, nPanels = 100)    
 R       = 1.0   # Radius of cylinder
 nPanel  = 100   # Number of panels
 dPanel  = np.spacing(100) # Spacing between panel and colloc. point
-theta   = np.linspace(np.pi,-np.pi,nPanel+1) # Panel polar angles
+theta   = np.linspace(np.pi,-np.pi,nPanel+1) # Panel polar angles, to define them.
 dtheta  = theta[1]-theta[0] # Angle spacing
 r       = (R + dPanel) / np.cos(dtheta/2.0) # Radial location of the panel end points
 
-# Panel Coordinates in cartesian coordinates
-xPanel = r*np.cos(theta[:-1] - dtheta/2)
-yPanel = r*np.sin(theta[:-1] - dtheta/2)
-
-# Panel location
-cmGlobal = np.array([0.,0.])
-thetaLocal = 0.
+# Make the cylinder and append the parameters to a dictionary.
+cylinderData = {'xPanel' : r*np.cos(theta - dtheta/2),
+                'yPanel' : r*np.sin(theta - dtheta/2),
+                'cmGlobal'   : np.array([0.,0.]),
+                'thetaLocal' : 0.,
+                'dPanel' : np.spacing(100)}
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Concatenate the geometries to list (for the input)
+# Append all the geometries for a multi-body panel solver
 
-# Single Cylinders
-#xPanel = [xPanel]
-#yPanel = [yPanel]
-#xCP    = [xCP]
-#yCP    = [yCP]
-#cmGlobal = [cmGlobal]
-#thetaLocal = [thetaLocal]
+# For now, only a single cylinder
+geometries = {'cylinder':cylinderData}
 
-# Panel data
-panel = {'xPanel'   : [xPanel],
-         'yPanel'   : [yPanel],
-         'cmGlobal' : [cmGlobal],
-         'thetaLocal': [thetaLocal],
-         'dPanel': [dPanel]}
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -62,7 +52,8 @@ panel = {'xPanel'   : [xPanel],
 startTime = time.time()
 
 # Initalize panelBody 
-panelBodies = pHyFlow.panel.Panels(panel)
+panelBodies = pHyFlow.panel.Panels(geometries=geometries)
+
 print "\nTime to initialize the panel problem: %g seconds." % (time.time() - startTime)
 
 # Self induction Matrix
@@ -70,7 +61,7 @@ A = panelBodies.A
 
 py.figure(1)
 py.imshow(A,interpolation='none')
-py.title('Self-Induction Matrix')
+py.title('Self-Induction Matrix (%g by %g)' % (nPanel, nPanel))
 py.colorbar()
 py.show(block=True)
 
@@ -80,7 +71,7 @@ py.show(block=True)
 # Solve for the panel strengths
 
 # Collocation points
-xCP,yCP = panelBodies.xCPGlobalCat, panelBodies.yCPGlobalCat
+xCP,yCP = panelBodies.xyCPGlobalCat
 
 # External velocity at collocation points
 vx,vy = externVel(xCP,yCP)

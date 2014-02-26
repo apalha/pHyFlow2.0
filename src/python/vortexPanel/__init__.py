@@ -1,6 +1,6 @@
-"""This module handles all Navier-Stokes grid operations in Python.
+"""This module handles all vortex-panel functions
 """
-# Copyright (C) 2013 Lento Manickathan                                                                                                     
+# Copyright (C) 2014 Lento Manickathan                                                                                                     
 #                                                                                                                                   
 # This file is part of pHyFlow.                                                                                                      
 #                                                                                                                                   
@@ -17,13 +17,12 @@
 # You should have received a copy of the GNU Lesser General Public License                                                          
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
-# First added:  2013-12-19
-# Last changed: 2013-12-19
+# First added:  2013-02-21                                                                                                    
+# Last changed: 2014-02-21
 
-# import all modules
-from solverBase import *
-from ipcs import *
-from chorin import *
-import boundary
+import base
+import vpOptions
 
+# import vortex-panel class
+from __vortexPanelClass import *
 

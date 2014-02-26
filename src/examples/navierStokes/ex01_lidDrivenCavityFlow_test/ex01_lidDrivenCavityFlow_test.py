@@ -7,31 +7,24 @@ Test the navier-stokes modules: _navierStokes.py
 import pHyFlow
 
 # External modules
-import time
 import dolfin
 import numpy as np
 import pylab as py
 py.ion()
 
-#def initialize_from_parameters():
-#    """
-#    Test using Lid-Driven cavity Flow
-#    """
-#    pass
- 
 
 #-----------------------------------------------------------------------------    
 
 # Mesh Data
-N = 40 
+N = 32 
 #mesh, boundaryDomains = lidDrivenCavityFlow(N)
 
 # Geometry Position
 cmGlobal = np.array([0.,0.])
-thetaGlobal = np.deg2rad(0.)
+thetaLocal = np.deg2rad(0.)
 
 # Fluid Parameters
-Re = 1000.
+Re = 1.
 uMax = 1.0
 nu   = (uMax*1.0)/(Re) # Unit Geometry with Re = 1000.
 
@@ -44,7 +37,6 @@ x0,y0,Lx,Ly,nx,ny = 0.2,0.2,0.6,0.6,10,10
 
 
 #-----------------------------------------------------------------------------
-
 # Define Mesh
 mesh = dolfin.UnitSquareMesh(N,N)
 
@@ -57,7 +49,6 @@ mesh.coordinates()[:] = xyi
     
 #-----------------------------------------------------------------------------    
 # Lid Driven Cavity Flow - Boundary Conditions
-
     
  # Sub domain for no-slip (mark whole boundary, Lid will overwrite)
 class NoSlip(dolfin.SubDomain):
@@ -76,11 +67,11 @@ boundaryDomains.set_all(1)
 
 # Mark no-slip
 noslip = NoSlip()
-noslip.mark(boundaryDomains, pHyFlow.navierStokes.noSlipID) # No-slip ID: 2
+noslip.mark(boundaryDomains, pHyFlow.navierStokes.nsOptions.ID_NOSLIP_BOUNDARY) # No-slip ID: 2
 
 # Mark exterior I.D
 lid = Lid()
-lid.mark(boundaryDomains, pHyFlow.navierStokes.extID) # extID : 3  
+lid.mark(boundaryDomains, pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY) # extID : 3  
   
 #-----------------------------------------------------------------------------   
 
@@ -90,21 +81,27 @@ lid.mark(boundaryDomains, pHyFlow.navierStokes.extID) # extID : 3
 
 # Export to files
 meshFileName = 'LDCF_%gx%g_mesh.xml.gz' % (N,N)
-boundaryMeshFileName = 'LDCF_%gx%g_boundaryDomains.xml.gz' % (N,N)
+boundaryDomainsFileName = 'LDCF_%gx%g_boundaryDomains.xml.gz' % (N,N)
 dolfin.File(meshFileName) << mesh
-dolfin.File(boundaryMeshFileName) << boundaryDomains
+dolfin.File(boundaryDomainsFileName) << boundaryDomains
 #-----------------------------------------------------------------------------   
 
 
 #------------------------------------------------------------------------------
 # Lid-Driven cavity flow test case
 
+geometry = {'mesh' : meshFileName,
+            'boundaryDomains': boundaryDomainsFileName,
+            'cmGlobal': cmGlobal,
+            'thetaLocal': thetaLocal}
+
+probeGrid = {'origin': np.array([x0,y0]),
+             'L'     : np.array([Lx,Ly]),
+             'N'     : np.array([nx,ny])}            
+
 # Initialize Navier-Stokes problem
-NSDomain = pHyFlow.navierStokes.NavierStokes(mesh=meshFileName,
-                                     boundaryDomains=boundaryMeshFileName,
-                                     cmGlobal=cmGlobal,thetaGlobal=thetaGlobal,
-                                     uMax=uMax,nu=nu,cfl=cfl,origin=np.array([x0,y0]),
-                                     L=np.array([Lx,Ly]),N=np.array([nx,ny]))
+NSDomain = pHyFlow.navierStokes.NavierStokes(geometry,probeGrid,uMax,nu,cfl,
+                                             deltaT=1e-5)
                                      
 #------------------------------------------------------------------------------
                                      
@@ -150,8 +147,8 @@ py.show(block=True)
 
 # Evolve NSDomain
 vxBoundary, vyBoundary = -1.0*np.ones(xB.shape), np.zeros(yB.shape)
-cmGlobalNew, thetaGlobalNew = None,None
-cmDotGlobal, thetaGlobal = None, None
+cmGlobalNew, thetaGlobalNew = cmGlobal,thetaLocal
+cmDotGlobal, thetaGlobal = np.array([0.,0.]), 0.
 
 saveDir = './data/'
 vFile = dolfin.File(saveDir + "velocity.pvd", "compressed")
@@ -159,23 +156,24 @@ pFile = dolfin.File(saveDir + "pressure.pvd", "compressed")
 wFile = dolfin.File(saveDir + "vorticity.pvd", "compressed")
 
 solver = NSDomain._NavierStokes__solver
-for i in range(50000):
 
-    T = i*NSDomain.dtMax
+for i in range(500):
+
+    T = i*NSDomain.deltaT
 
     NSDomain.evolve(vxBoundary,vyBoundary,cmGlobalNew,thetaGlobalNew,
                     cmDotGlobal,thetaGlobal)
     
     diff_u = dolfin.norm(solver.u1) - dolfin.norm(solver.u0)            
 
-    if i % 200 == 0:                
+    if i % 100 == 0:                
         #dolfin.plot(dolfin.sqrt(dolfin.inner(NSDomain._solver.u1,NSDomain._solver.u1)),key='vNorm')         
         vFile << (NSDomain._NavierStokes__solver.u1, T)
         pFile << (NSDomain._NavierStokes__solver.p1, T)
         wFile << (NSDomain._NavierStokes__solver.vorticity(), T)
 
-        print "Step = %g\tT = %g" % (i, T)
-        print "Difference in velocity : %g" % diff_u    
+    print "Step = %g\tT = %g" % (i, T)
+    print "Difference in velocity : %g" % diff_u    
     
     if diff_u <= 1e-10:
         break

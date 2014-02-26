@@ -193,12 +193,12 @@ class File:
                     self.__collection.append(_lET.SubElement(self.__root[body],'Collection'))
 
             # add the filename of the current time step to the PVD file
-            for body in range(0,dataObject.nBodies): # loop over all the panel bodies
-                _lET.SubElement(self.__collection[body],'DataSet',timestep=timestep,group='',part='0',file=self.__filename + ('_body_%02d_%09d' % (body,self.__tStep)) + '.vtu')
+            for body,bodyName in enumerate(dataObject.geometryKeys): # loop over all the panel bodies
+                _lET.SubElement(self.__collection[body],'DataSet',timestep=timestep,group='',part='0',file=self.__filename + ('_%s_%09d' % (bodyName,self.__tStep)) + '.vtu')
 
                 # generate the xml tree
                 pvdTree = _lET.ElementTree(self.__root[body])
-                pvdTree.write(self.__filename_path + ('_body_%02d' % body) + self.__extension,pretty_print=True,xml_declaration=False,encoding=None)
+                pvdTree.write(self.__filename_path + ('_%s' % bodyName) + self.__extension,pretty_print=True,xml_declaration=False,encoding=None)
 
         else:
             raise TypeError('Only dataObjects of type pHyFlow.vortex.VortexBlobs or pHyFlow.panel.Panels can be plotted.')
@@ -246,8 +246,8 @@ class File:
                 _pointsToVTK(self.__filename_path+('%09d' % self.__tStep), dataObject.x, dataObject.y, _numpy.zeros(dataObject.x.shape), scalars={"g": dataObject.g}, vectors=None)
 
         elif isinstance(dataObject,_Panels): # it is a panel body, therefore save circulation
-            for body in range(0,dataObject.nBodies): # loop over all the panel bodies
-                _linesToVTK(self.__filename_path + ('_body_%02d_%09d' % (body,self.__tStep)), dataObject.xCPGlobal[body], dataObject.yCPGlobal[body], _numpy.zeros(dataObject.xCPGlobal[body].shape), scalars={"g": dataObject.sPanel[body]})
+            for body,bodyName in enumerate(dataObject.geometryKeys): # loop over all the panel bodies
+                _linesToVTK(self.__filename_path + ('_%s_%09d' % (bodyName,self.__tStep)), dataObject.xyPanelGlobal[0][body], dataObject.xyPanelGlobal[1][body], _numpy.zeros(dataObject.nPanels[body]+1), scalars={"g": dataObject.sPanel[body]})
         else:
             raise TypeError('Only dataObjects of type pHyFlow.vortex.VortexBlobs can be plotted.')
 

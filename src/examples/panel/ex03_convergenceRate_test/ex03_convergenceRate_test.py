@@ -17,31 +17,29 @@ def externVel(x,y):
 # For testing convergence    
 def get_inducedVelocity_of_cylinder(nPanel,xEval,yEval):
     """
-    x0,y0 = 0., 0.
-    R = 1.0
+    Cylinder : 
+        - Radius = 1
+        - cmGlobal = [0.,0.]
+        - thetaLocal = 0.
     """
     
+    # Define the geometyr
     theta   = np.linspace(np.pi,-np.pi,nPanel+1) # Panel polar angles
     dtheta  = theta[1]-theta[0] # Angle spacing
     r       = (R + dPanel) / np.cos(dtheta/2.0) # Radial location of the panel end points
-    
-    # Panel Coordinates in cartesian coordinates
-    xPanel = r*np.cos(theta[:-1] - dtheta/2)
-    yPanel = r*np.sin(theta[:-1] - dtheta/2)
-    
-    # Panel location
-    cmGlobal = np.array([0.,0.])
-    thetaLocal = 0.
-
+  
+    # Make the cylinder and append the parameters to a dictionary.
+    cylinderData = {'xPanel' : r*np.cos(theta - dtheta/2),
+                    'yPanel' : r*np.sin(theta - dtheta/2),
+                    'cmGlobal'   : np.array([0.,0.]),
+                    'thetaLocal' : 0.,
+                    'dPanel' : np.spacing(100)}
     # Initialize panelBody 
-    panelBodies = pHyFlow.panel.Panels(panel={'xPanel': [xPanel],
-                                              'yPanel': [yPanel],
-                                              'cmGlobal': [cmGlobal],
-                                              'thetaLocal': [thetaLocal],
-                                              'dPanel': [dPanel]})
+    panelBodies = pHyFlow.panel.Panels(geometries={'cylinder': cylinderData})
     
     # Free-stream flow
-    vxInf,vyInf = externVel(panelBodies.xCPGlobalCat,panelBodies.yCPGlobalCat)
+    vxInf,vyInf = externVel(panelBodies.xyCPGlobalCat[0],
+                            panelBodies.xyCPGlobalCat[1])
     
     # Solve panel body problem
     panelBodies.solve(vxInf,vyInf)
@@ -51,7 +49,6 @@ def get_inducedVelocity_of_cylinder(nPanel,xEval,yEval):
     
     # Free-stream flow
     vxInf,vyInf = externVel(xEval, yEval)
-
     
     return vxPanel+vxInf,vyPanel+vyInf
 #------------------------------------------------------------------------------

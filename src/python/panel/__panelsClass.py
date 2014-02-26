@@ -107,9 +107,9 @@ from scipy.sparse.linalg import bicgstab as _bicgstab
 #import types as _types
 
 # Import pHyFlow options
+from pHyFlow.aux.customDecorators import simpleGetProperty
 from pHyFlow.panel.base import panelSolver as _panelSolver
 from pHyFlow.panel import panelOptions as _panelOptions
-import time
 
 class Panels(object):
     r"""
@@ -120,49 +120,71 @@ class Panels(object):
     -----
     .. code-block:: python
     
-        panelBody = Panels(panel, panelKernel='csv', problemType='moving',
+        panelBody = Panels(geometries, panelKernel='csv', problemType='moving',
                            velCompParams={'method':'direct', 'hardware':'cpu'},
                            solverCompParams={'method':'bicgstab', 'tol':1e-12,
                                              'assemble':'all'})
-        
        
     Parameters
     ----------
-    panel : str of filePath (1), or dict of data (2) 
-            both types containing panel parameters: {'xPanel','yPanel',
-            'cmGlobal','thetaLocal','dPanel'}. Each should a list containing the
-            said parameter of :math:`\mathbf{N}` bodies.
-            
-            xPanel : list of numpy.ndarray(float64), N list of shape (M,)
-                     the :math:`x`-coordinate of the :math:`\mathbf{M}` panel
-                     corners. The coordinates are defined in the local
-                     coordinates system with the reference point being (0,0).
-                     * Note: Do not close the loop (i.e no need to repeat
-                     the start point.)
+    geometries : dict of dict, nBodies of dict
+                 the dictionary containing dictionary of body name and its
+                 parameters.
+                 
+                 Format : {<'geometryKey'>: <geometryDataName>}
+                 
+                 'geometryKey' : str, nBodies of key
+                                the name (or key) of the body.
+                               
+                 geometryData : dict of data, {'xPanel','yPanel','cmGlobal','thetaLocal','dPanel'}
+                                a dictionary containing all the parameters of 
+                                the geometry (i.d. by geometryKey)
+                                
+                                'xPanel' : numpy.ndarray(float64), (nPanels+1,)
+                                           the :math:`x`-coordinate of the :math:`\mathbf{M}` panel
+                                           corners. The coordinates are defined in the local
+                                           coordinates system with the reference point being (0,0).
                      
-            yPanel : list of numpy.ndarray(float64), N list of shape (M,)
-                     the :math:`y`-coordinate of the :math:`\mathbf{M}` panel
-                     corners. The coordinates are defined in the local
-                     coordinates system with the reference point being (0,0).
-                     * Note: Do not close the loop (i.e no need to repeat
-                     the start point.) 
+                                           * Note: Close the loop 
                      
-            cmGlobal : list of numpy.ndarray(float64), N list of shape (2,) 
-                       the :math:`x,y` global coordinates of the local panel
-                       body reference point. For solving the problem, the panel
-                       body will be displaced according the global displacement
-                       vector **cmGlobal**.
+                                'yPanel' : numpy.ndarray(float64), (nPanels+1,)
+                                           the :math:`y`-coordinate of the :math:`\mathbf{M}` panel
+                                           corners. The coordinates are defined in the local
+                                           coordinates system with the reference point being (0,0).
+                                             
+                                           * Note: Close the loop
+                     
+                                'cmGlobal' : numpy.ndarray(float64), shape (2,) 
+                                             the :math:`x,y` global coordinates of the local panel
+                                             body reference point. For solving the problem, the panel
+                                             body will be displaced according the global displacement
+                                             vector **cmGlobal**.
                        
-            thetaLocal : list of float64, N list of floats, unit (radians)
-                         the local rotation angle :math:`\theta` w.r.t to 
-                         the local coordinate system. The rotational will be 
-                         performed around the local reference point (0,0), i.e
-                         around the global cm point **cmGlobal**. 
-                         * Note: Positive rotation is anti-clockwise.
-                         
-            1.  (<filePath>.npz) file containing the parameters 
-            2. dict file containing the parameters
-            
+                                'thetaLocal' : float, unit (rad)
+                                               the local rotation angle :math:`\theta` w.r.t to 
+                                               the local coordinate system. The rotational will be 
+                                               performed around the local reference point (0,0), i.e
+                                               around the global cm point **cmGlobal**. 
+                                               * Note: Positive rotation is anti-clockwise.
+                                               
+                                 'dPanel' : float
+                                            the off-set of the panel collocation point from the panel 
+                                            mid-point.                                               
+                      
+                  example:    
+                  .. code-block:: python                        
+                  
+                      geometries = {'airfoil': {'xPanel' : np.array(-1.,1.,1.,1.),
+                                                'yPanel' : np.array(-1.,1.,1.,1.),
+                                                'cmGlobal': np.array(-1.,1.),
+                                                'thetaLocal': 0.,
+                                                'dPanel': np.spacing(100)},
+                                    'cylinder': {'xPanel' : np.array(-1.,1.,1.,1.),
+                                                 'yPanel' : np.array(-1.,1.,1.,1.),
+                                                 'cmGlobal': np.array(-1.,1.),
+                                                 'thetaLocal': 0.,
+                                                 'dPanel': np.spacing(100)}}
+                
                 
     panelKernel : str, optional
                   A string defining panel kernel type:
@@ -229,46 +251,53 @@ class Panels(object):
     ----------
     A
     cmGlobal
-    nBodies
+    deltaT
+    geometryKeys
+    nBodies    
+    norm
+    normCat    
     nPanels
     nPanelsTotal
+    panelKernel
+    problemType
+    solverCompParams
     sPanel
+    t        
+    tang
+    tangCat    
     thetaLocal
-    xCPGlobal
-    xCPGlobalCat
-    xPanelGlobal
-    xPanelGlobalCat
-    xPanelLocal
-    yCPGlobal
-    yCPGlobalCat    
-    yPanelGlobal
-    yPanelGlobalCat
-    yPanelLocal
+    tStep
+    velCompParams
+    xyCPGlobal
+    xyCPGlobalCat
+    xyPanelGlobal
+    xyPanelGlobalCat
+    xyPanelLocal
     
-    __A : numpy.ndarray(float64), shape (\sum_i^N M_i,N\sum_i^N M_i)
+    __A : numpy.ndarray(float64), shape (nPanelsTotal, nPanelsTotal)
           the inter-induction matrix :math:`\mathbf{A}`, the LHS of the problem.
-          
-    __cmGlobal : list of numpy.ndarray(float64), N list of shape (2,)
-                 the global position vector for each of the :math:`\mathbf{N}`
-                 body, refining the position of the local panel (0,0) in the
-                 global coordinate system.
-                 
-    __cosSinAlpha : numpy.ndarray(float64), shape(2,\sum_i^N M_i)
+                
+    __cosSinAlpha : numpy.ndarray(float64), shape(2, nPanelsTotal)
                     the :math:`\cos\alpha` and :math:`\sin\alpha` of the panel
                     :math:`\mathbf{M}`, where the angle :math:`\alpha` is w.r.t 
                     to the panel :math:`\mathbf{x}^\prime`-axis and the local
                     :math:`\mathbf{x}`-axis.
                     
-    __dPanel : list of float64
-               the off-set of the panel collocation point from the panel 
-               mid-point.
-               
-    __index : numpy.ndarray(float64), shape(\sum_i^N M_i,)
+    __deltaT : float
+               the current time step size
+                    
+    __geometries : dict of dict, nBodies of dict
+                   the dictionary containing dictionary of body name and its
+                   parameters.  
+                   
+                   {'xPanel','yPanel','cmGlobal','thetaLocal','dPanel'}
+                                   
+    __index : numpy.ndarray(float64), shape(nBodies+1,)
               the index of panel start point and end point in concatenated
               numpy array containing all the panel coordinates.
               
-    __LU_FACTOR : tuple of (numpy.array(float64), shape(\sum_i^N M_i,\sum_i^N M_i) (1) and
-                  numpy.array(float64), shape (M,) (2).
+    __LU_FACTOR : tuple of (numpy.array(float64), shape(nPanelsTotal, nPanelsTotal) (1) and
+                  numpy.array(float64), shape (nPanelsTotal,) (2).
                   The output of the computed pivoted LU decomposition of a 
                   inter-induction matrix. It is used to solver the system using
                   LU factorization.
@@ -279,10 +308,10 @@ class Panels(object):
     __nBodies : float
                 the number of panel bodies.
     
-    __norm : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+    __norm : numpy.ndarray(float64), shape (2, nPanelsTotal)
              the :math:`x,y` normal vector of each panel.
              
-    __nPanels : numpy.ndarray(float64), shape (N,)
+    __nPanels : numpy.ndarray(float64), shape (nBodies,)
                 the number of panels in each body.
                 
     __nPanelsTotal: float
@@ -330,11 +359,14 @@ class Panels(object):
                                              assembled.
                                      * Note: Smart assembling is not implemented.
                                      
-    __sPanel : numpy.ndarray(float64), shape (\sum_i^N M_i,)
+    __sPanel : numpy.ndarray(float64), shape (nPanelsTotal,)
                the vortex sheet strengths :math:`\gamma` of :math:`\mathbf{M}`
                panels.  
                
-    __tang : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+     _t : float
+          the current time of the simulation
+          
+    __tang : numpy.ndarray(float64), shape (2, nPanelsTotal)
              the :math:`x,y` tangent vector of each panel.
              
     __thetaLocal : list of float, N list of float
@@ -359,32 +391,17 @@ class Panels(object):
                                    of the panel.
                                    'cpu' : [default] use the cpu.
                       * Note: options are available in .. py:module:: pHyFlow.panel.panelOptions
-    
-    __xPanel : list of numpy.ndarray(float64), N list of shape (M_i,)
-                the :math:`x`-coordinate of the :math:`\mathbf{M}` panel
-                corners. The coordinates are defined in the local
-                coordinates system with the reference point being (0,0).
-                * Note: Do not close the loop (i.e no need to repeat
-                the start point.)
-                
-    __xyCP_global : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+               
+    __xyCP_global : numpy.ndarray(float64), shape (2, nPanelsTotal)
                     the :math:`x,y` global coordinate of the collocation point.
                     
-    __xyPanelEnd__global : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+    __xyPanelEnd__global : numpy.ndarray(float64), shape (2, nPanelsTotal)
                            the :math:`x,y` global coordinate of the panel
                            starting points.
                            
-    __xyPanelStart_global: numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+    __xyPanelStart_global: numpy.ndarray(float64), shape (2, nPanelsTotal)
                            the :math:`x,y` global coordinate of the panel
                            end points.
-    
-    __yPanel : list of numpy.ndarray(float64), N list of shape (M_i,)
-               the :math:`x`-coordinate of the :math:`\mathbf{M}` panel
-               corners. The coordinates are defined in the local
-               coordinates system with the reference point being (0,0).
-               * Note: Do not close the loop (i.e no need to repeat
-               the start point.)
-        
 
     Methods
     -------
@@ -401,7 +418,7 @@ class Panels(object):
         save all the ..py:class::`panels` data to a file.
         
     :First Added:   2013-11-21
-    :Last Modified: 2014-02-20
+    :Last Modified: 2014-02-25
     :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
     :Licence:       GNU GPL version 3 or any later version               
                   
@@ -416,10 +433,14 @@ class Panels(object):
         - Restructured
         - Added attributes.
 
+    2014-02-25, Lento Manickathan
+        - Restructured
+        - implemented geometry dictionary storage and retrival
+        - Added attributes.
 
     """
     
-    def __init__(self,panel,panelKernel=_panelOptions.PANEL_KERNEL['default'],
+    def __init__(self,geometries,panelKernel=_panelOptions.PANEL_KERNEL['default'],
                  problemType=_panelOptions.PROBLEM_TYPE['default'],
                  velCompParams={'method'  : _panelOptions.VELOCITY_COMPUTATION_METHOD['default'],
                                 'hardware': _panelOptions.VELOCITY_COMPUTATION_HARDWARE['default']},
@@ -430,8 +451,8 @@ class Panels(object):
         #----------------------------------------------------------------------
         # Check input parameters
 
-        # The file containing all the data for the init
-        self.__set('panel',panel)
+        # Set the geometry(ies) datas.
+        self.__set('geometries',geometries)
         
         # Set velocity computation parameters
         self.__set('velCompParams', velCompParams)
@@ -456,16 +477,10 @@ class Panels(object):
         # Panel indices
         self.__index = _numpy.cumsum(_numpy.hstack((0,self.__nPanels)))
         
-        
-        #----------------------------------------------------------------------
         # Update the rotation matrix
         self.__updateRotMat()
-       
-       #----------------------------------------------------------------------
         
-        #----------------------------------------------------------------------       
-        # Initialize the global panel parameters
-        
+        # Initialize the global panel parameters       
         self.__norm = _numpy.zeros((2,self.__nPanelsTotal))
         self.__tang = _numpy.zeros((2,self.__nPanelsTotal))               
         self.__xyCP_global = _numpy.zeros((2,self.__nPanelsTotal))
@@ -475,9 +490,10 @@ class Panels(object):
         
         # Determine the global coordinates (also, concatenate the data)
         self.__updateCoordinates()
-                
+        
+        
         #----------------------------------------------------------------------
-
+        
         #----------------------------------------------------------------------
         # Assemble influence Matrix
         self.__A = _numpy.zeros((self.__nPanelsTotal,self.__nPanelsTotal))
@@ -486,11 +502,122 @@ class Panels(object):
         #----------------------------------------------------------------------
         # Define and initialize the time step counter and absolute time
 
-        self.__tStep = 0
+        self.__tStep = 0 # Current Step
+        self.__t = 0.0 # Current t
         
         #----------------------------------------------------------------------
+   
 
+    def updateBody(self,cmGlobalNew,thetaLocalNew):
+        """
+        Update all the panel body coordinates. This internally calculate the
+        new global panel coordinates of `xPanel, yPanel, xCP, yCP` and will
+        also rebuild the inter-induction influence matrix :math:`\mathbf{A}`
+        
+        Usage
+        -----
+        .. code-block :: python
+        
+            updateBody(cmGlobalNew,thetaLocalNew)
+        
+        Parameters
+        ----------
+        cmGlobalNew : dict of cmGlobalNew of each body, nBodies of keys
+                      The dictionary containing the geometry key and it's new
+                      cmGlobal.
+                      Format : {'<geometryKey>': cmGlobalNew}
+                   
+                      'geometryKey' : str, nBodies of key
+                                      the geometryKey is used to identify the body
+                                      inside the panel class. The geometryKey
+                                      can be found in **geometryKeys**.
+                                 
+                      cmGlobalNew : numpy.ndarray(float64), shape (2,)
+                                    the new :math:`x,y` global coordinates of the
+                                    local panel body reference point. For solving
+                                    the problem, the panel body will be displaced
+                                    according the global displacement vector **cmGlobalNew**.
+                                   
+        thetaLocalNew : dict of thetaLocalNew of each body, nBodies of keys
+                        The dictionary containing the geometry key and it's new
+                        thetaLocal.
+                        Format: {'<geometryKey>': thetaLocalNew}
+                        
+                        'geometryKey' : str, nBodies of key
+                                        the geometryKey is used to identify the body
+                                        inside the panel class. The geometryKey
+                                        can be found in **geometryKeys**.
+                       
+                                        
+                        thetaLocalNew : float
+                                        the new local rotation angle :math:`\theta`
+                                        w.r.t to the local coordinate system. The
+                                        rotational will be performed around the 
+                                        local reference point (0,0), i.e around
+                                        the global cm point **cmGlobal**. 
+                                        * Note: Positive rotation is anti-clockwise.
+        
+        Returns
+        -------
+        None returned.
+        
+        Attribute
+        ---------
+        __A : numpy.ndarray(float64), shape (nPanelsTotal, nPanelsTotal)
+              the inter-induction matrix :math:`\mathbf{A}`, the LHS of the problem.
+                           
+        __cosSinAlpha : numpy.ndarray(float64), shape(2, nPanelsTotal)
+                        the :math:`\cos\alpha` and :math:`\sin\alpha` of the panel
+                        :math:`\mathbf{M}`, where the angle :math:`\alpha` is w.r.t 
+                        to the panel :math:`\mathbf{x}^\prime`-axis and the local
+                        :math:`\mathbf{x}`-axis.
+              
+        __geometries : dict of dict, nBodies of dict
+                       the dictionary containing dictionary of body name and its
+                       parameters.  
+                       
+                       Updated parameters: {'cmGlobal','thetaLocal'}    
+                       
+        __norm : numpy.ndarray(float64), shape (2, nPanelsTotal)
+                 the :math:`x,y` normal vector of each panel.
+             
+        __rotMat : list of numpy.ndarray(float64), nBodies list of shape(2,2)
+                   the rotation matrix for rotating the local panel coordiantes
+                   with **thetaLocal** in the anti-clockwise direction.
+               
+        __tang : numpy.ndarray(float64), shape (2, nPanelsTotal)
+                 the :math:`x,y` tangent vector of each panel.
+                
+        __xyCP_global : numpy.ndarray(float64), shape (2, nPanelsTotal)
+                        the :math:`x,y` global coordinate of the collocation point.
+                    
+        __xyPanelEnd__global : numpy.ndarray(float64), shape (2, nPanelsTotal)
+                               the :math:`x,y` global coordinate of the panel
+                               starting points.
+                           
+        __xyPanelStart_global: numpy.ndarray(float64), shape (2, nPanelsTotal)
+                               the :math:`x,y` global coordinate of the panel
+                               end points.
     
+        :First Added:   2013-11-22
+        :Last Modified: 2014-02-25
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version            
+        
+        """
+        # Assign the new body location
+        self.__set('thetaLocal', thetaLocalNew)
+        self.__set('cmGlobal', cmGlobalNew)
+
+        # Update the rotational matrix
+        self.__updateRotMat()
+
+        # Update the panel coordinates and angles
+        self.__updateCoordinates()
+
+        # Re-assemble the influence matrix A
+        self.__assembleInfluenceMatrix()     
+
 
     def evaluateVelocity(self,xTarget, yTarget):
         """
@@ -509,21 +636,21 @@ class Panels(object):
             
         Parameters
         ----------
-        xTarget : numpy.ndarray(float64), shape (\sum_i^N M_i,)
+        xTarget : numpy.ndarray(float64), shape (nTargets,)
                   the :math:`x`-coordinate of the target location, where the 
                   total velocity should be evaluated.
                   
-        yTarget : numpy.ndarray(float64), shape (\sum_i^N M_i,)
+        yTarget : numpy.ndarray(float64), shape (nTargets,)
                   the :math:`y`-coordinate of the target location, where the 
                   total velocity should be evaluated.
                   
         Returns
         -------
-        vx : numpy.ndarray(float64), shape (\sum_i^N M_i,)
+        vx : numpy.ndarray(float64), shape (nTargets,)
              the :math:`x`-component of the induced velocity at each of the
              **(xTarget,yTarget)** points.
              
-        vy : numpy.ndarray(float64), shape (\sum_i^N M_i,)
+        vy : numpy.ndarray(float64), shape (nTargets,)
              the :math:`x`-component of the induced velocity at each of the
              **(xTarget,yTarget)** points.
              
@@ -531,7 +658,10 @@ class Panels(object):
         ----------
         None changed.
 
-                 
+        :First Added:   2013-11-22
+        :Last Modified: 2014-02-25
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version   
         """
         
         # Determine the computation hardware
@@ -555,101 +685,6 @@ class Panels(object):
         # return induced velocity
         return vx,vy
         
-        
-
-    def updateBody(self,cmGlobal,thetaLocal):
-        """
-        Update all the panel body coordinates. This internally calculate the
-        new global panel coordinates of `xPanel, yPanel, xCP, yCP` and will
-        also rebuild the inter-induction influence matrix :math:`\mathbf{A}`
-        
-        Usage
-        -----
-        .. code-block :: python
-        
-            updateBody(cmGlobal,thetaLocal)
-        
-        Parameters
-        ----------
-        cmGlobal : list of numpy.ndarray(float64), N list of shape (2,) 
-                   the :math:`x,y` global coordinates of the local panel
-                   body reference point. For solving the problem, the panel
-                   body will be displaced according the global displacement
-                   vector **cmGlobal**.
-                       
-        thetaLocal : list of float64, N list of floats, unit (radians)
-                     the local rotation angle :math:`\theta` w.r.t to 
-                     the local coordinate system. The rotational will be 
-                     performed around the local reference point (0,0), i.e
-                     around the global cm point **cmGlobal**. 
-                     * Note: Positive rotation is anti-clockwise.
-        
-        Returns
-        -------
-        None returned.
-        
-        Attribute
-        ---------
-        __A : numpy.ndarray(float64), shape (\sum_i^N M_i,N\sum_i^N M_i)
-              the inter-induction matrix :math:`\mathbf{A}`, the LHS of the problem.
-          
-        __cmGlobal : list of numpy.ndarray(float64), N list of shape (2,)
-                     the global position vector for each of the :math:`\mathbf{N}`
-                     body, refining the position of the local panel (0,0) in the
-                     global coordinate system.
-                 
-        __cosSinAlpha : numpy.ndarray(float64), shape(2,\sum_i^N M_i)
-                        the :math:`\cos\alpha` and :math:`\sin\alpha` of the panel
-                        :math:`\mathbf{M}`, where the angle :math:`\alpha` is w.r.t 
-                        to the panel :math:`\mathbf{x}^\prime`-axis and the local
-                        :math:`\mathbf{x}`-axis.
-              
-        __norm : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
-                 the :math:`x,y` normal vector of each panel.
-             
-        __rotMat : list of numpy.ndarray(float64), N list of shape(2,2)
-                   the rotation matrix for rotating the local panel coordiantes
-                   with **thetaLocal** in the anti-clockwise direction.
-               
-        __tang : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
-                 the :math:`x,y` tangent vector of each panel.
-             
-        __thetaLocal : list of float, N list of float
-                       the local rotation angle :math:`\theta` w.r.t to 
-                       the local coordinate system. The rotational will be 
-                       performed around the local reference point (0,0), i.e
-                       around the global cm point **cmGlobal**. 
-                       * Note: Positive rotation is anti-clockwise.
-                
-        __xyCP_global : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
-                        the :math:`x,y` global coordinate of the collocation point.
-                    
-        __xyPanelEnd__global : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
-                               the :math:`x,y` global coordinate of the panel
-                               starting points.
-                           
-        __xyPanelStart_global: numpy.ndarray(float64), shape (2,\sum_i^N M_i)
-                               the :math:`x,y` global coordinate of the panel
-                               end points.
-    
-        :First Added:   2013-11-22
-        :Last Modified: 2014-02-20
-        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version            
-        
-        """
-        # Assign the new body location
-        self.__set('thetaLocal', thetaLocal)
-        self.__set('cmGlobal', cmGlobal)
-
-        # Update the rotational matrix
-        self.__updateRotMat()
-
-        # Update the panel coordinates and angles
-        self.__updateCoordinates()
-
-        # Re-assemble the influence matrix A
-        self.__assembleInfluenceMatrix()
         
     def solve(self,vxExternel,vyExternel):
         """
@@ -679,12 +714,12 @@ class Panels(object):
             
         Parameters
         ----------
-        vxExternel : numpy.ndarray(float64), shape (\sum_i^N M_i)
+        vxExternel : numpy.ndarray(float64), shape (nPanelsTotal,)
                      the :math:`x`-component of the external velocity acting
                      of the :math:`\sum_i^N M_i` panel collocation points,
                      defining by **xCPGlobalCat** and **yCPGlobalCat**.
   
-        vyExternel : numpy.ndarray(float64), shape (\sum_i^N M_i)
+        vyExternel : numpy.ndarray(float64), shape (nPanelsTotal,)
                      the :math:`y-component of the external velocity acting
                      of the :math:`\sum_i^N M_i` panel collocation points,
                      defining by **xCPGlobalCat** and **yCPGlobalCat**.
@@ -695,15 +730,12 @@ class Panels(object):
 
         Attributes
         ----------
-        __sPanel : numpy.ndarray(float64), shape (\sum_i^N M_i,)
+        __sPanel : numpy.ndarray(float64), shape (nPanelsTotal,)
                    the vortex sheet strengths :math:`\gamma` of :math:`\mathbf{M}`
-                   panels.  
-                   
-        __tStep : float
-                  the current step of the simulation                   
+                   panels.                   
                
         :First Added:   2013-11-21
-        :Last Modified: 2014-02-20
+        :Last Modified: 2014-02-25
         :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version                
         """
@@ -730,56 +762,54 @@ class Panels(object):
             # Use the direct matrix solver.
             elif self.__solverCompParams['method'] == 'direct':
                 self.__sPanel = _numpy.linalg.solve(self.__A,RHS)
-                
-        # Advance the step
-        self.__tStep += 1                
-        
-                               
-        
-    #    def save(self,fileName=None):
-    #        """
-    #        Save all the data of the ..py:class::`panels` class to a file. This
-    #        file can be used later to re-initalize the class.
-    #        
-    #        Usage
-    #        -----
-    #        ...
-    #        
-    #
-    #        Parameters
-    #        ----------
-    #        ...
-    #        
-    #
-    #        Assigns
-    #        -------
-    #        ...
-    #        
-    #        
-    #        Returns
-    #        -------
-    #        ...
-    #        
-    #        
-    #        :First Added:   2013-11-21
-    #        :Last Modified: 2013-11-22
-    #        :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
-    #        :Licence:       GNU GPL version 3 or any later version                     
-    #        
-    #        """
-    #        
-    #        # Define the file store location            
-    #        if fileName is None:
-    #            fileName = './panelData'
-    #            
-    #        # Save data
-    #        _numpy.savez_compressed(fileName,xCP=self.__xCP,yCP=self.__yCP,
-    #                            xPanel=self.__xPanel,yPanel=self.__yPanel,
-    #                            cmGlobal=self.__cmGlobal,thetaLocal=self.__thetaLocal,
-    #                            nPanels=self.__nPanels,nBody=self.__nBodies)
+     
 
+    def _advanceTime(self,deltaTNew):
+        r"""
+        Function to advance the internal time clock.
+
+        Usage
+        -----
+        .. code-block :: python
+
+            _advanceTime(deltaT)
+
+        Parameters
+        ----------
+        deltaT : float
+                 the current time step size
+                 
+        Returns
+        -------
+        None returned.
+        
+        Attributes
+        ----------
+        __deltaT : float
+                   the current time step size
     
+         _t : float
+              the current time of the simulation
     
+        __tStep : float
+                  the current step of the simulation
+        
+        :First Added:   2014-02-25
+        :Last Modified: 2014-02-25
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
+
+        """
+
+        # store the current time step size
+        self.__deltaT = deltaTNew
+
+        # advance tStep
+        self.__tStep += 1
+
+        # advance t
+        self.__t += self.__deltaT
+
 
     def __assembleInfluenceMatrix(self):
         r"""
@@ -815,11 +845,11 @@ class Panels(object):
         
         Attributes
         ----------
-        __A : numpy.ndarray(float64), shape (\sum_i^N M_i,N\sum_i^N M_i)
+        __A : numpy.ndarray(float64), shape (nPanelsTotal, nPanelsTotal)
               the inter-induction matrix :math:`\mathbf{A}`, the LHS of the problem.
               
-        __LU_FACTOR : tuple of (numpy.array(float64), shape(\sum_i^N M_i,\sum_i^N M_i) (1) and
-                      numpy.array(float64), shape (M,) (2).
+        __LU_FACTOR : tuple of (numpy.array(float64), shape(nPanelsTotal, nPanelsTotal) (1) and
+                      numpy.array(float64), shape (nPanelsTotal,) (2).
                       The output of the computed pivoted LU decomposition of a 
                       inter-induction matrix. It is used to solver the system using
                       LU factorization.
@@ -828,7 +858,7 @@ class Panels(object):
                       2. The pivot indices represeting the permutation matrix P.
         
         :First Added:   2013-11-25
-        :Last Modified: 2014-02-20
+        :Last Modified: 2014-02-25
         :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version          
         """
@@ -868,7 +898,6 @@ class Panels(object):
             self.__LU_FACTOR = _splin.lu_factor(self.__A)
             
             
-
     def __updateCoordinates(self):
         """
         Function to update the coordinates. Calculates the global panel
@@ -891,49 +920,52 @@ class Panels(object):
         
         Attributes
         ----------
-        __cosSinAlpha : numpy.ndarray(float64), shape(2,\sum_i^N M_i)
+        __cosSinAlpha : numpy.ndarray(float64), shape(2, nPanelsTotal)
                         the :math:`\cos\alpha` and :math:`\sin\alpha` of the panel
                         :math:`\mathbf{M}`, where the angle :math:`\alpha` is w.r.t 
                         to the panel :math:`\mathbf{x}^\prime`-axis and the local
                         :math:`\mathbf{x}`-axis.
                     
-        __norm : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+        __norm : numpy.ndarray(float64), shape (2, nPanelsTotal)
                  the :math:`x,y` normal vector of each panel.
                
-        __tang : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+        __tang : numpy.ndarray(float64), shape (2, nPanelsTotal)
                  the :math:`x,y` tangent vector of each panel.
                 
-        __xyCP_global : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+        __xyCP_global : numpy.ndarray(float64), shape (2, nPanelsTotal)
                         the :math:`x,y` global coordinate of the collocation point.
                     
-        __xyPanelEnd__global : numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+        __xyPanelEnd__global : numpy.ndarray(float64), shape (2, nPanelsTotal)
                                the :math:`x,y` global coordinate of the panel
                                starting points.
                            
-        __xyPanelStart_global: numpy.ndarray(float64), shape (2,\sum_i^N M_i)
+        __xyPanelStart_global: numpy.ndarray(float64), shape (2, nPanelsTotal)
                                the :math:`x,y` global coordinate of the panel
                                end points.
     
       
         :First Added:   2013-11-25
-        :Last Modified: 2014-02-20
+        :Last Modified: 2014-02-25
         :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version  
         
         """
             
         # Update panel coordinates
-        for i,(x,y) in enumerate(zip(self.__xPanel, self.__yPanel)):
+        for i, geometryData in enumerate(self.__geometries.itervalues()):
             
             # Start and end index
             iS, iE = self.__index[i], self.__index[i+1]
             
             # New global panel coordinates
-            xyPanelNew = _numpy.dot(self.__rotMat[i], _numpy.vstack((x,y))) + self.__cmGlobal[i].reshape(2,1)
-
+            xyPanelNew = _numpy.dot(self.__rotMat[i], 
+                                    _numpy.vstack((geometryData['xPanel'],
+                                                   geometryData['yPanel']))) \
+                               + geometryData['cmGlobal'].reshape(2,1)
+            
             # Separate and concatenate the (start) and (end) points of the panels
-            self.__xyPanelStart_global[:,iS:iE]  = xyPanelNew[:,:]
-            self.__xyPanelEnd_global[:,iS:iE]    = _numpy.hstack((xyPanelNew[:,1:],xyPanelNew[:,0].reshape(-1,1)))
+            self.__xyPanelStart_global[:,iS:iE]  = xyPanelNew[:,:-1]
+            self.__xyPanelEnd_global[:,iS:iE]    = xyPanelNew[:,1:]
             
             #------------------------------------------------------------------
             # Calculate the angle functions
@@ -947,14 +979,19 @@ class Panels(object):
             #------------------------------------------------------------------
             
             # Unit Vectors (Tangent and Normal vector)
-            self.__norm[:,iS:iE] = _numpy.vstack((-self.__cosSinAlpha[1,iS:iE], self.__cosSinAlpha[0,iS:iE])) 
-            self.__tang[:,iS:iE] = _numpy.vstack((self.__cosSinAlpha[0,iS:iE], self.__cosSinAlpha[1,iS:iE]))
+            self.__norm[:,iS:iE] = _numpy.vstack((-self.__cosSinAlpha[1,iS:iE], 
+                                                  self.__cosSinAlpha[0,iS:iE])) 
+                                                  
+            self.__tang[:,iS:iE] = _numpy.vstack((self.__cosSinAlpha[0,iS:iE],
+                                                  self.__cosSinAlpha[1,iS:iE]))
             
             # Determine the collocation points (at the new position)
-            self.__xyCP_global[:,iS:iE] = 0.5*(self.__xyPanelEnd_global[:,iS:iE] + self.__xyPanelStart_global[:,iS:iE]) - self.__norm[:,iS:iE]*self.__dPanel[i]
+            self.__xyCP_global[:,iS:iE] = 0.5 * (self.__xyPanelEnd_global[:,iS:iE] + \
+                                                 self.__xyPanelStart_global[:,iS:iE])\
+                                           - self.__norm[:,iS:iE]*geometryData['dPanel'] # shift collocation point by dPanel, in the noraml dir.
         
-        
-        
+            
+
     def __updateRotMat(self):
         """
         Calculates the global transformation matrix for rotating the local
@@ -977,21 +1014,20 @@ class Panels(object):
         
         Attributes
         ----------
-        __rotMat : list of numpy.ndarray(float64), N list of shape(2,2)
+        __rotMat : list of numpy.ndarray(float64), nBodies list of shape(2,2)
                    the rotation matrix for rotating the local panel coordiantes
                    with **thetaLocal** in the anti-clockwise direction.
                    
         :First Added:   2013-11-25
-        :Last Modified: 2014-02-20
+        :Last Modified: 2014-02-25
         :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version                     
         """ 
         
         # The global rotational matrix
-        self.__rotMat = [_numpy.array([[_numpy.cos(theta), -_numpy.sin(theta)],
-                                       [_numpy.sin(theta), _numpy.cos(theta)]])
-                         for theta in self.__thetaLocal.flatten()]
-                                         
+        self.__rotMat = [_numpy.array([[_numpy.cos(geometryData['thetaLocal']), -_numpy.sin(geometryData['thetaLocal'])],
+                                       [_numpy.sin(geometryData['thetaLocal']), _numpy.cos(geometryData['thetaLocal'])]])
+                         for geometryData in self.__geometries.itervalues()]                                         
 
 
     def __set(self,varName,var):
@@ -1000,11 +1036,11 @@ class Panels(object):
         set them to local attributes.
         
         varNames:
-            - 'cmGlobal'            
-            - 'panel'            
+            - 'geometries'       
             - 'panelKernel'
             - 'problemType'
             - 'solverCompParams'
+            - 'cmGlobal'
             - 'thetaLocal' 
             - 'velCompParams'
         
@@ -1038,95 +1074,146 @@ class Panels(object):
         
         #----------------------------------------------------------------------
         # Load the panel data
-        if varName == 'panel':
+        
+        if varName == 'geometries':
             
-            # Parameters to be loaded
-            panelParmsList = ['xPanel','yPanel','cmGlobal','thetaLocal','dPanel']
-            
-            # Load numpy data if string given
-            if type(var) == str:
-                var = _numpy.load(var)
+            # Check geometries data type
+            if type(var) != dict:
+                raise TypeError("'geometries' must either be a dictionary of "\
+                                "geometries, containing all the parameters of "\
+                                "its body: ['xPanel','yPanel','cmGlobal','thetaLocal', 'dPanel'] "\
+                                "in a dictionary format.")
 
-            # Raise error if it not a dictionary                
-            elif type(var) != dict:
-                raise TypeError("'panel' must either be a dictionary, \
-                                 containing the panel data or a path string \
-                                 specifying the file containing the panel data.")
-
-            # Check if all the keys are found inside 'panel'                                 
-            for key in panelParmsList:
-                if key not in var.keys():
-                    raise ValueError("%s was not found in 'panel'." % key)
-                    
             # Determine number of bodies
-            self.__nBodies = len(var['xPanel'])
-            
-            # Determine number of panels
+            self.__nBodies = len(var)
+
+            # Parameters of a given geometry that needs to loaded and checked
+            panelParmsList = ['xPanel','yPanel','cmGlobal','thetaLocal','dPanel']
+                        
+            # Allocate nPanel variable
+            # variable storing the number of panels in each body
             self.__nPanels = _numpy.zeros(self.__nBodies,dtype=int)
-            for i,xPanel in enumerate(var['xPanel']):
-                self.__nPanels[i] = xPanel.shape[0]
             
-            # Iterate through all the parameters
-            for key, panelParm in var.iteritems():
+            for i,(geometryName, geometryData) in enumerate(var.iteritems()):
                 
-                # Check if the panel contains the data of all bodies
-                if len(panelParm) != self.__nBodies:
-                    raise ValueError("'%s' must have exactly %g numpy arrays. It has %g." % (key, self.__nBodies, len(panelParm)))
+                # Raise error if it not a dictionary                
+                if type(geometryData) != dict:
+                    raise TypeError("%geometries['%s'] must either be a dictionary, "\
+                                    "containing the geometry's panel datas." % geometryName)
+                                     
+                # Check if all the keys are found inside 'geometryData'                                 
+                for panelParameter in panelParmsList:
+                    if panelParameter not in geometryData.keys():
+                        raise ValueError("%s was not found in geometries['%s']."\
+                                          % (panelParameter, geometryName))
+            
+                # Determine the number of panels of the current body
+                # with M panels, we will have M+1 panel end points
+                self.__nPanels[i] = geometryData['xPanel'].shape[0] - 1
+                
+                #--------------------------------------------------------------
+                # Check 'xPanel'
+                
+                # Check data type
+                if type(geometryData['xPanel']) != _numpy.ndarray or geometryData['xPanel'].dtype != float:
+                    raise TypeError("'geometries['%s']['xPanel']' must be a "\
+                                    "float64 numpy ndarray. It is %s."\
+                                    % (geometryName,str(type(geometryData['xPanel']))))
+                
+                # Check shape of data
+                if (geometryData['xPanel'].shape[0] - 1) != self.__nPanels[i]:
+                    raise ValueError("geometries['%s']['xPanel'] must have shape " \
+                                     "%s. It has shape %s." % (geometryName,
+                                                               str((self.__nPanels[i],)),
+                                                               str(((geometryData['xPanel'].shape[0] - 1),))))
+                
+                #--------------------------------------------------------------
+                
+                #--------------------------------------------------------------
+                # Check 'yPanel'
+                
+                # Check data type
+                if type(geometryData['yPanel']) != _numpy.ndarray or geometryData['yPanel'].dtype != float:
+                    raise TypeError("'geometries['%s']['yPanel']' must be a "
+                                    "float64 numpy ndarray. It is %s."\
+                                     % (geometryName,str(type(geometryData['yPanel']))))
+                    
+                # Check shape of data    
+                if (geometryData['yPanel'].shape[0] - 1) != self.__nPanels[i]:
+                    raise ValueError("geometries['%s']['yPanel'] must have shape %s. "
+                                     "It has shape %s." % (geometryName,
+                                                           str((self.__nPanels[i],)),
+                                                           str(((geometryData['yPanel'].shape[0] - 1),))))
+                    
+                #--------------------------------------------------------------                    
+                    
+                #--------------------------------------------------------------
+                # Check 'cmGlobal'
+                
+                # Check data type
+                if type(geometryData['cmGlobal']) != _numpy.ndarray or geometryData['cmGlobal'].dtype != float:
+                    raise TypeError("'geometries['%s']['cmGlobal'] must be a float64 "\
+                                    "numpy ndarray. It is a %s" % (geometryName,
+                                                                   str(type(geometryData['cmGlobal']))))
+                # Check data shape    
+                if geometryData['cmGlobal'].shape[0] != 2:
+                    raise ValueError("geometries['%s']['cmGlobal'] must have "\
+                                     "shape (2,). It has shape %s."% (geometryName,
+                                                                     str(geometryData['cmGlobal'].shape)))
+                                                                     
+                #--------------------------------------------------------------
+                                                                     
+                #--------------------------------------------------------------                                                                     
+                # Check 'thetaLocal'
+                                                                     
+                # Check data type
+                if type(geometryData['thetaLocal']) != float and type(geometryData['thetaLocal']) != _numpy.float64:
+                    raise TypeError("geometries['%s']['thetaLocal'] must be a "\
+                                    "float. It is a %s" % (geometryName,str(type(geometryData['thetaLocal']))))
+                                    
+                #--------------------------------------------------------------
+                        
+                #--------------------------------------------------------------                        
+                # Check 'dPanel'
+                
+                # Check data type
+                if type(geometryData['dPanel']) != float and type(geometryData['dPanel']) != _numpy.float64:
+                    raise TypeError("geometries['%s']['dPanel'] must be a "\
+                                    "float. It is a %s" % (geometryName,str(type(geometryData['dPanel']))))
+                
+                #--------------------------------------------------------------                        
+                
+            # Everything checked, simply save the data.
+            self.__geometries = var
+                
 
-                # Enumerate data in panelParms
-                for i, data in enumerate(panelParm):
-                    
-                    if key == 'xPanel' or key == 'yPanel':
-                        # Check data type
-                        if type(data) != _numpy.ndarray:
-                            raise TypeError("'%s[%g]' must be a numpy ndarray." % (key,i,str(type(data))))
-                        # Check data shape    
-                        if data.shape[0] != self.__nPanels[i]:
-                            raise ValueError('%s[%g] must have shape (%g,0). It has shape %s.') % (key, i, str((self.__nPanels[i],)), str(data.shape))
-                    
-                    elif key == 'cmGlobal':
-                        # Check data type
-                        if type(data) != _numpy.ndarray:
-                            raise TypeError("'%s[%g]' must be a numpy ndarray. It is a %s" % (key,i,str(type(data))))
-                        # Check data shape    
-                        if data.shape[0] != 2:
-                            raise ValueError('%s[%g] must have shape (%g,0). It has shape %s.') % (key, i, str((2,)), str(data.shape))
-
-                    elif key == 'dPanel' or key == 'thetaLocal':
-                        # Check data type
-                        if type(data) != float and type(data) != _numpy.float64:
-                            raise TypeError("'%s[%g]' must be a numpy float. It is a %s" % (key,i,str(type(data))))
-                  
-                # Store all the data
-                if key == 'xPanel':
-                    self.__xPanel = _numpy.array(panelParm)
-                elif key == 'yPanel':
-                    self.__yPanel = _numpy.array(panelParm)
-                elif key == 'cmGlobal':
-                    self.__cmGlobal = _numpy.array(panelParm)
-                elif key == 'thetaLocal':
-                    self.__thetaLocal = _numpy.array(panelParm)
-                elif key == 'dPanel':
-                    self.__dPanel = _numpy.array(panelParm)
-                else:
-                    raise ValueError('%s is unknown.' % key)
-                    
         #----------------------------------------------------------------------                 
         # Set the velocity computation parameters
         elif varName == 'velCompParams':
+            
+            # Check if the input method is an available options
             if var['method'] not in _panelOptions.VELOCITY_COMPUTATION_METHOD['available']:
                 raise ValueError(r"velCompParams['method'] must be in [%s]. It is %s" % (_panelOptions.VELOCITY_COMPUTATION_METHOD['available'],var['method']))
+            
+            # Check if input harware is an available option
             if var['hardware'] not in _panelOptions.VELOCITY_COMPUTATION_HARDWARE['available']:
                 raise ValueError(r"velCompParams['hardware'] must be in [%s]. It is %s" % (_panelOptions.VELOCITY_COMPUTATION_HARDWARE['available'],var['hardware']))   
             self.__velCompParams = var
+        #----------------------------------------------------------------------            
             
         #----------------------------------------------------------------------            
         # Set solver computation parameters
         elif varName == 'solverCompParams':
+            
+            # Check if input method is an available option
             if var['method'] not in _panelOptions.SOLVER_COMPUTATION_METHOD['available']:
                 raise ValueError(r"solverCompParams['method'] must be in [%s]. It is %s" % (_panelOptions.SOLVER_COMPUTATION_METHOD['available'],var['method']))
+            
+            # Check if the tolerance is float
             if type(var['tol']) != float and type(var['tol']) != _numpy.float64:
                     raise TypeError("solverCompParams['tol'] must be a numpy float. It is a %s" % (str(type(var['tol']))))
+
+            # Check if input assemble is an available option.                    
             if var['assemble'] not in _panelOptions.SOLVER_COMPUTATION_ASSEMBLE['available']:
                 raise ValueError(r"solverCompParams['assemble'] must be in [%s]. It is %s" % (_panelOptions.SOLVER_COMPUTATION_ASSEMBLE['available'],var['assemble']))
             self.__solverCompParams = var
@@ -1147,238 +1234,387 @@ class Panels(object):
             self.__problemType = var
 
         #----------------------------------------------------------------------                
-        # Set cm_global only
-        elif varName == 'cmGlobal':
-            for i, data in enumerate(var):
-                # Check data type
-                if type(data) != _numpy.ndarray:
-                    raise TypeError("'%s[%g]' must be a numpy ndarray. It is a %s" % (key,i,str(type(data))))
-                # Check data shape    
-                if data.shape[0] != 2:
-                    raise ValueError('%s[%g] must have shape (%g,0). It has shape %s.') % (key, i, str((2,)), str(data.shape))
-            # Set cmGlobal
-            self.__cmGlobal = _numpy.array(var)
-            
-        #----------------------------------------------------------------------                            
         # Set thetaLocal
         elif varName == 'thetaLocal':
-            for i, data in enumerate(var):
-                # Check data type
-                if type(data) != float and type(data) != _numpy.float64:
-                    raise TypeError("'%s[%g]' must be a numpy float. It is a %s" % (key,i,str(type(data))))
-            # Set thetaLocal
-            self.__thetaLocal = _numpy.array(var)
             
+            # Check the parent type
+            if type(var) != dict:
+                raise TypeError("'thetaLocal' must either be a dictionary containing "\
+                                "the following keys: %s" % str(self.geometryKeys))
 
-    #--------------------------------------------------------------------------
-    # Define the attributes sets, gets and deleters
-        
-    def __setError(self,setVar):
-        raise AttributeError('Cannot be manually set !')
-        
-    def __delError(self):
-        raise AttributeError('Cannot be manually deleted !')
-        
+            # Iterate through all the bodies                                
+            for key in self.geometryKeys:
+                if key not in var:
+                    raise TypeError("'thetaLocal' must either be a dictionary containing "\
+                                    "the following keys: %s" % str(self.geometryKeys))
 
-
-    # sPanel   
-    def __sPanel_get(self):
-        """__sPanel : numpy.ndarray(float64), shape (\sum_i^N M_i,)
-                      the vortex sheet strengths :math:`\gamma` of :math:`\mathbf{M}`
-                      panels. 
-        """
-        
-        # Separate panel strengths according to the body
-        sPanel = [] # Init list
-        
-        # Split the data
-        for i in range(self.__nBodies):
-            iS,iE = self.__index[i], self.__index[i+1]
-            sPanel.append(self.__sPanel[iS:iE])
-        
-        # Return list of panel strengths
-        return sPanel
-        
-    def __xCPGlobal_get(self):
-        """
-        The global :math:`x`-coordinates of the panel collocation points.
-        
-        Note: 
-        
-           *Slower* function. This function contains a for-loop for the 
-            splitting.
-        """
-        
-        xCPGlobal = []
-        # Split the data
-        for i in range(self.__nBodies):
-            iS,iE = self.__index[i], self.__index[i+1]
-            xCPGlobal.append(self.__xyCP_global[0,iS:iE])
-        
-        # return the list of xCPGlobal
-        return xCPGlobal
-
-    def __xPanelGlobal_get(self):
-        """
-        The global :math:`x`-coordinate of the panel edge points.
-        
-            Note: It is a open loop
-        """
-        xPanelGlobal = []
-        # Split the data
-        for i in range(self.__nBodies):
-            iS,iE = self.__index[i], self.__index[i+1]
-            xPanelGlobal.append(self.__xyPanelStart_global[0,iS:iE])
+                # Check the child data type
+                if type(var[key]) != float and type(var[key]) != _numpy.float64:
+                    raise TypeError("thetaLocal['%s'] must be a float. It is a %s"\
+                                     % (key,type(var[key])))
+                
+                # Replace the thetaLocal
+                self.__geometries[key]['thetaLocal'] = var[key]
+     
+        elif varName == 'cmGlobal':
             
-        return xPanelGlobal
-
-    def __yCPGlobal_get(self):
-        """
-        The global :math:`y`-coordinates of the panel collocation points.
-        
-        Note: 
-        
-           *Slower* function. This function contains a for-loop for the 
-            splitting.
-        """
-        
-        yCPGlobal = []
-        # Split the data
-        for i in range(self.__nBodies):
-            iS,iE = self.__index[i], self.__index[i+1]
-            yCPGlobal.append(self.__xyCP_global[1,iS:iE])
-        
-        # return the list of xCPGlobal
-        return yCPGlobal   
-   
-
-    def __yPanelGlobal_get(self):
-        """
-        The global :math:`y`-coordinate of the panel edge points.
-        
-            Note: It is a open loop
-        """
-        yPanelGlobal = []
-        # Split the data
-        for i in range(self.__nBodies):
-            iS,iE = self.__index[i], self.__index[i+1]
-            yPanelGlobal.append(self.__xyPanelStart_global[1,iS:iE])
+            # Check the parent type
+            if type(var) != dict:
+                raise TypeError("'cmGlobal' must either be a dictionary containing "\
+                                "the following keys: %s" % str(self.geometryKeys))
             
-        return yPanelGlobal     
-      
+            # Iterate through all the bodies                                
+            for key in self.geometryKeys:
+                if key not in var:
+                    raise TypeError("'thetaLocal' must either be a dictionary containing "\
+                                    "the following keys: %s" % str(self.geometryKeys))
+
+                # Check the child data type
+                if type(var[key]) != _numpy.ndarray and var[key].dtype != float:
+                    raise TypeError("cmGlobal['%s'] must be a float64 numpy ndarray."\
+                                    "It is a %s" % (key,type(var[key])))
+                                    
+                # Check the child data shape
+                if var[key].shape[0] != 2:
+                    raise ValueError("cmGlobal['%s'] must have shape (2,). "\
+                                     "It has shape %s."% (key,str(var[key].shape)))
+                                     
+                # Replace the thetaLocal
+                self.__geometries[key]['cmGlobal'] = var[key]     
+                
         
     #--------------------------------------------------------------------------        
     # All the attributes
-
+        
     # Inter induction matrix
-    A = property(fget = lambda self: self.__A,
-                 fset =__setError, fdel=__delError,
-                 doc = r"""A : numpy.ndarray(float64), shape (\sum_i^N M_i,N\sum_i^N M_i)
-                               the inter-induction matrix :math:`\mathbf{A}`, the LHS of the problem.
-                        """)
-    
-    # cmGlobal
-    cmGlobal = property(fget = lambda self: self.__cmGlobal,
-                        fset = __setError, fdel = __delError,
-                        doc = r"""cmGlobal : list of numpy.ndarray(float64), N list of shape (2,)
-                                             the global position vector for each of the :math:`\mathbf{N}`
-                                             body, refining the position of the local panel (0,0) in the
-                                             global coordinate system.
-                              """)
+    @simpleGetProperty        
+    def A(self):
+        r"""
+        A : numpy.ndarray(float64), shape (nPanelsTotal, nPanelsTotal)
+            the inter-induction matrix :math:`\mathbf{A}`, the LHS of the problem.
+        """
+        return self.__A
         
-    # nBodies
-    nBodies = property(fget = lambda self: self.__nBodies,
-                       fset = __setError, fdel = __delError,
-                       doc = r""" The Number of panel bodies
-                       """)
-    
-    # nPanels
-    nPanels = property(fget = lambda self: self.__nPanels,
-                       fset = __setError, fdel = __delError,
-                       doc = r""" Number of panels in each body
-                       """)
+    @simpleGetProperty
+    def cmGlobal(self):
+        r"""
+        cmGlobal : list of numpy.ndarray(float64), nBodies list of shape (2,)
+                   the global position vector for each of the :math:`\mathbf{N}`
+                   body, refining the position of the local panel (0,0) in the
+                   global coordinate system.
+        """
+        # Extract cmGlobal
+        return [geometryData['cmGlobal'] for geometryData in self.__geometries.itervalues()]
+
+    @simpleGetProperty
+    def deltaT(self):
+        r"""
+        deltaT : float
+                 the simulation time step size :math:`\Delta T`
+        """
+        return self.__deltaT
         
-    # nPanelsTotal
-    nPanelsTotal = property(fget = lambda self: self.__nPanelsTotal,
-                            fset = __setError, fdel = __delError,
-                            doc = r"""Number of panel in total
-                            """)
+    @simpleGetProperty
+    def geometryKeys(self):
+        r"""
+        geometryKeys : list of str
+                       the key/names of the geometries in the panel problem. 
+        """
+        return self.__geometries.keys()
+    
+    @simpleGetProperty
+    def nBodies(self):
+        r"""
+        nBodies : int
+                  The total number of panel bodies/geometries
+        """
+        return self.__nBodies
+
+    @simpleGetProperty
+    def norm(self):
+        r"""
+        norm : list of numpy.ndarray(float64), nBodies of shape (2,nPanels_i)
+               the global :math:`x,y`-component of the panel normal vector
+               at each collocation points.
+        """
+        # Split norm concatenated array
+        return [self.__norm[0,self.__index[i]:self.__index[i+1]] for i in range(self.__nBodies)],\
+               [self.__norm[1,self.__index[i]:self.__index[i+1]] for i in range(self.__nBodies)]    
+  
+    @simpleGetProperty
+    def normCat(self):
+        r"""
+        normCat : numpy.ndarray(float64), nBodies of shape (2,nPanelsTotal)
+                  the global concatenated :math:`x,y`-component of the panel
+                  normal vector at each collocation points.
+        """
+        return self.__norm
+  
+    @simpleGetProperty
+    def nPanels(self):
+        r"""
+        nPanels : numpy.ndarray(int64), shape (nBodies,)
+                  the number of panels in each body/geometry
+        """
+        return self.__nPanels
+        
+    @simpleGetProperty
+    def nPanelsTotal(self):
+        r"""
+        nPanelsTotal : int
+                       the total number of panels
+        """
+        return self.__nPanelsTotal
+
+    @simpleGetProperty        
+    def panelKernel(self):
+        r"""
+        panelKernel : str
+                      A string defining panel kernel type:
+                      
+                      'csv' : [default] Constant-strength vortex panel
+                      'css' : Constant-strength source panel
+        """
+        return self.__panelKernel
+        
+    @simpleGetProperty
+    def problemType(self):
+        r"""
+        problemType : str
+                      A string defining the panel problem is of a moving type or
+                      of a fixed type.
+                    
+                      'moving' : [default] The panel geometries change during each
+                                 iteration. Therefore, new coordinates and new
+                                 inter-induction matrix has to be recalculated.
+                               
+                                 * Note: LU Factorization algorithm is not possible.
+                      
+                      'fixed' : The panel body is not moving and therefore the 
+                                inter-induction matrix only needed to be computed
+                                once. The LU factorization is very efficient for this
+                                type of problem.
+        """        
+        return self.__problemType
+        
+    @simpleGetProperty
+    def solverCompParams(self):
+        r"""
+        solverCompParams : dict
+                           the dictionary containing solver computation parameters
+                           
+                           'method' : str
+                                      the method to solve the problem.
+                                      
+                                      'bicgstab' : [default] BIConjugate Gradient 
+                                                   STABilized iteration method
+                                      'gmres' : Generalized Minimal RESidual 
+                                                iteration method
+                                      'direct' : Direct solving.
+                           'tol' : str
+                                   the tolerance of the absolute and relative
+                                   residual for the iterative solvers: ('bicgstab','gmres')
+                                   
+                                   'tol' : [default] 1e-12
+                         
+                           'assemble' : str
+                                        the type of assembling for the inter-
+                                        induction matrix. 
+                                     
+                                        'all' : [default] all of the inter-induction
+                                                matrix will be recalculated and
+                                                assembled.
+                                      
+                                        * Note: Smart assembling is not implemented.        
+        """
+        return self.__solverCompParams
                             
-    # sPanel
-    sPanel = property(fget = __sPanel_get, fset=__setError, fdel = __delError)        
-
-
-    # thetaLocal
-    thetaLocal = property(fget = lambda self: self.__cmGlobal,
-                          fset = __setError, fdel = __delError,
-                          doc = r"""__thetaLocal : list of float, N list of float
-                                                   the local rotation angle :math:`\theta` w.r.t to 
-                                                   the local coordinate system. The rotational will be 
-                                                   performed around the local reference point (0,0), i.e
-                                                   around the global cm point **cmGlobal**. 
-                                                   * Note: Positive rotation is anti-clockwise.
-                          """)
-
-    # tStep
-    tStep = property(fget = lambda self: self.__tStep,
-                     fset = __setError, fdel = __delError,
-                     doc = r"""tStep : float
-                                       the current step of the simulation
-                     """)
-
-    # xCPGlobal
-    xCPGlobal = property(fget = __xCPGlobal_get, fset=__setError, fdel = __delError)        
+    @simpleGetProperty
+    def sPanel(self):
+        r"""
+        sPanel : numpy.ndarray(float64), shape (nPanelsTotal,)
+        """
+        # Split the sPanel data
+        return [self.__sPanel[self.__index[i]:self.__index[i+1]] for i in range(self.__nBodies)]
+     
+    @simpleGetProperty
+    def t(self):
+        r"""
+        t : float
+            the current time of the simulation
+        """
+        return self.__t
         
-    # xCPGlobalCat
-    xCPGlobalCat = property(fget = lambda self: self.__xyCP_global[0],
-                            fset =__setError,  fdel = __delError,
-                            doc = r"""The global x coordinate of the collocation
-                                      point, concatenated.  
-                            """ )        
-
-    # xCPGlobal
-    xPanelGlobal = property(fget = __xPanelGlobal_get, fset=__setError, fdel=__delError) 
-
-    # xCPGlobalCat
-    xPanelGlobalCat = property(fget = lambda self: self.__xyPanelStart_global[0],
-                           fset=__setError,  fdel = __delError,
-                           doc = r""" The global concatenated x coordinate of 
-                                 the panel corners.
-                           """)
-    
-    # xPanelLocal
-    xPanelLocal = property(fget = lambda self: self.__xPanel,
-                           fset=__setError,  fdel = __delError,
-                           doc = r""" The local x coordinate of the panel corners.
-                           """)
-
-    # yCPGlobal
-    yCPGlobal = property(fget = __yCPGlobal_get, fset=__setError,  fdel = __delError)        
+    @simpleGetProperty
+    def tang(self):
+        r"""
+        tang : list of numpy.ndarray(float64), nBodies of shape (2,nPanels_i)
+               the global :math:`x,y`-component of the panel tangent vector
+               at each collocation points.
+        """
+        # Split norm concatenated array
+        return [self.__tang[0,self.__index[i]:self.__index[i+1]] for i in range(self.__nBodies)],\
+               [self.__tang[1,self.__index[i]:self.__index[i+1]] for i in range(self.__nBodies)]    
+  
+    @simpleGetProperty
+    def tangCat(self):
+        r"""
+        tangCat : numpy.ndarray(float64), nBodies of shape (2,nPanelsTotal)
+                  the global concatenated :math:`x,y`-component of the panel
+                  normal vector at each collocation points.
+        """
+        return self.__tang
         
-    # yCPGlobalCat
-    yCPGlobalCat = property(fget = lambda self: self.__xyCP_global[1],
-                            fset =__setError, fdel = __delError,
-                            doc = r"""The global y coordinate of the collocation
-                                      point, concatenated.  
-                            """ )        
+    @simpleGetProperty
+    def thetaLocal(self):
+        r"""
+        thetaLocal : list of float, nBodies of float
+                     the local rotation angle :math:`\theta` w.r.t to the local
+                     coordinate system. The rotational will be performed around
+                     the local reference point (0,0), i.e around the global cm 
+                     point **cmGlobal**. 
+                                                   
+                     * Note: Positive rotation is anti-clockwise.                              
+        """
+        # Extract data
+        return [geometryData['thetaLocal'] for geometryData in self.__geometries.itervalues()]
+        
+    @simpleGetProperty
+    def tStep(self):
+        r"""
+        tStep : float
+                the current step of the simulation
+        """
+        return self.__tStep
 
-    # yCPGlobal
-    yPanelGlobal = property(fget = __yPanelGlobal_get, fset=__setError, fdel = __delError) 
-
-    # yCPGlobalCat
-    yPanelGlobalCat = property(fget = lambda self: self.__xyPanelStart_global[1],
-                           fset=__setError, fdel = __delError,
-                           doc = r""" The global concatenated x coordinate of 
-                                 the panel corners.
-                           """)
+    @simpleGetProperty
+    def velCompParams(self):
+        r"""
+        velCompParams : dict, optional
+                        A dictionary containing the velocity computation parameters,
+                        method and hardware.
+                      
+                        'method' : str
+                                   the method to compute the induced velocities.
+                                   
+                                   'direct' : [default] direct calculation with
+                                              :math:`\mathcal{O}\left(n^2\right)`
+                        
+                        'hardware' : str
+                                     the hardware for computing the induced velocity
+                                     of the panel.
+                                     
+                                     'cpu' : [default] use the cpu.
+        """
+        return self.__velCompParams        
+        
+    @simpleGetProperty
+    def xyCPGlobal(self):
+        r"""
+        xyCPGlobal : list of numpy.ndarray(float64), nBodies of shape (2,nPanels_i)
+                     the global :math:`x,y`-coordinate of the panel collocation
+                     points.
+        """
+        # Split global coordinate
+        return [self.__xyCP_global[0,self.__index[i]:self.__index[i+1]] for i in range(self.__nBodies)],\
+               [self.__xyCP_global[1,self.__index[i]:self.__index[i+1]] for i in range(self.__nBodies)]
+                        
+    @simpleGetProperty
+    def xyCPGlobalCat(self):
+        r"""
+        xyCPGlobalCat : numpy.ndarray(float64), shape (2,nPanelsTotal)
+                        the global concatenated :math:`x,y`-coordinate of the
+                        panel collocation points.
+        """                 
+        return self.__xyCP_global  
+        
+    @simpleGetProperty
+    def xyPanelGlobal(self):
+        r"""
+        xyPanelGlobal : list of numpy.ndarray(float64), nBodies of shape (2,nPanels_i+1)
+                        the global :math:`x,y`-coordinate of the panel bodies.
+                       
+                        * Note: closed loop
+        """
+        return [_numpy.append(self.__xyPanelStart_global[0,self.__index[i]:self.__index[i+1]],
+                              self.__xyPanelStart_global[0,self.__index[i]]) for i in range(self.__nBodies)],\
+               [_numpy.append(self.__xyPanelStart_global[1,self.__index[i]:self.__index[i+1]],
+                              self.__xyPanelStart_global[1,self.__index[i]]) for i in range(self.__nBodies)]               
+                 
     
-    # xPanelLocal
-    yPanelLocal = property(fget = lambda self: self.__yPanel,
-                           fset=__setError, fdel = __delError,
-                           doc = r""" The local x coordinate of the panel corners.
-                           """)
-
+    @simpleGetProperty
+    def xyPanelGlobalCat(self):
+        r"""
+        xyPanelGlobalCat : numpy.ndarray(float64), shape (2,nPanelsTotal+nBodies)
+                           the global concatenated :math:`x,y`-coordinate of the
+                           panel bodies.
+                          
+                           * Note: closed loop
+        """
+        # Initialize the variable
+        xyPanelGlobalCat = _numpy.zeros((2,self.__nPanelsTotal + self.__nBodies))
+        
+        # Close the panel body (append start point)
+        for i in range(self.__nBodies):
+            iS,iE = self.__index[i] + i, self.__index[i+1] + (i+1)
+            xyPanelGlobalCat[:,iS:iE] = _numpy.hstack((self.__xyPanelStart_global[:,iS:iE],
+                                                       self.__xyPanelStart_global[:,iS].reshape(2,1)))
+        # return xPanel Global concatenated data                                                   
+        return xyPanelGlobalCat
+  
+    @simpleGetProperty
+    def xyPanelLocal(self):
+        r"""
+        xyPanelLocal : list of numpy.ndarray(float64), nBodies of shape (2,nPanels_i+1) 
+                       the local :math:`x,y`-coordinate of the panel bodies.
+                      
+                      * Note: closed loop.
+        """
+        return [geometryData['xPanel'] for geometryData in self.__geometries.itervalues()],\
+               [geometryData['yPanel'] for geometryData in self.__geometries.itervalues()]
+ 
+ 
     #--------------------------------------------------------------------------
 
 
-        
+#    def save(self,fileName=None):
+#        """
+#        Save all the data of the ..py:class::`panels` class to a file. This
+#        file can be used later to re-initalize the class.
+#        
+#        Usage
+#        -----
+#        ...
+#        
+#
+#        Parameters
+#        ----------
+#        ...
+#        
+#
+#        Assigns
+#        -------
+#        ...
+#        
+#        
+#        Returns
+#        -------
+#        ...
+#        
+#        
+#        :First Added:   2013-11-21
+#        :Last Modified: 2013-11-22
+#        :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
+#        :Licence:       GNU GPL version 3 or any later version                     
+#        
+#        """
+#        
+#        # Define the file store location            
+#        if fileName is None:
+#            fileName = './panelData'
+#            
+#        # Save data
+#        _numpy.savez_compressed(fileName,xCP=self.__xCP,yCP=self.__yCP,
+#                            xPanel=self.__xPanel,yPanel=self.__yPanel,
+#                            cmGlobal=self.__cmGlobal,thetaLocal=self.__thetaLocal,
+#                            nPanels=self.__nPanels,nBody=self.__nBodies)

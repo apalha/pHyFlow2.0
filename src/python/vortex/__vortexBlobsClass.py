@@ -77,12 +77,12 @@ import types as __types
 import inspect as __inspect
 
 from pHyFlow import options # import options definitions for pHyFlow
-from pHyFlow.aux import ErrorOutput as _ErrorOutput # import error output functions
+#from pHyFlow.aux import ErrorOutput as _ErrorOutput # import error output functions
 
 # import required base functions from where to build up the class
 from pHyFlow.vortex.base.induced import velocity as _base_velocity
-from pHyFlow.vortex.base.induced import vorticity_blobs as _base_vorticity_blobs
-from pHyFlow.vortex.base.induced import vorticity as _base_vorticity
+#from pHyFlow.vortex.base.induced import vorticity_blobs as _base_vorticity_blobs
+#from pHyFlow.vortex.base.induced import vorticity as _base_vorticity
 from pHyFlow.vortex.base.regrid import Regrid as _base_redistribute
 from pHyFlow.vortex.base.regrid import PopulationControl as _base_populationControl
 from pHyFlow.vortex.base.evolution import convection as _base_convection
@@ -797,7 +797,7 @@ class VortexBlobs(object):
 
 
         # update the time counter
-        self.__advanceTime()
+        self._advanceTime()
 
         # redistribution step
         if self.__stepRedistribution != 0: # meaning that redistribution should be done
@@ -2168,7 +2168,7 @@ class VortexBlobs(object):
         return deltaTd, stepDiffusion
 
 
-    def __advanceTime(self):
+    def _advanceTime(self):
         r"""
         __advanceTime updates all time related variables: self.__tStep and self.__t.
 
@@ -2204,6 +2204,48 @@ class VortexBlobs(object):
         # advance t
         self.__t += self.__deltaTc
 
+
+    
+    def __diffusion(self):
+        """
+        diffusion
+        """        
+        # select the diffusion method to use
+        if self.__diffusionParams['method'] == 'regrid_wee':
+            # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
+            # on regrid of the blobs into a grid that
+            # does not need to have a node at the point [0.0, 0.0], for that it
+            # uses the original grid placement of particles to redistribute them.
+            # in here it is assumed that the redistribution grid always contains the
+            # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
+            # yBounds variables are computes in order to redistribute particles
+            # into a grid that contains the point [0.0, 0.0]. Essentially, the
+            # redistribution is done into the following initial grid:
+            #
+            #       -------------------------
+            #       |       |       |       |
+            #       |   X   |   X   |   X   |
+            #       |  (3)  |  (7)  |  (11) |
+            #       -------------------------
+            #       |       |       |      O|
+            #       |   X   |   X   |   X   |
+            #       |  (2)  |  (6)  |  (10) |
+            #       -------------------------
+            #       |       |       |       |
+            #       |   X   |   X   |   X   |
+            #       |  (1)  |  (5)  |  (9)  |
+            #       -------------------------
+            #
+            # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
+            # terms appear.
+            xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+            yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+
+            # perform diffusion and store the results directly in the object
+            self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
+                                                             self.__x,self.__y,self.__g,
+                                                             self.__sigma,xBounds,yBounds,
+                                                             overlap=self.__overlap)
 
     #----------------------------------------------------
     # Definition of properties

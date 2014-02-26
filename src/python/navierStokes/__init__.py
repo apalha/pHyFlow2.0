@@ -18,9 +18,11 @@
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
 # First added:  2013-07-01                                                                                                          
-# Last changed: 2014-02-12
+# Last changed: 2014-02-20
+
+import base
+import nsOptions
 
 # import Navier-Stokes class
 from __NavierStokesClass import *
-import options
 

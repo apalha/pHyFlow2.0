@@ -8,16 +8,40 @@ number of panels.
 import pHyFlow
 
 import numpy as np
+import pylab as py
 import time
+py.ion()
 
 #------------------------------------------------------------------------------
-# Define external velocity field
+# Global variables
 
-# Free-stream flow
-def externVel(x,y):
-    vInf = np.array([1.,0.])
-    return vInf[0]*np.ones(x.shape[0]), vInf[1]*np.ones(y.shape[0])
+vInf = np.array([1.0,0.0]) # the free stream velocity
 
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Initialize vortex blobs
+
+# Define blobs
+nBlobs = 20
+overlap = 1.0 # the overlap ration between the blobs
+h = 0.01 # the cell size to which each blob is associated to
+
+deltaTc = 0.01 # the size of the time step
+nu = 0.0
+
+blobControlParams = {'stepRedistribution':0,'stepPopulationControl':0,\
+                     'gThresholdLocal':1e-8,'gThresholdGlobal':1e-8}
+
+# generate the vortex blobs
+x,y = -np.ones(nBlobs)*5.0, np.linspace(-4.0,2.0,nBlobs)
+g = np.zeros(nBlobs)
+
+wField = (x,y,g) # the vorticity field made up of the blobs coordinates and circulation
+
+# Generate the blobs
+blobs = pHyFlow.vortex.VortexBlobs(wField,vInf,nu,deltaTc,h,overlap,
+                                   blobControlParams=blobControlParams)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -72,9 +96,6 @@ cylinder3Data = {'xPanel' : r3*np.cos(theta3 - dtheta3/2),
                  'thetaLocal' : np.pi,
                  'dPanel' : np.spacing(100)}
 
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
 # Append all the geometries for a multi-body panel solver
 
 # For now, only a single cylinder
@@ -82,90 +103,52 @@ geometries = {'cylinderNormal':cylinder1Data,
               'cylinderSmall' :cylinder2Data,
               'cylinderLarge' :cylinder3Data}
 
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
 # Initialize the panels
-
-# Input method 1: Provide all the parameters
-# Initalize panelBody
-panelBodies = pHyFlow.panel.Panels(geometries=geometries)
+panels = pHyFlow.panel.Panels(geometries=geometries)
 
 #------------------------------------------------------------------------------
 
+                                   
 #------------------------------------------------------------------------------
-# Solve for panel strengths (to satisfy no-slip b.c.)
-
-# Collocation points
-xCP,yCP = panelBodies.xyCPGlobalCat
-
-# External velocity at collocation points
-vx,vy = externVel(xCP,yCP)
-
-# External Velocity : simple free-stream flow
-panelBodies.solve(vx,vy)
-
+# Initialize the vortex-panel class
+                       
+startTime = time.time()                     
+vortexPanel = pHyFlow.vortexPanel.VortexPanel(blobs,panels,
+                                              couplingParams={'panelStrengthUpdate':'constant'})
+print "\nTime to initialize the coupled vortex-panel problem: %g seconds." % (time.time() - startTime)
+                         
+                         
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Move the bodies and save the panels in VTK, solving for panel strength every time
+# Evaluate the velocity field - due to panels
+                         
+x,y  = np.meshgrid(np.linspace(-4,6,30),np.linspace(-4,2,40))
+vortexPanel.panels.solve(vInf[0],vInf[1])
+vx,vy = vortexPanel.panels.evaluateVelocity(x.flatten(),y.flatten())
 
-# define the filename
-filename = 'panels.pvd'
+#------------------------------------------------------------------------------     
 
-# open the pvd file
-pvdFile = pHyFlow.IO.File(filename)
+#------------------------------------------------------------------------------
+# Plot the convection
 
-# define the time step for the motion functions
-dt = 0.1
+py.figure(1)
+py.title('Multi-body : Convection of zero-valued blobs')
+#py.clf()
+py.quiver(x.flat,y.flat,vx+vInf[0],vy+vInf[1],scale=100)
+py.scatter(blobs.x,blobs.y,c='g',s=30,edgecolor='none',label='blobs')
+[py.plot(x,y,k+'-',label=geoName) for x,y,geoName,k in zip(vortexPanel.panels.xyPanelGlobal[0],
+                                                            vortexPanel.panels.xyPanelGlobal[1],
+                                                            vortexPanel.panels.geometryKeys,['b','g','k'])]
+py.grid(True)
+py.axis('scaled')
+py.axis([-6,7,-5,4])
+    
+for i in xrange(2000):  
+    if i % 50 == 0:     
+        py.scatter(blobs.x,blobs.y,c='g',s=30,edgecolor='none',label='blobs')
+        py.draw()
+    print i
+    vortexPanel.evolve()
 
-# step in time
-for tStep in range(0,100):
-    print '-----------------------------------'
-    print 'Time step %d\n' % tStep
-    
-    startTime_MoveBodies = time.time()
-    
-    # move the bodies
-    cmGlobalNew = {'cylinderNormal': np.array([0.75*np.cos(2*tStep*dt),0.25*np.sin(2*tStep*dt)]),
-                   'cylinderSmall' : np.array([3.*np.cos(tStep*dt),3.*np.sin(tStep*dt)]),
-                   'cylinderLarge' : np.array([-4.0*np.cos(-tStep*dt),4.0*np.sin(-tStep*dt)])}
-    
-    # do not rotate them (keep the rotation angle theta constant)
-    thetaLocalNew = {'cylinderNormal': 0.,
-                     'cylinderSmall' : 0.,
-                     'cylinderLarge' : 0.}
-
-    # update panel body
-    panelBodies.updateBody(cmGlobalNew,thetaLocalNew)
-    panelBodies.advanceTime(dt)
-    
-    endTime_MoveBodies = time.time()
-    
-    startTime_UpdateStrengths = time.time()
-    
-    # update the strengths
-    
-    # Collocation points
-    xCP,yCP = panelBodies.xyCPGlobalCat
-
-    # External velocity at collocation points
-    vx,vy = externVel(xCP,yCP)
-
-    # External Velocity : simple free-stream flow
-    panelBodies.solve(vx,vy)
-    
-    endTime_UpdateStrengths = time.time()    
-    
-    startTime_SaveBodies = time.time()
-    
-    # save the bodies to pvd
-    pvdFile << panelBodies
-    
-    endTime_SaveBodies = time.time()
-    
-    # print the times
-    print 'Time to move bodies     : %fs' % (endTime_MoveBodies-startTime_MoveBodies)
-    print 'Time to update strengths: %fs' % (endTime_UpdateStrengths-startTime_UpdateStrengths)
-    print 'Time to save bodies     : %fs' % (endTime_SaveBodies-startTime_SaveBodies)
-    print '-----------------------------------\n'
+#------------------------------------------------------------------------------
