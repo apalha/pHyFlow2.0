@@ -77,12 +77,12 @@ import types as __types
 import inspect as __inspect
 
 from pHyFlow import options # import options definitions for pHyFlow
-from pHyFlow.aux import ErrorOutput as _ErrorOutput # import error output functions
+#from pHyFlow.aux import ErrorOutput as _ErrorOutput # import error output functions
 
 # import required base functions from where to build up the class
 from pHyFlow.vortex.base.induced import velocity as _base_velocity
-from pHyFlow.vortex.base.induced import vorticity_blobs as _base_vorticity_blobs
-from pHyFlow.vortex.base.induced import vorticity as _base_vorticity
+#from pHyFlow.vortex.base.induced import vorticity_blobs as _base_vorticity_blobs
+#from pHyFlow.vortex.base.induced import vorticity as _base_vorticity
 from pHyFlow.vortex.base.regrid import Regrid as _base_redistribute
 from pHyFlow.vortex.base.regrid import PopulationControl as _base_populationControl
 from pHyFlow.vortex.base.evolution import convection as _base_convection

@@ -481,49 +481,7 @@ class Panels(object):
         self.__t = 0.0 # Current t
         
         #----------------------------------------------------------------------
-        
-
-    def advanceTime(self,deltaT):
-        r"""
-        Function to advance the internal time clock.
-
-        Usage
-        -----
-        .. code-block :: python
-
-            advanceTime(deltaT)
-
-        Parameters
-        ----------
-        deltaT : float
-                 the current time step size
-                 
-        Returns
-        -------
-        None returned.
-        
-        Attributes
-        ----------
-        deltaT
-        t
-        tStep
-        
-        :First Added:   2014-02-25
-        :Last Modified: 2014-02-25
-        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
-        :License:       GNU GPL version 3 or any later version
-
-        """
-
-        # store the current time step size
-        self.__deltaT = deltaT
-
-        # advance tStep
-        self.__tStep += 1
-
-        # advance t
-        self.__t += self.__deltaT
-    
+   
 
     def updateBody(self,cmGlobal,thetaLocal):
         """
@@ -769,6 +727,47 @@ class Panels(object):
         # Advance the step
         self.__tStep += 1                
       
+
+    def _advanceTime(self,deltaT):
+        r"""
+        Function to advance the internal time clock.
+
+        Usage
+        -----
+        .. code-block :: python
+
+            _advanceTime(deltaT)
+
+        Parameters
+        ----------
+        deltaT : float
+                 the current time step size
+                 
+        Returns
+        -------
+        None returned.
+        
+        Attributes
+        ----------
+        deltaT
+        t
+        tStep
+        
+        :First Added:   2014-02-25
+        :Last Modified: 2014-02-25
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
+
+        """
+
+        # store the current time step size
+        self.__deltaT = deltaT
+
+        # advance tStep
+        self.__tStep += 1
+
+        # advance t
+        self.__t += self.__deltaT
       
     #    def save(self,fileName=None):
     #        """

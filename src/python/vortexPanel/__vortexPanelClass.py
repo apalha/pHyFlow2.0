@@ -47,11 +47,11 @@ __all__ = ['VortexPanel']
 
 # External packages
 import numpy as _numpy
-import sys
 
 # Import pHyFlow
-from pHyFlow import options
-from pHyFlow.vortexPanel import base as _base
+from pHyFlow import options as _pHyFlowOptions
+from pHyFlow.aux.customDecorators import simpleGetProperty
+#from pHyFlow.vortexPanel import base as _base
 from pHyFlow.vortexPanel import vpOptions as _vpOptions
 
 from pHyFlow.vortex import VortexBlobs as _VortexBlobs
@@ -68,7 +68,7 @@ class VortexPanel(object):
     .. code-block:: python
     
         VortexPanel(blobs, panels, 
-                    couplingParams={})
+                    couplingParams={'panelStrengthUpdate': 'constant'})
         
     Parameters
     ----------
@@ -99,18 +99,33 @@ class VortexPanel(object):
                           
     Attribute
     ---------
-    blobs
-    panels
-    __couplingParams     
+    blobs : pHyFlow.vortex.VortexBlobs
+            the vortex-blobs class is assigned
+            
+    deltaT
+    
+    panels : pHyFlow.panels.Panels
+             the panel blass    
+             
+    t
+    tStep
+    vInf    
+
+    __couplingParams : dict
+                       Dictionary containing parameters for coupling the
+                       panels and the blobs together.  
     
     Methods
     -------
     evolve
+    evaluateVelocity
     __coupled_convection
-   
-
+    __advanceTime
+    __set
+    __mute_blobs_evolve
+    
     :First Added:   2014-02-21
-    :Last Modified: 2014-02-24                         
+    :Last Modified: 2014-02-25                         
     :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
     :License:       GNU GPL version 3 or any later version   
    
@@ -141,6 +156,7 @@ class VortexPanel(object):
 
         # Modify the parameters
         self.blobs.evolve = self.__mute_blobs_evolve # remove blobs.evolve option
+       
        
     def evaluateVelocity(self,xTarget,yTarget):
         """
@@ -200,6 +216,8 @@ class VortexPanel(object):
         of the vortex blobs, the no-through boundary condition is taken into 
         account by solving the no-slip panel problem.
         
+        * Note: moving panels not implemented yet !
+        
         The problem can be solved in two manners: 
                 
             panelStrengthUpdate = 'constant'
@@ -214,7 +232,7 @@ class VortexPanel(object):
                 In this case, the panel problem is solved in every sub-step.
                 This ensures that that no-slip b.c is also satisfied during
                 the sub-step.
-                        
+                                
         Usage
         -----
         .. code-block:: python
@@ -273,7 +291,7 @@ class VortexPanel(object):
                 self.blobs._VortexBlobs__diffusion()
 
         # update the time counter
-        self._advanceTime()
+        self.__advanceTime() # update blobs+panels internal time.
 
         #----------------------------------------------------------------------
 
@@ -292,7 +310,6 @@ class VortexPanel(object):
                 self.blobs.populationControl()
                 
         #----------------------------------------------------------------------                
-            
             
             
     def __coupled_convection(self):
@@ -334,9 +351,24 @@ class VortexPanel(object):
         
         Attributes
         ----------
+        blobs : pHyFlow.vortex.VortexBlobs
+                the position (only) of the blobs are updated
+                
+                x : numpy.ndarray(float64), shape (blobs.numBlobs, )
+                    the :math:`x`-position of the particle.
+                y : numpy.ndarray(float64), shape (blobs.numBlobs, )
+                    the :math:`y`-postion of the particles.
+                    
+        panels : pHyFlow.panels.Panels
+                 the strength of the panels are updated.
+                 
+                 sPanel : numpy.ndarray(float64), shape (panels.nPanelTotal, )
+                          the strength :math:`\gamma` of the panels.
+                  
+                 * Note: position update not implemented yet.        
         
         :First Added:   2014-02-21
-        :Last Modified: 2014-02-24
+        :Last Modified: 2014-02-25
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version        
         
@@ -347,21 +379,21 @@ class VortexPanel(object):
 
         # convert the hardware flag into an int to use in _base_convection
         if self.blobs.velocityComputationParams['hardware'] == 'gpu': 
-            blobs_hardware = options.GPU_HARDWARE
+            blobs_hardware = _pHyFlowOptions.GPU_HARDWARE
         else: 
-            blobs_hardware = options.CPU_HARDWARE
+            blobs_hardware = _pHyFlowOptions.CPU_HARDWARE
 
         # convert the method flag into an int to use in _base_convection
         if self.blobs.velocityComputationParams['method'] == 'fmm': 
-            blobs_method = options.FMM_METHOD
+            blobs_method = _pHyFlowOptions.FMM_METHOD
         else: 
-            blobs_method = options.DIRECT_METHOD
+            blobs_method = _pHyFlowOptions.DIRECT_METHOD
     
         # convert the time integration method into an int to use in _base_convection
         if self.blobs.timeIntegrationParams['method'] == 'rk4': 
-            blobs_integrator = options.RK4_INTEGRATOR
+            blobs_integrator = _pHyFlowOptions.RK4_INTEGRATOR
         elif self.blobs.timeIntegrationParams['method'] == 'euler':
-            blobs_integrator = options.FE_INTEGRATOR
+            blobs_integrator = _pHyFlowOptions.FE_INTEGRATOR
             
         #----------------------------------------------------------------------
 
@@ -370,7 +402,7 @@ class VortexPanel(object):
         # Time integrate the vortex blobs
 
         # If integration method is RK4
-        if blobs_integrator == options.RK4_INTEGRATOR:
+        if blobs_integrator == _pHyFlowOptions.RK4_INTEGRATOR:
 
             # Make references to vortex-blobs
             xBlob, yBlob, gBlob = self.blobs.x, self.blobs.y, self.blobs.g 
@@ -465,21 +497,25 @@ class VortexPanel(object):
                 #--------------------------------------------------------------
             
             
-        elif blobs_integrator == options.FE_INTEGRATOR:
+        elif blobs_integrator == _pHyFlowOptions.FE_INTEGRATOR:
             raise NotImplementedError('FE time integration not available !')
         
         #----------------------------------------------------------------------           
 
     
-    def _advanceTime(self):
+    def __advanceTime(self):
         """
-        Function to advance time.
+        Function to advance time. To advance time, we advance both the internal
+        time of VortexBlobs and Panels. Then we assert that both :math:`t`
+        are the same. 
+        
+        The VortexPanels uses internal time of VortexBlobs.
         
         Usage
         -----
         .. code-block :: python
         
-            _advanceTime()
+            __advanceTime()
             
         Parameters
         ----------
@@ -498,13 +534,22 @@ class VortexPanel(object):
                 the current time step
         
         :First Added:   2014-02-24
-        :Last Modified: 2014-02-24
+        :Last Modified: 2014-02-25
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version    
         """
-        # The time-stepping algorithm is found inside blobs.
+        # Advance the internal time of blobs
         self.blobs._advanceTime()
     
+        # Advance the internal time of panels
+        self.panels._advanceTime(self.deltaT)
+        
+        # Check if both are sync
+        if _numpy.abs(self.blobs.t - self.panels.t) > _numpy.spacing(1):
+            raise ValueError('The internal time of VortexBlobs and Panels'\
+                             ' are not synchronized. blobs = %g, panels = %g'\
+                             % (self.blobs.t, self.panels.t)  )
+                             
             
     def __set(self,varName,var):
         """
@@ -573,30 +618,43 @@ class VortexPanel(object):
     def __mute_blobs_evolve(self):
         raise AttributeError('Not possible with vortexPanel coupled class !')
             
-    def __setError(self,setVar):
-        raise AttributeError('Cannot be manually set !')
-        
-    def __delError(self):
-        raise AttributeError('Cannot be manually deleted !')         
+
     #--------------------------------------------------------------------------
-    # Define properties
+    # All attributes
             
-    # Time-step
-    #    test = my_property(getter = lambda self: self.blobs.tStep,
-    #                       doc = "Documentation...")
-        
-    tStep = property(fget = lambda self: self.blobs.tStep,
-                     fset = __setError,
-                     fdel = __delError,
-                     doc  = r"""tStep : int
-                                        the current time step 
-                     """)
+    @simpleGetProperty
+    def tStep(self):
+        r"""
+        tStep : int
+                the current time step of the simulation
+        """
+        return self.blobs.tStep
             
     # Current time t
-    t = property(fget = lambda self: self.blobs.t)
+    @simpleGetProperty
+    def t(self):
+        r"""
+        t : float
+            the current time of the simulation
+        """
+        return self.blobs.t
     
     # Time-step size
-    deltaT= property(fget = lambda self: self.blobs.deltaTc)
+    @simpleGetProperty
+    def deltaT(self):
+        r"""
+        deltaT : float
+                 the time step size of the simulation :math:`|Delta t`
+        """
+        return self.blobs.deltaTc
     
     # Free-stream velocity
-    vInf  = property(fget = lambda self: self.blobs.vInf)
+    @simpleGetProperty
+    def vInf(self):
+        """
+        vInf : numpy.ndarray(float64), shape (2,)
+               the :math:`x,y` component of the free-stream velocity
+        """
+        return self.blobs.vInf
+        
+        
