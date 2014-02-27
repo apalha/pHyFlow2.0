@@ -7,8 +7,10 @@ __all__ = ['solverBase']
 
 # External modules
 import dolfin       # FEniCS/DOLFIN
+import numpy
 
 # Import pHyFlow packages
+from pHyFlow.aux.customDecorators import simpleGetProperty
 from pHyFlow.navierStokes.base import boundary
 from pHyFlow.navierStokes import nsOptions
 
@@ -235,7 +237,7 @@ class solverBase(object):
         # Determine boundary indices and boundary coordinates
         #self.boundary_VectorDOFIndex = boundary.vectorDOF_boundaryIndex(self.V,self.boundaryDomains,options.ID_EXTERNAL_BOUNDARY)
         self.boundary_VectorDOFIndex = boundary.vectorDOF_boundaryIndex(self.mesh,self.boundaryDomains,nsOptions.ID_EXTERNAL_BOUNDARY,2)
-        self.boundary_DOFCoordinates = boundary.vectorDOF_coordinates(self.mesh,self.V,self.boundary_VectorDOFIndex[0])
+        #self.boundary_DOFCoordinates = boundary.vectorDOF_coordinates(self.mesh,self.V,self.boundary_VectorDOFIndex[0])
         
         # Define the pressure boundary conditions
         if nsOptions.ID_PRESSURE_OUTLET in self.boundaryDomains.array():
@@ -244,8 +246,8 @@ class solverBase(object):
         else:
             # If there is no pressure outlet
             self.bcPressure = []
-        
-    
+   
+   
     def set_deltaT(self,deltaT):
         r"""
         Update the time-step when modified. If :math:`\Delta t` is modified,
@@ -308,7 +310,7 @@ class solverBase(object):
         pass
     
     
-    def vorticity(self,recalculate=True):
+    def vorticity(self):
         r"""
                 
         Calculate the vorticity of the current calculated velocity :math:`u_1`,
@@ -358,12 +360,14 @@ class solverBase(object):
         """
 
         # Calculate vorticity if it has not been calculated
-        if recalculate:
+        if self.recalculateVorticityFlag:
             # Compute Vorticity
             b = dolfin.assemble(self.bVort) # Assemble RHS
             dolfin.solve(self.AVort, self.w.vector(), b, 'gmres', 'default') # solve for vorticity
         
-        # Else: Vorticity has already been calculated [just return vorticity]
+        # Else: don't recalculate vorticity
+        
+        # Return vorticity field
         return self.w        
 
 
@@ -467,4 +471,15 @@ class solverBase(object):
 
         """
         # Rotate the mesh around cmLocal
-        self.mesh.rotate(thetaLocal,2,self.cmLocal)
+        #   input takes angles in degrees
+        self.mesh.rotate(numpy.rad2deg(thetaLocal),2,self.cmLocal)
+        
+    @simpleGetProperty
+    def boundary_DOFCoordinates(self):
+        r"""
+        boundary_DOFCoordinates : numpy.ndarray(float64), shape (2,n_boundaryDOFs)
+                                  the :math:`x,y` boundary coordinates of the 
+                                  vector DOFs.
+        """
+        # Extract the boundary coordinates from complete vector dof coordiantes
+        return (boundary.vectorDOF_coordinates(self.mesh,self.V)[:,self.boundary_VectorDOFIndex[0]]).copy()

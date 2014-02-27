@@ -100,7 +100,8 @@ probeGrid = {'origin': np.array([x0,y0]),
              'N'     : np.array([nx,ny])}            
 
 # Initialize Navier-Stokes problem
-NSDomain = pHyFlow.navierStokes.NavierStokes(geometry,probeGrid,uMax,nu,cfl,
+NSDomain = pHyFlow.navierStokes.NavierStokes(geometry,probeGrid,
+                                             uMax=uMax,nu=nu,cfl=cfl,
                                              deltaT=1e-5)
                                      
 #------------------------------------------------------------------------------
@@ -157,7 +158,7 @@ wFile = dolfin.File(saveDir + "vorticity.pvd", "compressed")
 
 solver = NSDomain._NavierStokes__solver
 
-for i in range(500):
+for i in range(100):
 
     T = i*NSDomain.deltaT
 
@@ -166,7 +167,7 @@ for i in range(500):
     
     diff_u = dolfin.norm(solver.u1) - dolfin.norm(solver.u0)            
 
-    if i % 100 == 0:                
+    if i % 10 == 0:                
         #dolfin.plot(dolfin.sqrt(dolfin.inner(NSDomain._solver.u1,NSDomain._solver.u1)),key='vNorm')         
         vFile << (NSDomain._NavierStokes__solver.u1, T)
         pFile << (NSDomain._NavierStokes__solver.p1, T)

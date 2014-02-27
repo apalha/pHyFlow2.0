@@ -100,7 +100,7 @@ solver = NSDomain._NavierStokes__solver
 
 for i in xrange(int(1e6)):
 
-    T = i*NSDomain.dtMax
+    T = i*NSDomain.deltaT
 
     NSDomain.evolve(vxBoundary,vyBoundary,cmGlobalNew,thetaGlobalNew,
                     cmDotGlobal,thetaGlobal)
