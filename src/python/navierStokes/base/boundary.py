@@ -78,7 +78,7 @@ def vectorDOF_boundaryIndex(mesh,boundaryDomains,boundaryID,pOrder):
     
     
     
-def vectorDOF_coordinates(mesh,V,xIndices):
+def vectorDOF_coordinates(mesh,V):
     r"""
     Function to locate the coordinates of the vector functionspace 
     :math:`\mathbf{V} of the mesh **mesh** and indexed according to
@@ -107,25 +107,26 @@ def vectorDOF_coordinates(mesh,V,xIndices):
                
     Returns
     -------
-    xyBoundaryCoordinates : numpy.ndarray(float64), shape (2,N_boundaryDOFs) 
+    xyCoordinates : numpy.ndarray(float64), shape (2,N_vectorDOFs) 
+                    the :math:`x,y` coordinates of the vector DOF points.
     """
     
-    # List all the coordinates of vector function space as ordered by DOFmap
-    xyCoordinates = V.dofmap().tabulate_all_coordinates(mesh)
-
-    # Extract vector boundary DOF coordinates    
-    xyBoundaryCoordinates = xyCoordinates.reshape(-1,2).T[:,xIndices]
+    #    # List all the coordinates of vector function space as ordered by DOFmap
+    #    xyCoordinates = V.dofmap().tabulate_all_coordinates(mesh)
+    #
+    #    # Extract vector boundary DOF coordinates    
+    #    xyBoundaryCoordinates = xyCoordinates.reshape(-1,2).T[:,xIndices]
+    #    
+    #    # return vector dof boundary coordinates
+    #    return xyBoundaryCoordinates
     
-    # return vector dof boundary coordinates
-    return xyBoundaryCoordinates
+    # return the all the coordinates of the vector function space
+    return V.dofmap().tabulate_all_coordinates(mesh).reshape(-1,2).T
 
                                              
 
 def locate_boundaryDOFs_slow(mesh,boundaryDomains,boundaryID):
-    r"""
-    
-    .... work in progress ....
-    
+    r"""    
     Compute the mapping from vertices to degrees of freedom only at the 
     boundary. This saves time, since we do not have to loop over all the 
     cells of the domain. If the for loop was replaced by a simple c++ 

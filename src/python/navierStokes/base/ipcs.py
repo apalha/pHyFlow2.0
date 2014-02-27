@@ -342,6 +342,10 @@ class ipcs(solverBase):
         [bc.apply(self.A3, b) for bc in self.bcVelocity]
         dolfin.solve(self.A3, self.u1.vector(), b, "gmres", 'default')
         
+        # Now that the velocity field changed we have to recalculate the 
+        # vorticity
+        self.recalculateVorticityFlag = True
+        
         
     #-------------------------------------------------------------------------
     # Additional terms of the NS equations.

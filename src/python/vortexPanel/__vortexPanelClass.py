@@ -1,8 +1,8 @@
 #-*- coding: utf-8 -*-
 __doc__ = """
 
-VORTEXPANELCLASS
-================
+VORTEXPANEL
+===========
 
 The main class for the vortex-panel coupled.
 

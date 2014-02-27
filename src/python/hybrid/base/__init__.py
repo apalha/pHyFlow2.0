@@ -1,8 +1,6 @@
-"""Import vortex and N-S solver modules and options
-
-Several different kernel implementations are implemented in one unified function.
+"""This module handles all vortex-panel operations.
 """
-# Copyright (C) 2013 Artur Palha                                                                                                     
+# Copyright (C) 2014 Lento Manickathan                                                                                                     
 #                                                                                                                                   
 # This file is part of pHyFlow.                                                                                                      
 #                                                                                                                                   
@@ -19,33 +17,10 @@ Several different kernel implementations are implemented in one unified function
 # You should have received a copy of the GNU Lesser General Public License                                                          
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
-# First added:  2013-05-27                                                                                                          
-# Last changed: 2014-02-28
-# -*- coding: utf-8 -*-
+# First added:  2014-02-26
+# Last changed: 2013-02-26
 
-# load auxiliary modules aux
-import aux
-
-# load hybrid related modules
-import hybrid
-
-# load input/output modules
-import IO
-
-# load NavierStokes modules
-import navierStokes
-
-# load module options
-import options
-
-# load panel related modules
-import panel
-
-# load vortex related modules
-import vortex
-
-# load vortex-panel related modules
-import vortexPanel
+# import all modules
 
 
 

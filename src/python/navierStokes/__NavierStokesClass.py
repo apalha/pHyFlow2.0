@@ -64,10 +64,11 @@ Implemented NS Algorithms
 __all__ = ['NavierStokes']
 
 # External packages
-import fenicstools as _fenicstools
 import numpy as _numpy
+import fenicstools as _fenicstools
 
 # Import pHyFlow
+from pHyFlow.aux.customDecorators import simpleGetProperty
 from pHyFlow.navierStokes import base as _base
 from pHyFlow.navierStokes import nsOptions as _nsOptions
 
@@ -86,7 +87,9 @@ class NavierStokes(object):
                                             'thetaLocal': thetaLocal},
                                 probeGrid = {'origin': origin,
                                              'L': L
-                                             'N': N}
+                                             'N': N},
+                                interpolationDomain = {'surfacePolygon': None,
+                                                       'boundaryPolygon': None},
                                 uMax=uMax,nu=nu,cfl=cfl,deltaT,
                                 solverParams={'solver':'ipcs')
         
@@ -118,7 +121,7 @@ class NavierStokes(object):
                             the :math:`x,y` position of the mesh local reference
                             point (0.,0.) in the global coordinates.
                           
-               'thetaLocal' : float
+               'thetaLocal' : float, unit (rad)
                               the local rotational angle :math:`\theta` of the 
                               mesh domain. Therefore, the rotation will be done
                               about local reference point (0.,0.), i.e cmGlobal 
@@ -140,7 +143,11 @@ class NavierStokes(object):
                 'N' : numpy.ndarray(float64), shape (2,)
                       the number of probes :math:`N_x,N_y` in the :math:`x,y` 
                       direction.
-        
+    
+    #TODO: finish doc        
+    interpolationDomain : dict
+    
+    
     uMax : float
            the maximum fluid velocity :math:`U_{max}`.
         
@@ -165,8 +172,15 @@ class NavierStokes(object):
     
     Attribute
     ---------
-    dtMax
-    
+    deltaT
+    deltaTMax
+    cfl
+    cmGlobal
+    hMin
+    thetaLocal
+    uMax
+    nu
+    solverParams    
     
     __boundaryDomainsFile : str
                             the facet boundary domain mesh data file location.                 
@@ -262,7 +276,7 @@ class NavierStokes(object):
 
     """
     
-    def __init__(self,geometry,probeGrid,uMax,nu,cfl,deltaT='max',
+    def __init__(self,geometry, probeGrid, uMax, nu, cfl,deltaT='max',
                  solverParams={'solver':_nsOptions.SOLVER['default']}):
         
         
@@ -275,8 +289,9 @@ class NavierStokes(object):
         self.__set('uMax', uMax)
         self.__set('nu',nu)            
         self.__set('cfl',cfl)  
-        self.__set('solverParams', solverParams)          
-            
+        self.__set('solverParams', solverParams)
+        
+        
         #---------------------------------------------------------------------
         # Choose the solver: (Chorin or other solvers)
         # - Various Navier-stokes solving algorithms can be imported. All the
@@ -304,10 +319,10 @@ class NavierStokes(object):
 
         #---------------------------------------------------------------------            
         # Define the probe grid
-        self.__xyProbes = _numpy.meshgrid(_numpy.linspace(0,self.__probeGrid_L[0],
-                                                          self.__probeGrid_N[0]) + self.__probeGrid_origin[0],
-                                          _numpy.linspace(0,self.__probeGrid_L[1],
-                                                          self.__probeGrid_N[1]) + self.__probeGrid_origin[1])
+        self.__xyProbes = _numpy.meshgrid(_numpy.linspace(0,self.__probeGrid['L'][0],
+                                                          self.__probeGrid['N'][0]) + self.__probeGrid['origin'][0],
+                                          _numpy.linspace(0,self.__probeGrid['L'][1],
+                                                          self.__probeGrid['N'][1]) + self.__probeGrid['origin'][1])
                      
         # Initialize the probes                     
         self.__probes = _fenicstools.Probes(_numpy.append(self.__xyProbes[0].reshape(-1,1),
@@ -326,14 +341,10 @@ class NavierStokes(object):
         
         # define the current time
         self.__t = 0.0
-        
-        
-                                            
+                          
         #---------------------------------------------------------------------
                                             
-                                                    
-            
-
+           
     def getCoordinates(self):
         r"""
         Function get all the coordinates of the velocity function space
@@ -572,7 +583,8 @@ class NavierStokes(object):
         """
         # update the mesh position [Not Implemented]
         #dThetaLocal = thetaLocal - self.__thetaLocal # new - old
-        #self.__solver.rotateMesh(dThetaLocal)        
+        #self.__solver.rotateMesh(dThetaLocal)  
+        self.__updatePosition(cmGlobal,thetaLocal)
         
         # Set boundary conditions
         self.__solver.boundaryConditions(vxBoundary,vyBoundary)
@@ -583,10 +595,7 @@ class NavierStokes(object):
         # update the time
         self.__advanceTime()
         
-        # update the parameters [Not Implemented]
-        #self.__thetaLocal = thetaLocal
-        #self.__cmGlobal = cmGlobal
-        
+
 
 
     def getVorticity(self):
@@ -621,83 +630,25 @@ class NavierStokes(object):
         :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version   
         """
+
+        # Should we re-probe the vorticity field
+        if self.__reprobeVorticityFlag:
         
-        # Remove old vorticity data
-        if self.__probes.number_of_evaluations() > 0:
-            self.__probes.clear()
+            # Remove old vorticity data 
+            if self.__probes.number_of_evaluations() > 0:
+                self.__probes.clear()
+            
+            # Probe the data
+            self.__probes(self.__solver.vorticity())
+            
+            self.__reprobeVorticityFlag = False
         
-        # Probe the data
-        self.__probes(self._solver.vorticity())
+        # else: don't do anything
         
         # Return the data as the shape Nx,Ny of Probes
-        return self.__probes.array().reshape(self.__probeGrid_N)
+        return self.__probes.array().reshape(self.__probeGrid['N'])
         
-        
-        
-    def getProbeGrid(self,metadata=True):
-        r"""
-        Return the probe grid parameters
-        
-        Usage
-        -----
-        .. code-block:: python
-            
-            origin, L, N = getProbeGrid(metaData=True)
-            
-        or
-        
-        .. code-block:: python
-        
-            xProbes, yProbes = getProbeGrid(metaData=False)
-            
-        Parameters
-        ----------
-        metaData : bool
-                   The boolean status where only metaData should be returned
-                   or the complete probe grid mesh coordinates.
-        
-        Returns
-        -------
-        metadata : True
-                   origin : numpy.ndarray(float64), shape (2,)
-                            the :math:`x,y` coordinate of the origin of the
-                            probe mesh origin.
-             
-                   L : numpy.ndarray(float64), shape (2,)
-                       the width :math:`L_x` and the height :math:`L_y` of the 
-                       probe mesh.
-    
-                   N : numpy.ndarray(float64), shape (2,)
-                       the number of probes :math:`N_x,N_y` in the :math:`x,y` 
-                       direction.
-                
-        metadata : False
-                   xProbes : numpy.ndarray(float64), shape (NxProbes,NyProbes)
-                             the :math:`x` coordinate of the probe mesh.
-                      
-                   yProbes : numpy.ndarray (float64), shape (NxProbes,NyProbes)
-                             the :math:`y` coordinate of the probe mesh.
-        
-        Attributes
-        ----------
-        None changed.
-        
-        :First Added:   2013-12-22
-        :Last Modified: 2014-02-21
-        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version                      
-        """
-        
-        # Return only the metadata
-        if metadata:
-            return self.__probeGrid_origin, self.__probeGrid_L, self.__probeGrid_N
-
-        # Return the x,y coordinates of the probe mesh grid.
-        else:
-            return self.__xyProbes
-        
-        
-        
+               
     def __advanceTime(self):
         """
         Function to advance the time.
@@ -735,6 +686,23 @@ class NavierStokes(object):
         # advance t
         self.__t += self.__solver.deltaT
         
+        # We need to recalculate the vorticity
+        self.__solver.recalculateVorticityFlag = True
+        self.__reprobeVorticityFlag = True
+        
+        
+    def __updatePosition(self, cmGlobalNew, thetaLocalNew):
+        r"""
+        Function to rotate the mesh
+        """
+        # update the mesh position [Not Implemented]
+        dThetaLocal = thetaLocalNew - self.__thetaLocal # new - old
+        self.__solver.rotateMesh(dThetaLocal)   
+        
+        # update the parameters [Not Implemented]
+        self.__thetaLocal = thetaLocalNew
+        self.__cmGlobal = cmGlobalNew
+        
         
         
     def __set(self, varName, var):
@@ -764,7 +732,7 @@ class NavierStokes(object):
             self.__thetaLocal = var['thetaLocal']
         
         #---------------------------------------------------------------------
-        
+
         #---------------------------------------------------------------------
         # Check probegrid parameters
         elif varName == 'probeGrid':
@@ -783,9 +751,7 @@ class NavierStokes(object):
             if var['N'].shape != (2,):
                 raise ValueError("probeGrid['N'] must have shape (2,). It has shape %s." % str(var['N'].shape))
             
-            self.__probeGrid_origin = var['origin']
-            self.__probeGrid_L = var['L']
-            self.__probeGrid_N = var['N']
+            self.__probeGrid = var
         
         #---------------------------------------------------------------------                
 
@@ -837,98 +803,130 @@ class NavierStokes(object):
             self.__solver.set_deltaT(var)
             
 
-        #---------------------------------------------------------------------
-
-
-    #--------------------------------------------------------------------------            
-    # Generic set error function
-    def __setError(self,setVar):
-        raise AttributeError('Cannot be manually set !')
-        
-    # Generic del error function
-    def __delError(self):
-        raise AttributeError('Cannot be manually deleted !')
-    #--------------------------------------------------------------------------        
+        #--------------------------------------------------------------------- 
         
 
     #--------------------------------------------------------------------------       
     # Attributes
 
     # Time step size
-    deltaT = property(fget = lambda self: self.__solver.deltaT,
-                      fset = lambda self, deltaTNew: self.__set('deltaT',deltaTNew),
-                      fdel = __delError,
-                      doc = r"""
-                      deltaT : float
-                               the time step size :math:`\Delta t`.""")
-
+    @simpleGetProperty
+    def deltaT(self):
+        r"""
+        deltaT : float
+                 the time step size :math:`\Delta t`.
+        """
+        return self.__solver.deltaT
+        
     # Time step  max
-    deltaTMax = property(fget = lambda self: self.__solver.deltaTMax,
-                         fset = __setError, fdel = __delError,
-                         doc = r"""
-                         dtMax : float64
-                                 The maximum allowable time step size.""")
+    @simpleGetProperty
+    def deltaTMax(self):
+        r"""
+        deltaTMax : float
+                    the maximum allowable time step size :math:`|Delta t_{max}`
+        """
+        return self.__solver.deltaTMax
                                  
-    # cfl number                                 
-    cfl = property(fget = lambda self: self.__cfl,
-                     fset = __setError, fdel = __delError,
-                     doc = r"""
-                     cfl : float64
-                           the :math:`CFL` stability parameter.""")        
+    # cfl number 
+    @simpleGetProperty                                 
+    def cfl(self):
+        r"""
+        cfl : float
+              the Courant–Friedrichs–Lewy condition stability number,
+              :math:`CFL`.
+        """
+        return self.__cfl
 
-    # cm global coordinates                     
-    cmGlobal = property(fget = lambda self: self.__cmGlobal,
-                        fset = __setError, fdel = __delError,
-                        doc = r"""
-                        cmGlobal : numpy.ndarray(float64), shape (2,)
-                                   the :math:`x,y` position of the mesh local 
-                                   reference point (0.,0.) in the global 
-                                   coordinates.""")
+    # cm global coordinates
+    @simpleGetProperty
+    def cmGlobal(self):
+        r"""
+        cmGlobal : numpy.ndarray(float64), shape (2,)
+                   the :math:`x,y` position of the mesh local reference point
+                   (0.,0.) in the global coordinates. 
+        """
+        return self.__cmGlobal
                            
     # minimum cell size                           
-    hMin = property(fget = lambda self: self.__solver.hmin,
-                    fset = __setError, fdel = __delError,
-                    doc = r"""
-                    hMin : float
-                           the minimum mesh cell size.""")                                     
-                     
-    # local theta                     
-    thetaLocal = property(fget = lambda self: self.__thetaLocal,
-                          fset = __setError, fdel = __delError,
-                          doc = r"""
-                          thetaLocal : float
-                                       the local rotational angle :math:`\theta`
-                                       of the mesh domain. Therefore, the 
-                                       rotation will be done about local 
-                                       reference  point (0.,0.), i.e cmGlobal 
-                                       in the global coordinate system.""")  
-                   
-    # maximum fluid velocity                   
-    uMax  = property(fget = lambda self: self.__uMax,
-                     fset = __setError, fdel = __delError,
-                     doc = r"""
-                     uMax : float
-                            the maximum fluid velocity :math:`U_{max}`""")  
-                            
-    # viscosity                            
-    nu  = property(fget = lambda self: self.__uMax,
-                   fset = __setError, fdel = __delError,
-                   doc = r"""
-                   nu : float
-                        the fluid kinematic viscosity :math:`\nu`.""")
-               
-    # solver parameters               
-    solverParams = property(fget = lambda self: self.__uMax,
-                            fset = __setError, fdel = __delError,
-                            doc = r"""
-                            solverParams : dict
-                                           dictionary file containing all the 
-                                           solver parameters.
-                                           'solver' : str
-                                                      type of NS solver that 
-                                                      should used to solve
-                                                      the incompressible laminar
-                                                      problem.""")
+    @simpleGetProperty
+    def hMin(self):
+        r"""
+        hMin : float
+               the minimum mesh cell size 
+        """
+        return self.__solver.hmin
+        
+    @simpleGetProperty        
+    def probeGridMesh(self):
+        r"""
+        xProbes, yProbes : numpy.ndarray(float64), shape (nxProbes,nyProbes)
+                           the :math:`x,y` coordinates of the probe grid mesh.
+        """
+        # TODO: transform to global coordinate system
+        return self.__xyProbes
 
-          
+    @simpleGetProperty        
+    def probeGridParams(self):
+        r"""
+        probeGridParams : dict
+                          dictionary containing all the parameters of the probe
+                          grid for extracting the vorticity data.                             
+    
+                          'origin' : numpy.ndarray(float64), shape (2,)
+                                     the :math:`x,y` coordinate of the origin of
+                                     the probe mesh in the **local** coordinate
+                                     system of the fluid mesh.
+                                 
+                          'L' : numpy.ndarray(float64), shape (2,)
+                                the width :math:`L_x` and the height :math:`L_y`
+                                of the probe mesh.
+                        
+                          'N' : numpy.ndarray(float64), shape (2,)
+                                the number of probes :math:`N_x,N_y` in the
+                                :math:`x,y` direction.
+        """
+        return self.__probeGrid
+                   
+    # local theta
+    @simpleGetProperty
+    def thetaLocal(self):
+        """
+        thetaLocal : float
+                     the local rotational angle :math:`\theta` of the mesh
+                     domain. Therefore, the rotation will be done about local                                                                                
+                     reference  point (0.,0.), i.e cmGlobal in the global 
+                     coordinate system.
+        """
+        return self.__thetaLocal
+                   
+    # maximum fluid velocity
+    @simpleGetProperty                   
+    def uMax(self):
+        r"""
+        uMax : float
+               the maximum fluid velocity :math:`\mathbf{u}_{max}` 
+        """
+        return self.__uMax
+                            
+    # viscosity
+    @simpleGetProperty                            
+    def nu(self):
+        """
+        nu : float
+             the fluid kinematic viscosity :math:`\nu`.
+        """
+        return self.__nu
+               
+    # solver parameters 
+    @simpleGetProperty                           
+    def solverParams(self):
+        r"""
+        solverParams : dict
+                       the dictionary file containing all the solver parameters.
+                       
+                       'solver' : str
+                                  type of NS solver that should used to solve 
+                                  the incompressible laminar problem.
+        """
+        return self.__solverParams
     
