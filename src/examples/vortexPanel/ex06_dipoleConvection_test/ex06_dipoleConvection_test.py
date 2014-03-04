@@ -1,0 +1,351 @@
+"""
+
+Hybrid test : ex02_dipoleConvection_test
+=================================
+
+Goal
+----
+ - test the coupling of navier-stokes and vortex blobs
+     without any panel body.
+
+ - test the evolution of lamb-oseen vortex core     
+
+:First added:   2014-03-03
+:Last updated:  2014-03-03
+:Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+:Licence:       GNU GPL version 3 or any later version
+      
+"""
+
+# External modules
+import dolfin
+import numpy as np
+import pylab as py
+import time
+py.ion()
+
+
+# pHyFlow
+import pHyFlow
+
+
+
+#-----------------------------------------------------------------------------    
+# Global parameters
+
+# Simulation parameters
+nTimeSteps = 1000
+# Fluid Parameters
+
+# Double-monopole parameters
+Re = 625. # Reynolds number
+vInf = np.array([0.,0.]) # Free stream velocity
+U = 1.0
+L = 1.0
+Tend = 1.0
+
+# Compute fluid kinematic viscosity
+nu = U*L/Re         
+
+# Initial conditions for a double-Monopole
+# Parameters
+x1,y1   = 0.1, 0. # Initial core location. `Positive Core`
+x2,y2   = -0.1,0. # Initial core location. `Negative Core`
+r0      = 0.1      # Half core radius
+omega_e = 299.528385375226# Maximum single core voriticty
+
+# Exact Function
+def wExactFunction(x,y):
+    rr1 = (x-x1)**2 + (y-y1)**2 # Radius 1
+    rr2 = (x-x2)**2 + (y-y2)**2 # Radius 2
+    return omega_e*(1- rr1/(r0**2))*np.exp(-rr1/(r0**2)) \
+          -omega_e*(1- rr2/(r0**2))*np.exp(-rr2/(r0**2))
+                                  
+#-----------------------------------------------------------------------------    
+
+#-----------------------------------------------------------------------------
+# Setup the vortex blobs - Lagrangian domain
+
+# Define blob parameters
+overlap = 1.0               # overlap ratio
+nBlobs = 128*128*(2*2)# number of blobs
+h = 2.0/np.sqrt(nBlobs)    # blob spacing
+
+# Estimate of delta T
+#   with optimized c2 of 1/3.
+#   delta T of convection should be a multiple of delta diffusion
+nConvectionPerDiffusion = 10.
+deltaTc = float(np.round((1.0/nConvectionPerDiffusion) * ( (1./3.)*h*h/nu),decimals=3))
+
+# blob control parameters
+blobControlParams = {'stepRedistribution':1,'stepPopulationControl':1,\
+                     'gThresholdLocal':1e-8,'gThresholdGlobal':1e-8}
+
+
+# Generate the vortex blobs uniformly distributed in the square [-10,10] x [-10,10]
+x,y = np.meshgrid(np.linspace(-1.0,1.0,np.sqrt(nBlobs)+1),
+                  np.linspace(y1-1.0,y1+1.0,np.sqrt(nBlobs)+1))
+x = x.flatten()
+y = y.flatten()
+g = wExactFunction(x,y) * (h*h)
+
+if np.sum(x==0) == 0 or np.sum(y==0) == 0:
+    raise ValueError('vortex mesh should coincide with (0.,0.) for remeshing grid')
+
+wField = (x,y,g)
+
+# generate the blobs
+blobs = pHyFlow.vortex.VortexBlobs(wField,vInf,nu,deltaTc,h,overlap,
+                                   blobControlParams=blobControlParams)
+
+blobs.plotVelocity = True
+# This problem does not have any panels
+panels = None
+
+# Setup the full vortex problem : blobs and others.
+vortex = pHyFlow.vortexPanel.VortexPanel(blobs,panels=None)
+
+#------------------------------------------------------------------------------
+
+
+
+
+#------------------------------------------------------------------------------
+# Evolve
+
+# Export the blobs
+
+
+blobsFileName = './data/blobs.pvd'
+blobsFile = pHyFlow.IO.File(blobsFileName)
+
+
+# Export initial data
+blobsFile << blobs
+
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Evolve
+
+# Post-processing parameters
+numBlobsTime = np.zeros(nTimeSteps+1)
+totalCirculationTime = np.zeros(nTimeSteps+1)
+numBlobsTime[0] =  vortex.blobs.numBlobs
+totalCirculationTime[0] =  vortex.blobs.g.sum()
+
+
+for timeStep in range(1,nTimeSteps+1):
+    
+    
+    
+    startTime = time.time()
+    # Evolve the coupled navier-stokes and vortex method
+    vortex.evolve()
+
+    print "\nThe current time\t\t: %g" % (timeStep*vortex.deltaT)
+    print "Time-step\t\t\t: %g" % timeStep
+    print 'Time to evolve\t\t\t: %g'  % (time.time() - startTime)
+    
+    if timeStep % 10 == 0:
+        # Export initial data
+        blobsFile << vortex.blobs
+    
+    numBlobsTime[timeStep] =  vortex.blobs.numBlobs
+    totalCirculationTime[timeStep] =  vortex.blobs.g.sum()
+    print 'Number of blobs\t\t\t: %d'  % numBlobsTime[timeStep]
+    print 'Total circulation\t\t: %.8f'  % totalCirculationTime[timeStep]
+    print '--------------------------------------------\n'
+
+#------------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------------
+# Plot results
+
+py.figure()
+py.plot(np.arange(0,nTimeSteps+1)*blobs.deltaTc,numBlobsTime)
+
+py.figure()
+py.plot(np.arange(0,nTimeSteps+1)*vortex.deltaT,totalCirculationTime-totalCirculationTime[0])
+
+
+
+##-----------------------------------------------------------------------------    
+## Setup the navier-stokes problem - Eulerian domain
+#
+## Setup navier-stokes mesh and boundary Domains
+##---------------------------
+#
+## Mesh parameters
+#N = 128# Number of mesh nodes (in x and y dir)
+#
+#mesh = dolfin.UnitSquareMesh(N,N)
+#xy = mesh.coordinates()
+#xy = xy - 0.5
+#mesh.coordinates()[:] = xy
+#
+## Sub domain for dirichlet boundary
+#class dirichletBoundary(dolfin.SubDomain):
+#    def inside(self,x,on_boundary):
+#        return on_boundary
+#
+## Define boundary domains    
+#boundaryDomains = dolfin.MeshFunction('size_t', mesh, mesh.topology().dim()-1)
+#
+## Mark the fluid
+#boundaryDomains.set_all(1)
+#
+## Mark no-slip
+#noslip = dirichletBoundary()
+#noslip.mark(boundaryDomains, pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY)
+#
+## Export mesh and boundary mesh files
+#
+## Export to files
+#meshFilePath = './data/unitSquareMesh_%gx%g_mesh.xml.gz' % (N,N)
+#boundaryDomainsFilePath = './data/unitSquareMesh_%gx%g_boundaryDomains.xml.gz' % (N,N)
+#dolfin.File(meshFilePath) << mesh
+#dolfin.File(boundaryDomainsFilePath) << boundaryDomains
+##---------------------------
+#
+#
+## Define the geometry parameters
+#geometry = {'mesh' : meshFilePath,
+#            'boundaryDomains': boundaryDomainsFilePath,
+#            'cmGlobal': np.array([0.,0.]),
+#            'thetaLocal': 0.} # radians
+#
+## Probe Grid Parameters
+#probeL = np.array([1.0,0.5]) # guess
+#origin = np.array([-0.5,-0.25])
+#probeN = np.int64(np.round(probeL / h))
+#probeL = probeN*h # to ensure the correct grid spacing
+#origin = -np.round(probeN*0.5)*h
+#
+#probeGridParams = {'origin' : origin,
+#                   'L' : probeL,
+#                   'N' : probeN}          
+#
+## Solver parameters
+#cfl = 0.95 # CFL number
+#uMax = 14.0
+#
+#
+## Initialize the navierStokes problem
+#NSDomain = pHyFlow.navierStokes.NavierStokes(geometry,probeGridParams,
+#                                             uMax=uMax,nu=nu,cfl=cfl,
+#                                             deltaT=0.00005)
+#  
+## Concatenate all the navier-stokes domains
+## TODO: temporary, will implement a multi-ns class
+#class MultiNavierStokes(object):
+#    def __init__(self,subDomains):
+#        self.subDomains = subDomains
+#        
+#    def __getitem__(self,key):
+#        return self.subDomains[key]
+#
+#    @property
+#    def nSubDomains(self):
+#        return len(self.subDomains)
+#        
+#    @property
+#    def subDomainKeys(self):
+#        return self.subDomains.keys()
+#        
+#    @property
+#    def t(self):
+#        return self.subDomains[self.subDomainKeys[0]].t
+#
+#    @property
+#    def deltaT(self):
+#        return self.subDomains[self.subDomainKeys[0]].deltaT     
+#
+#    @deltaT.setter
+#    def deltaT(self,deltaTNew):
+#        self.subDomains[self.subDomainKeys[0]].deltaT  = deltaTNew
+#     
+#    def getCoordinates(self):
+#        xyCoordinates = []
+#        for subDomain in self.subDomains.itervalues():
+#            xyCoordinates.append(subDomain.getCoordinates())
+#        
+#        return np.hstack(xyCoordinates)
+#        
+#    def getBoundaryCoordinates(self):
+#        xyBoundaryCoordinates = []
+#        for subDomain in self.subDomains.itervalues():
+#            xyBoundaryCoordinates.append(subDomain.getBoundaryCoordinates())
+#        
+#        return np.hstack(xyBoundaryCoordinates)   
+#        
+#    def getBoundaryVelocity(self):
+#        vxyBoundary = []
+#        for subDomain in self.subDomains.itervalues():
+#            vxyBoundary.append(subDomain.getBoundaryVelocity())
+#        
+#        return np.hstack(vxyBoundary)         
+#        
+#    def setVelocity(self,vx,vy):
+#        iS = 0
+#        for subDomain in self.subDomains.itervalues():
+#            iE = iS + subDomain.getCoordinates()[0].shape[0]
+#            subDomain.setVelocity(vx[iS:iE],vy[iS:iE])
+#            iS = np.copy(iE)
+#
+#    def evolve(self,vx,vy,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew):
+#        for subDomain in self.subDomains.itervalues():
+#            subDomain.evolve(vx,vy,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew)
+#        
+#                                         
+#   
+#multiNS = MultiNavierStokes(subDomains={'NSDomain': NSDomain})
+#        
+#                               
+##-----------------------------------------------------------------------------
+#
+##-----------------------------------------------------------------------------
+## Define the interpolation region
+#
+## Use stocks parameters
+## ..[1] Stock, M., Gharakhani, A., & Stone, C. (2010). Modeling Rotor Wakes 
+##       with a Hybrid OVERFLOW-Vortex Method on a GPU Cluster.
+#dBdry = 2*h
+#
+#interpolationRegions = {}
+#
+#for subDomain in multiNS.subDomainKeys:
+#
+#    # Get the limits of the navier-stokes boundary
+#    xMin = multiNS[subDomain].getBoundaryCoordinates()[0].min()
+#    xMax = multiNS[subDomain].getBoundaryCoordinates()[0].max()
+#    yMin = multiNS[subDomain].getBoundaryCoordinates()[1].min()
+#    yMax = multiNS[subDomain].getBoundaryCoordinates()[1].max()
+#    
+#    # Define the boundary polygon (closed loop)
+#    xBoundaryPolygon = np.array([xMin+dBdry, xMax-dBdry, xMax-dBdry,xMin+dBdry,xMin+dBdry])
+#    yBoundaryPolygon = np.array([yMin+dBdry, yMin+dBdry, yMax-dBdry,yMax-dBdry,yMin+dBdry])
+#    
+#    # Reshape the boundary polygon of point in polygon search
+#    xyBoundaryPolygon = np.vstack((xBoundaryPolygon,yBoundaryPolygon)).T
+#    
+#    interpolationRegions[subDomain] = {'surfacePolygon': None,
+#                                       'boundaryPolygon': xyBoundaryPolygon}
+#
+#
+##-----------------------------------------------------------------------------
+#
+##-----------------------------------------------------------------------------
+## Setup the hybrid problem
+#
+## Define the coupling parameters
+#couplingParams={'correctBlobs':'end',
+#                'eulerianIC': 'use_lagrangian'}
+#
+## Initialize the hybrid problem
+#hybrid = pHyFlow.hybrid.Hybrid(vortex=vortex, # either vortex-blobs or coupled vortex-panels
+#                               navierStokes=multiNS, # dictionary or class of multiple navier-stokes
+#                               interpolationRegions=interpolationRegions, # the interpolation regions
+#                               couplingParams=couplingParams) # coupling parameters
+##-----------------------------------------------------------------------------
