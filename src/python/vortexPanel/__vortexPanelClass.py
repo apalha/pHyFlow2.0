@@ -137,7 +137,7 @@ class VortexPanel(object):
 
     """
     
-    def __init__(self,blobs,panels,couplingParams={
+    def __init__(self,blobs,panels=None,couplingParams={
                  'panelStrengthUpdate': _vpOptions.PANEL_STRENGTH_UPDATE['default']}):
         
         
@@ -155,13 +155,15 @@ class VortexPanel(object):
         # Make references
 
         # Modify the parameters
-        self.blobs.evolve = self.__mute_blobs_evolve # remove blobs.evolve option
+        if self.panels is not None:
+            self.blobs.evolve = self.__mute_blobs_evolve # remove blobs.evolve option
        
        
-    def evaluateVelocity(self,xTarget,yTarget):
+    def evaluateVelocity(self,xTarget,yTarget,Ndirect=35,tol=1.0e-6,cutoff=None):
         """
         Function to evaluate the total induced velocity due to vortex blobs,
         panels and the free-stream flow.
+        
         .. math::
         
             \mathbf{u} = \mathbf{u}_{\omega} + \mathbf{u}_{\gamma} + \mathbf{u}_\infty
@@ -201,10 +203,17 @@ class VortexPanel(object):
         :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
         :License:       GNU GPL version 3 or any later version   
         """
-        # Determine the induced velocity due to blobs + panels + free-stream.
-        vx,vy = self.blobs.evaluateVelocity(xTarget,yTarget) \
+        # Determine the induced velocity of blobs and free-stream
+        if self.panels is None:
+            vx,vy = self.blobs.evaluateVelocity(xTarget,yTarget,Ndirect,tol,cutoff) \
+                            + self.blobs.vInf.reshape(2,-1)
+        
+        # Determine the induced velocity of blobs, panels and free-stream                
+        else:
+            # Add blobs, panels and free-stream
+            vx,vy = self.blobs.evaluateVelocity(xTarget,yTarget,Ndirect,tol,cutoff) \
                             + self.panels.evaluateVelocity(xTarget,yTarget) \
-                            + self.vInf.reshape(2,-1)
+                            + self.blobs.vInf.reshape(2,-1)
         
         # return the induced velocity
         return vx,vy
@@ -279,37 +288,45 @@ class VortexPanel(object):
         :Licence:       GNU GPL version 3 or any later version
 
         """        
-        #----------------------------------------------------------------------
-        # Evolve : Convect + Diffuse the blobs with regard of panel geometry
+        # Only convect the blobs
+        if self.panels is None:
+            
+            # Evolve : convection + diffusion + redistribution + population control
+            self.blobs.evolve()
+            
+        # Coupled convection : blobs with coupled panels            
+        else:
+            
+            #----------------------------------------------------------------------
+            # Evolve: Convect + Diffuse the blobs with regard of panel geometry
       
-        # convect blobs with coupled panels
-        self.__coupled_convection() # Algorithm for convection
-        
-        # Diffusion Step : diffuse vortex blobs
-        if self.blobs.stepDiffusion != 0: # corresponds to nu = 0.0, therefore no diffusion is to be computed
-            if (self.tStep % self.blobs.stepDiffusion) == 0: # if the time step is a multiple of the stepDiffusion perform diffusion
-                self.blobs._VortexBlobs__diffusion()
+             # Algorithm for convecting the coupled problem     
+            self.__coupled_convection()
+            
+            # Diffusion Step : diffuse vortex blobs
+            if self.blobs.stepDiffusion != 0: # corresponds to nu = 0.0, therefore no diffusion is to be computed
+                if (self.tStep % self.blobs.stepDiffusion) == 0: # if the time step is a multiple of the stepDiffusion perform diffusion
+                    self.blobs._VortexBlobs__diffusion()
+    
+            # update the time counter
+            self.__advanceTime() # update both blobs+panels internal time.
 
-        # update the time counter
-        self.__advanceTime() # update blobs+panels internal time.
+            #----------------------------------------------------------------------
 
-        #----------------------------------------------------------------------
-
-        #----------------------------------------------------------------------
-        # Redistribution step
-        if self.blobs.stepRedistribution != 0: # meaning that redistribution should be done
-            if (self.tStep % self.blobs.stepRedistribution) == 0: # if the time step is a multiple of the stepRedistribution perform redistribution
-                self.blobs.redistribute()
+            #----------------------------------------------------------------------
+            # Redistribution step
+            if self.blobs.stepRedistribution != 0: # meaning that redistribution should be done
+                if (self.tStep % self.blobs.stepRedistribution) == 0: # if the time step is a multiple of the stepRedistribution perform redistribution
+                    self.blobs.redistribute()
                 
-        #----------------------------------------------------------------------                
+            #----------------------------------------------------------------------                
 
-        #---------------------------------------------------------------------- 
-        # population control step
-        if self.blobs.stepPopulationControl != 0: # meaning that population control should be done
-            if (self.tStep % self.blobs.stepPopulationControl) == 0: # if the time step is a multiple of the stepPopulationControl perform population control
-                self.blobs.populationControl()
+            #---------------------------------------------------------------------- 
+            # population control step
+            if self.blobs.stepPopulationControl != 0: # meaning that population control should be done
+                if (self.tStep % self.blobs.stepPopulationControl) == 0: # if the time step is a multiple of the stepPopulationControl perform population control
+                    self.blobs.populationControl()
                 
-        #----------------------------------------------------------------------                
             
             
     def __coupled_convection(self):
@@ -597,12 +614,12 @@ class VortexPanel(object):
                 raise ValueError("'blobs' should be of type pHyFlow.vortex.VortexBlobs. It is %s" % type(var))
                 
             self.blobs = var
-            self.blobs.evolve = self.__mute_blobs_evolve
         
         # panels
         elif varName == 'panels':
-            if type(var) != _Panels:
-                raise ValueError("'blobs' should be of type pHyFlow.vortex.VortexBlobs. It is %s" % type(var))
+            if var is not None:
+                if type(var) != _Panels:
+                    raise ValueError("'blobs' should be of type pHyFlow.vortex.VortexBlobs. It is %s" % type(var))
                 
             self.panels = var
             

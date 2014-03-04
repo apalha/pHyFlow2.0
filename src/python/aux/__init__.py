@@ -1,6 +1,6 @@
 """This module handles all vortex operations in Python.
 """
-# Copyright (C) 2014Artur Palha
+# Copyright (C) 2014 Artur Palha
 #
 # This file is part of pHyFlow.
 #
@@ -18,7 +18,10 @@
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.
 #
 # First added:  2014-02-06
-# Last changed: 2014-02-06
+# Last changed: 2014-02-28
 
 # import error output module
 import ErrorOutput
+
+# import custom decorators
+import customDecorators

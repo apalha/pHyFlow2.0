@@ -54,17 +54,17 @@ def vectorDOF_boundaryIndex(mesh,boundaryDomains,boundaryID,pOrder):
                 the :math:`x,y` indicies of the vector boundary DOFs.
                        
     :First Added:   2014-02-14
-    :Last Modified: 2014-02-14
+    :Last Modified: 2014-03-03
     :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
     :License:       GNU GPL version 3 or any later version
     """
  
     # Temporary Function space, same order as vector function space
-    Q = dolfin.FunctionSpace(mesh,'CG',pOrder)
+    Q = dolfin.FunctionSpace(mesh,'CG', pOrder)
     
     # Extract the boundary index values   
     iIndices = numpy.array(dolfin.DirichletBC(Q,dolfin.Constant(0.),
-                                              boundaryDomains,boundaryID).get_boundary_values().keys())
+                                              boundaryDomains, boundaryID).get_boundary_values().keys())
                                                
     # Determine the x,y Index in a p-order vector function.
     # Assumption: the function space and vector function space are ordered

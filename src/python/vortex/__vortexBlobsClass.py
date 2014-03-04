@@ -477,10 +477,10 @@ class VortexBlobs(object):
         # perform redistribution and population control
 
         if self.stepPopulationControl > 0: # only if population control is to be performed during time stepping
-            self.populationControl()
+            self.populationControl()         
 
         if self.stepRedistribution > 0: # only if redistribution is to be performed during time stepping
-            self.redistribute()
+            self.redistribute()      
 
         #--------------------------
 
@@ -627,7 +627,7 @@ class VortexBlobs(object):
         -----
         .. code-block :: python
 
-            self.evaluateVelocity(xEval,yEval,Ndirect=35,tol=1.0e-6,cutoff=None)
+            self.evaluateVorticity(xEval,yEval,Ndirect=35,tol=1.0e-6,cutoff=None)
     
         Parameters
         ----------
@@ -2202,7 +2202,8 @@ class VortexBlobs(object):
         self.__tStep += 1
 
         # advance t
-        self.__t += self.__deltaTc
+        #self.__t += self.__deltaTc
+        self.__t = self.__deltaTc * self.__tStep
 
 
     

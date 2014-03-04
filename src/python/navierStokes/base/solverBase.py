@@ -222,7 +222,8 @@ class solverBase(object):
     
         # Define the variational problem for vorticity
         self.aVort = dolfin.inner(self.w,self.x)*dolfin.dx # LHS
-        self.bVort = dolfin.inner(dolfin.curl(self.u1),self.q)*dolfin.dx # RHS
+        #self.bVort = dolfin.inner(dolfin.curl(self.u1),self.q)*dolfin.dx # RHS
+        self.bVort = dolfin.inner(dolfin.curl(self.u1),self.x)*dolfin.dx # RHS
                  
         # Assemble the matrix
         self.AVort = dolfin.assemble(self.aVort) # vorticity

@@ -342,6 +342,10 @@ class NavierStokes(object):
         # define the current time
         self.__t = 0.0
                           
+        # We need to calculate the vorticity  
+        self.__solver.recalculateVorticityFlag = True
+        self.__reprobeVorticityFlag = True                          
+        
         #---------------------------------------------------------------------
                                             
            
@@ -503,6 +507,51 @@ class NavierStokes(object):
         # returnt the boundary coordinates
         return xyGlobal
         
+ 
+    def getBoundaryVelocity(self):
+        """
+        Returns the boundary velocity of the dirichlet velocity boundary
+        domain.
+        
+        The Dirichlet boundary is ID is found in 
+        .. py:module:: pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY
+        
+            External boundary: 3
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            vxBoundary, vyBoundary = getBoundaryVelocitys()
+            
+        Parameters
+        ----------
+        None
+            
+        Returns
+        -------
+        
+        
+        Attributes
+        ----------
+        None changed.
+        
+        :First Added:   2013-02-28
+        :Last Modified: 2014-02-28
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version    
+        """
+        
+        # Get the boundary coordinates of the mesh (local coordinate system)
+        boundary_VectorDOFIndex = self.__solver.boundary_VectorDOFIndex
+        
+        # in the global coordinate system
+        vx = self.__solver.u1.vector()[boundary_VectorDOFIndex[0]].copy()
+        vy = self.__solver.u1.vector()[boundary_VectorDOFIndex[1]].copy()
+        
+        # return the boundary velocities
+        return vx,vy
+        
         
 
     def evolve(self,vxBoundary,vyBoundary,cmGlobal,thetaLocal,cmDotGlobal,
@@ -584,7 +633,7 @@ class NavierStokes(object):
         # update the mesh position [Not Implemented]
         #dThetaLocal = thetaLocal - self.__thetaLocal # new - old
         #self.__solver.rotateMesh(dThetaLocal)  
-        self.__updatePosition(cmGlobal,thetaLocal)
+        #self.__updatePosition(cmGlobal,thetaLocal)
         
         # Set boundary conditions
         self.__solver.boundaryConditions(vxBoundary,vyBoundary)
@@ -646,7 +695,7 @@ class NavierStokes(object):
         # else: don't do anything
         
         # Return the data as the shape Nx,Ny of Probes
-        return self.__probes.array().reshape(self.__probeGrid['N'])
+        return self.__probes.array().reshape(self.__probeGrid['N'][1],self.__probeGrid['N'][0])
         
                
     def __advanceTime(self):
@@ -684,7 +733,7 @@ class NavierStokes(object):
         self.__tStep += 1
         
         # advance t
-        self.__t += self.__solver.deltaT
+        self.__t = self.__solver.deltaT * self.__tStep
         
         # We need to recalculate the vorticity
         self.__solver.recalculateVorticityFlag = True
@@ -810,13 +859,18 @@ class NavierStokes(object):
     # Attributes
 
     # Time step size
-    @simpleGetProperty
+    @property
     def deltaT(self):
         r"""
         deltaT : float
                  the time step size :math:`\Delta t`.
         """
         return self.__solver.deltaT
+        
+    @deltaT.setter
+    def deltaT(self,deltaTNew):
+        self.__set('deltaT',deltaTNew)
+        
         
     # Time step  max
     @simpleGetProperty
@@ -887,6 +941,14 @@ class NavierStokes(object):
         """
         return self.__probeGrid
                    
+    @simpleGetProperty
+    def t(self):
+        r"""
+        t : float
+            the current time of the simulation
+        """
+        return self.__t                   
+                   
     # local theta
     @simpleGetProperty
     def thetaLocal(self):
@@ -898,6 +960,14 @@ class NavierStokes(object):
                      coordinate system.
         """
         return self.__thetaLocal
+        
+    @simpleGetProperty
+    def tStep(self):
+        r"""
+        tStep : float
+                the current step of the simulation
+        """
+        return self.__tStep        
                    
     # maximum fluid velocity
     @simpleGetProperty                   

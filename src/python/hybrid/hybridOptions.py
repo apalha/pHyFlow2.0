@@ -1,5 +1,6 @@
+#-*- coding: utf-8 -*-
 r"""
-Define vortex-panel options
+Define hybrid options
 """
 ##############################################################################
 # Copyright (C) 2014 Lento Manickathan
@@ -20,7 +21,7 @@ Define vortex-panel options
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
 # First added:  2014-02-21                                                                                                          
-# Last changed: 2014-02-21
+# Last changed: 2014-02-28
 # -*- coding: utf-8 -*-
 ##############################################################################
 
@@ -28,6 +29,34 @@ Define vortex-panel options
 
 """
 
+# When should we correct the lagrangian domain.
+# Stock _[1] and Daeninck _[2] correct the lagrangian field at the start
+#
+# .. [1] Stock, M., Gharakhani, A., & Stone, C. (2010). Modeling Rotor Wakes 
+#        with a Hybrid OVERFLOW-Vortex Method on a GPU Cluster. AIAA Applied 
+#        Aerodynamics
+# .. [2] Daeninck, G. (2006). D EVELOPMENTS IN HYBRID APPROACHES Vortex method 
+#        with known separation location Vortex method with near-wall Eulerian 
+#        solver RANS-LES coupling. Universit´ catholique de Louvain.
+#
 
-PANEL_STRENGTH_UPDATE = {'default': 'constant',
-                         'available': ('constant', 'varying')}
+ADJUST_LAGRANGIAN_AT = {'default': 'start',
+                       'available': ('start', 'end')}
+                       
+# We could also not couple the problem, but just evolve both solutions
+ADJUST_LAGRANGIAN = {'default': True,
+                     'available': (True, False)}
+                    
+                   
+# Determine the eulerian initian conditions
+EULERIAN_INITIAL_CONDITIONS = {'default': 'lagrangian_field',
+                              'available': ('lagrangian_field','eulerian_field') }
+
+
+# Interpolation parameters
+INTERPOLATION_ALGORITHM = {'default': 'scipy_griddata',
+                           'available': ('scipy_griddata','structured_probes')}
+                      
+# Method of interpolation                      
+INTERPOLATION_METHOD = {'default': 'linear',
+                        'available': ('linear')}                   
