@@ -1,0 +1,24 @@
+interpolation_kernels_1d
+
+	DESCRIPTION:
+            
+            Computes the interpolation kernels for remeshing vortex particles.
+            Implemented kernels are:
+            	- M4'
+
+	FILES:
+
+            interpolation_kernels_1d.cpp --> main file
+            Makefile --> the make file that compiles the program to be used as an extension to Python
+
+
+Copyright (C) 2013 Artur Palha
+                   pHyFlow
+
+
+First added: 2013-07-15
+
+Reviews: 
+
+
+

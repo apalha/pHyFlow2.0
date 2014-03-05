@@ -1,0 +1,54 @@
+/* cudasort.h */
+
+#ifndef __cudasort_h
+#define __cudasort_h
+
+#include "cudaeval.h"
+
+#define CUDAREAL double
+#define maxblockcount 4096*2
+#define threadsperblock 256
+#define SWAP(x,y,tmp) (tmp)=(x);(x)=(y);(y)=(tmp);
+//always use values of the form 2^N, where N is an integer for the number of threads
+#define ZDMAXTHREADS 256
+#define PREPARESPLITTHREADCOUNT 128
+#define SINGLETHREADTHREADCOUNT 128
+#define SINGLETHREADMAXTHREADS 16384
+#define SPLITSHIFT 4096
+#define MAXBLOCKSZDMAXMULTI 16384
+#define MAXCONNECTIVITYTHREADS 256
+#define MAXCONNECTIVITYBLOCKS 16384
+
+//necessary for visual studio, for gcc, the definitions in fmm.h works fine
+#define meshratio 2.0
+#define theta 0.5
+
+#define INDEXCACHELENGTH 4
+//VALIDATEPARTITIONING checks if the partitioning was correct for zr and zi. Will slow down the code significantly
+// #define VALIDATEPARTITIONING
+// TIMEPARTITIONING prints additional timing information for the sorting part
+// #define TIMEPARTITIONING
+//CHECKPARTITIONING debugs multiblockpartition. Will take some time
+// #define CHECKPARTITIONING
+// #define DEBUGSINGLEBLOCKPARTITION
+
+void performpartitioning(cudavariables *GPUvars,
+			 int N,int NE,int nlevels,
+			 const CUDAREAL* zr,const CUDAREAL *zi,
+			 const CUDAREAL *er,const CUDAREAL *ei,
+			 CUDAREAL eta);
+void calcdabs(const dcmplx *d,CUDAREAL *dabs,int count,int maxconnecticivityblocks,int maxconnectivitythreads); //wrapper
+void cudaCreateConnectivity(int* jcptr,int* kcptr,int* ir,int* oldjcptr,int* oldkcptr,int* oldir,int count,int maxm2p,dcmplx* z,CUDAREAL *dabs,CUDAREAL cutoff,int lastlevel,int* outputvector,CUDAREAL* debugvector,int maxconnecticityblocks,int maxconnecticitythreads); //wrapper
+
+#ifdef __CUDACC__
+__global__ void cudacreateconnectivity(int* jcptr,int* kcptr,int* ir,
+				       int* oldjcptr,int* oldkcptr,int* oldir,
+				       int count,int maxm2p,
+				       dcmplx* z,
+				       CUDAREAL *dabs,CUDAREAL cutoff,
+				       int lastlevel,
+				       int* outputvector,CUDAREAL* debugvector);
+__global__ void calculatedabs(const dcmplx *d,CUDAREAL *dabs,int count);
+#endif /* __CUDACC__ */
+
+#endif /* __cudasort_h */
