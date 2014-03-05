@@ -34,7 +34,7 @@ import pHyFlow
 # Global parameters
 
 # Simulation parameters
-nTimeSteps = 1000
+nTimeSteps = 50
 
 # Fluid Parameters
 
@@ -96,15 +96,15 @@ if np.sum(x==0) == 0 or np.sum(y==0) == 0:
 wField = (x,y,g)
 
 # generate the blobs
-blobs = pHyFlow.vortex.VortexBlobs(wField,vInf,nu,deltaTc,h,overlap,
-                                   blobControlParams=blobControlParams)
+blobs = pHyFlow.blobs.Blobs(wField,vInf,nu,deltaTc,h,overlap,
+                            blobControlParams=blobControlParams)
 
 blobs.plotVelocity = True
 # This problem does not have any panels
 panels = None
 
 # Setup the full vortex problem : blobs and others.
-vortex = pHyFlow.vortexPanel.VortexPanel(blobs,panels=None)
+lagrangian = pHyFlow.lagrangian.LagrangianSolver(blobs,panels=None)
 
 #------------------------------------------------------------------------------
 
@@ -174,13 +174,13 @@ uMax = 12.0
 
 
 # Initialize the navierStokes problem
-NSDomain = pHyFlow.navierStokes.NavierStokes(geometry,probeGridParams,
-                                             uMax=uMax,nu=nu,cfl=cfl,
-                                             deltaT=5e-5)
+eulerian = pHyFlow.eulerian.EulerianSolver(geometry,probeGridParams,
+                                           uMax=uMax,nu=nu,cfl=cfl,
+                                           deltaT=5e-5)
   
 # Concatenate all the navier-stokes domains
 # TODO: temporary, will implement a multi-ns class
-class MultiNavierStokes(object):
+class MultiEulerianSolver(object):
     def __init__(self,subDomains):
         self.subDomains = subDomains
         
@@ -240,10 +240,9 @@ class MultiNavierStokes(object):
             subDomain.evolve(vx,vy,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew)
         
                                          
-   
-multiNS = MultiNavierStokes(subDomains={'NSDomain': NSDomain})
+# Initialize the eulerian solver   
+multiEulerian = MultiEulerianSolver(subDomains={'eulerian': eulerian})
         
-                               
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
@@ -252,17 +251,17 @@ multiNS = MultiNavierStokes(subDomains={'NSDomain': NSDomain})
 # Use stocks parameters
 # ..[1] Stock, M., Gharakhani, A., & Stone, C. (2010). Modeling Rotor Wakes 
 #       with a Hybrid OVERFLOW-Vortex Method on a GPU Cluster.
-dBdry = 2*h  + np.spacing(10e10)
+dBdry = 2*h  + np.spacing(10e10) # line should not coincide with remeshing grid
 
 interpolationRegions = {}
 
-for subDomain in multiNS.subDomainKeys:
+for subDomain in multiEulerian.subDomainKeys:
 
     # Get the limits of the navier-stokes boundary
-    xMin = multiNS[subDomain].getBoundaryCoordinates()[0].min()
-    xMax = multiNS[subDomain].getBoundaryCoordinates()[0].max()
-    yMin = multiNS[subDomain].getBoundaryCoordinates()[1].min()
-    yMax = multiNS[subDomain].getBoundaryCoordinates()[1].max()
+    xMin = multiEulerian[subDomain].getBoundaryCoordinates()[0].min()
+    xMax = multiEulerian[subDomain].getBoundaryCoordinates()[0].max()
+    yMin = multiEulerian[subDomain].getBoundaryCoordinates()[1].min()
+    yMax = multiEulerian[subDomain].getBoundaryCoordinates()[1].max()
     
     # Define the boundary polygon (closed loop)
     xBoundaryPolygon = np.array([xMin+dBdry, xMax-dBdry, xMax-dBdry,xMin+dBdry,xMin+dBdry])
@@ -289,11 +288,11 @@ interpolationParams={'algorithm':'scipy_griddata',
                      'method':'linear'}
 
 # Initialize the hybrid problem
-hybrid = pHyFlow.hybrid.Hybrid(vortex=vortex, # either vortex-blobs or coupled vortex-panels
-                               navierStokes=multiNS, # dictionary or class of multiple navier-stokes
-                               interpolationRegions=interpolationRegions, # the interpolation regions
-                               couplingParams=couplingParams,
-                               interpolationParams=interpolationParams) # coupling parameters
+hybrid = pHyFlow.hybrid.HybridSolver(lagrangian=lagrangian,
+                                     multiEulerian=multiEulerian, # dictionary or class of multiple navier-stokes
+                                     interpolationRegions=interpolationRegions, # the interpolation regions
+                                     couplingParams=couplingParams,
+                                     interpolationParams=interpolationParams) # coupling parameters
 #-----------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -313,8 +312,7 @@ blobsFile = pHyFlow.IO.File(blobsFileName)
 
 
 # Export initial data
-nsVFile << (hybrid.navierStokes['NSDomain']._NavierStokes__solver.u1, hybrid.navierStokes.t)
-nsWFile << (hybrid.navierStokes['NSDomain']._NavierStokes__solver.vorticity(), hybrid.navierStokes.t)
+nsVFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.u1, hybrid.multiEulerian.t)
 blobsFile << blobs
 
 #------------------------------------------------------------------------------
@@ -331,32 +329,30 @@ thetaDotLocalNew = 0. # zero-rotational velocity
 # Post-processing parameters
 numBlobsTime = np.zeros(nTimeSteps+1)
 totalCirculationTime = np.zeros(nTimeSteps+1)
-numBlobsTime[0] =  hybrid.vortex.blobs.numBlobs
-totalCirculationTime[0] =  hybrid.vortex.blobs.g.sum()
+numBlobsTime[0] =  hybrid.lagrangian.blobs.numBlobs
+totalCirculationTime[0] =  hybrid.lagrangian.blobs.g.sum()
 
 
 for timeStep in range(1,nTimeSteps+1):
     
-    
-    
     startTime = time.time()
     # Evolve the coupled navier-stokes and vortex method
     hybrid.evolve(cmGlobalNew, thetaLocalNew, cmDotGlobalNew, thetaDotLocalNew)
-
-    print "\nThe current time\t\t: %g" % (timeStep*hybrid.vortex.deltaT)
-    print "Time-step\t\t\t: %g" % timeStep
-    print 'Time to evolve\t\t\t: %g'  % (time.time() - startTime)
+    
+    print "Time-step\t\t: %g" % timeStep    
+    print "T\t\t\t: %g" % (timeStep*hybrid.lagrangian.deltaT)
+    print 'Time to evolve\t\t: %g'  % (time.time() - startTime)
     
     # Export initial data
     if timeStep % 1 == 0:
-        nsVFile << (hybrid.navierStokes['NSDomain']._NavierStokes__solver.u1, hybrid.navierStokes.t)
-        nsWFile << (hybrid.navierStokes['NSDomain']._NavierStokes__solver.vorticity(), hybrid.navierStokes.t)
-        blobsFile << hybrid.vortex.blobs
+        nsVFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.u1, hybrid.multiEulerian.t)
+        nsWFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.vorticity(), hybrid.multiEulerian.t)
+        blobsFile << hybrid.lagrangian.blobs
     
-    numBlobsTime[timeStep] =  hybrid.vortex.blobs.numBlobs
-    totalCirculationTime[timeStep] =  hybrid.vortex.blobs.g.sum()
-    print 'Number of blobs\t\t\t: %d'  % numBlobsTime[timeStep]
-    print 'Total circulation\t\t: %.8f'  % totalCirculationTime[timeStep]
+    numBlobsTime[timeStep] =  hybrid.lagrangian.blobs.numBlobs
+    totalCirculationTime[timeStep] =  hybrid.lagrangian.blobs.g.sum()
+    print 'Number of blobs\t\t: %g'  % numBlobsTime[timeStep]
+    print 'Total circulation\t: %g'  % totalCirculationTime[timeStep]
     print '--------------------------------------------\n'
 
 #------------------------------------------------------------------------------
@@ -366,8 +362,12 @@ for timeStep in range(1,nTimeSteps+1):
 # Plot results
 
 py.figure()
-py.plot(np.arange(0,nTimeSteps+1)*blobs.deltaTc,numBlobsTime)
+py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,numBlobsTime)
+py.grid()
+py.xlabel('t')
 
 py.figure()
-py.plot(np.arange(0,nTimeSteps+1)*hybrid.vortex.deltaT,totalCirculationTime-totalCirculationTime[0])
+py.semilogy(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,np.abs(totalCirculationTime-totalCirculationTime[0]))
+py.grid()
+py.xlabel('t')
 

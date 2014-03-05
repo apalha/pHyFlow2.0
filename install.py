@@ -100,15 +100,15 @@ pythonSrcSourcePath = os.path.join(srcSourcePath,'python') # get the absolute pa
                                                            # where all compiled vortex functions are stored
 libExamples = os.path.join(libRoot,'examples') # define the examples root directory                                
 
-libVortexPath = os.path.join(libRoot,'vortex') # define the vortex library root directory
+libBlobsPath = os.path.join(libRoot,'blobs') # define the vortex blobs library root directory
 
 libIOPath = os.path.join(libRoot,'IO') # define the IO library root directory
 
 externCodeDirName = 'cpp' # define the directory where to store all compiled external libraries
 
-externCodeVortexPath = os.path.join(pythonSrcSourcePath,externCodeDirName,'vortex') # define the vortex library compiled external libraries root directory
+externCodeBlobsPath = os.path.join(pythonSrcSourcePath,externCodeDirName,'blobs') # define the vortex blobs library compiled external libraries root directory
                                                              
-externCodePanelPath = os.path.join(pythonSrcSourcePath,externCodeDirName,'panel') # define the panel library compiled eternal 
+externCodePanelsPath = os.path.join(pythonSrcSourcePath,externCodeDirName,'panels') # define the panel library compiled eternal 
 
 #############################################################################
 
