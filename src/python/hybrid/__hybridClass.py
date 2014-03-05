@@ -408,7 +408,7 @@ class Hybrid(object):
         # (a) Check if everything worked, assert t_{ns} == t_{vortex} 
         #        self.vortex.blobs._advanceTime()
 
-        if _numpy.abs(self.vortex.t - self.navierStokes.t) > _numpy.spacing(1):
+        if _numpy.abs(self.vortex.t - self.navierStokes.t) > _numpy.spacing(100):
             raise ValueError('the simulation is not to sync !'\
                              'navier-stokes t : %g; '\
                              'vortex t : %g' % (self.navierStokes.t,self.vortex.t))
@@ -472,10 +472,12 @@ class Hybrid(object):
 
         # Return the list of corrected strengths
         if self.__interpolationParams['algorithm'] == 'scipy_griddata':
-            gBlobNewList = self.__scipyInterpolate_strength_from_ns(xBlobNewList,yBlobNewList) #TODO: conservation of circulation
+            gBlobNewList = self.__scipyInterpolate_strength_from_ns(xBlobNewList, yBlobNewList) #TODO: conservation of circulation
+            print 'scipy_griddata !!'
         elif self.__interpolationParams['algorithm'] == 'structured_probes':
-            # gBlobNewList = self.__interpolate_strength_from_ns(xBlobNewList,yBlobNewList) #TODO: conservation of circulation
-            raise NotImplementedError('Need to fix the error in structured probe interpolation !!')
+            gBlobNewList = self.__interpolate_strength_from_ns(xBlobNewList,yBlobNewList) #TODO: conservation of circulation
+            print 'Structured probe interpolation not working!\nNeed to fix the error in structured probe interpolation !!'
+            #raise NotImplementedError('Structured probe interpolation not working!\nNeed to fix the error in structured probe interpolation !!')
 
         #----------------------------------------------------------------------        
         # Determine the change in circulation

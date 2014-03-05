@@ -476,6 +476,7 @@ class VortexBlobs(object):
         #--------------------------
         # perform redistribution and population control
 
+        #if _numpy.abs(self.__g).sum() > _numpy.spacing(1):# TODO:Check
         if self.stepPopulationControl > 0: # only if population control is to be performed during time stepping
             self.populationControl()         
 

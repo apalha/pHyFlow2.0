@@ -157,6 +157,9 @@ class VortexPanel(object):
         # Modify the parameters
         if self.panels is not None:
             self.blobs.evolve = self.__mute_blobs_evolve # remove blobs.evolve option
+        
+            # Solve for the initial panel strengths
+            self.__solve_panelStrength()
        
        
     def evaluateVelocity(self,xTarget,yTarget,Ndirect=35,tol=1.0e-6,cutoff=None):
@@ -205,15 +208,26 @@ class VortexPanel(object):
         """
         # Determine the induced velocity of blobs and free-stream
         if self.panels is None:
-            vx,vy = self.blobs.evaluateVelocity(xTarget,yTarget,Ndirect,tol,cutoff) \
-                            + self.blobs.vInf.reshape(2,-1)
+            # Induced velocity
+            vx,vy = self.blobs.evaluateVelocity(xTarget,yTarget,Ndirect,tol,cutoff)
+            
+            # Total induced velocity
+            vx += self.blobs.vInf[0]
+            vy += self.blobs.vInf[1]
         
         # Determine the induced velocity of blobs, panels and free-stream                
         else:
-            # Add blobs, panels and free-stream
-            vx,vy = self.blobs.evaluateVelocity(xTarget,yTarget,Ndirect,tol,cutoff) \
-                            + self.panels.evaluateVelocity(xTarget,yTarget) \
-                            + self.blobs.vInf.reshape(2,-1)
+            #            vx,vy = self.blobs.evaluateVelocity(xTarget,yTarget,Ndirect,tol,cutoff) \
+            #                            + self.panels.evaluateVelocity(xTarget,yTarget) \
+            #                            + self.blobs.vInf.reshape(2,-1)
+            # Induced velocity from blobs
+            vxBlob, vyBlob = self.blobs.evaluateVelocity(xTarget,yTarget,Ndirect,tol,cutoff)
+            # Induced velocity from panels
+            vxPanel, vyPanel = self.panels.evaluateVelocity(xTarget,yTarget)
+            
+            # Total induced velocity
+            vx = vxBlob + vxPanel + self.blobs.vInf[0]
+            vy = vyBlob + vyPanel + self.blobs.vInf[1]
         
         # return the induced velocity
         return vx,vy
@@ -520,6 +534,48 @@ class VortexPanel(object):
         #----------------------------------------------------------------------           
 
     
+    def __solve_panelStrength(self):
+        r"""
+        Function to solve for the initial panel strength
+        """
+        
+        #----------------------------------------------------------------------
+        # Determine parameters
+
+        # convert the hardware flag into an int to use in _base_convection
+        if self.blobs.velocityComputationParams['hardware'] == 'gpu': 
+            blobs_hardware = _pHyFlowOptions.GPU_HARDWARE
+        else: 
+            blobs_hardware = _pHyFlowOptions.CPU_HARDWARE
+
+        # convert the method flag into an int to use in _base_convection
+        if self.blobs.velocityComputationParams['method'] == 'fmm': 
+            blobs_method = _pHyFlowOptions.FMM_METHOD
+        else: 
+            blobs_method = _pHyFlowOptions.DIRECT_METHOD
+            
+        #----------------------------------------------------------------------
+
+
+        #----------------------------------------------------------------------
+        # Solve panel strength
+
+        # Make references to vortex-blobs
+        xBlob, yBlob, gBlob = self.blobs.x, self.blobs.y, self.blobs.g 
+            
+        # Make references to panel collocation points (where no-slip b.c. is enforced.)
+        xCP, yCP = self.panels.xyCPGlobalCat
+        
+        # Determine the initial slip velocity
+        vxSlip, vySlip = _blobs_velocity(xBlob,yBlob,gBlob,self.blobs.sigma,
+                                         xEval=xCP,yEval=yCP,hardware=blobs_hardware,   
+                                         method=blobs_method) \
+                                 + self.vInf.reshape(2,-1)
+                
+        # Solve for no-slip panel strengths
+        self.panels.solve(vxSlip, vySlip)
+        
+                            
     def __advanceTime(self):
         """
         Function to advance time. To advance time, we advance both the internal
@@ -562,7 +618,7 @@ class VortexPanel(object):
         self.panels._advanceTime(self.deltaT)
         
         # Check if both are sync
-        if _numpy.abs(self.blobs.t - self.panels.t) > _numpy.spacing(1):
+        if _numpy.abs(self.blobs.t - self.panels.t) > _numpy.spacing(100):
             raise ValueError('The internal time of VortexBlobs and Panels'\
                              ' are not synchronized. blobs = %g, panels = %g'\
                              % (self.blobs.t, self.panels.t)  )

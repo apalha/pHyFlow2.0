@@ -223,7 +223,8 @@ def Regrid(xBlob,yBlob,wBlob,sigma,overlap,xBounds,yBounds,interpKernel=0,c=0.0)
     
 
 
-def PopulationControl(xBlob,yBlob,wBlob,wThreshold,wRelativeThreshold):
+#def PopulationControl(xBlob,yBlob,wBlob,wThreshold,wRelativeThreshold):
+def PopulationControl(xBlob,yBlob,wBlob,wThreshold,wTotalThreshold):
     """
     
         PopulationControl controls the number of particles by discarding
@@ -264,7 +265,14 @@ def PopulationControl(xBlob,yBlob,wBlob,wThreshold,wRelativeThreshold):
                                   wThreshold = wThreshold/10.0 and the process
                                   of flagging blobs is repeated
                                   (type: float64, dimension: single value)
-    
+
+            wTotalThreshold :: the maximum value of the flaggedCirculation 
+            ------------------ that is acceptable. If flaggedCirculation  > wRelativeThreshold
+                               then wThreshold = wThreshold/10.0 and the process
+                               of flagging blobs is repeated
+                               (type: float64, dimension: single value)    
+
+
         Returns
         -------
             xBlobNew :: the x coordinates of the new vortex blobs
@@ -294,7 +302,7 @@ def PopulationControl(xBlob,yBlob,wBlob,wThreshold,wRelativeThreshold):
     #    to step 1
     
     # compute the total absolute circulation
-    totalCirculation = numpy.abs(wBlob).sum()
+    #    totalCirculation = numpy.abs(wBlob).sum()
     
     # determine the particles with circulation smaller then gThreshold
     # compute how much absolute circulation is discarded, if 
@@ -310,7 +318,8 @@ def PopulationControl(xBlob,yBlob,wBlob,wThreshold,wRelativeThreshold):
     while not circulationConservationFlag:
         flaggedParticles = numpy.abs(wBlob)<wThreshold # determine the blobs to discard
         circulationLoss = (numpy.abs(wBlob[flaggedParticles])).sum() # determine the total circulation loss
-        if (circulationLoss/totalCirculation) < wRelativeThreshold:
+        #if (circulationLoss/totalCirculation) < wRelativeThreshold:
+        if circulationLoss < wTotalThreshold:
             circulationConservationFlag = True # the circulation change is acceptable
         else:
             wThreshold /=10.0 # decrease the circulation threshold

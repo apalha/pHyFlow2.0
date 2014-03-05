@@ -808,7 +808,7 @@ class Panels(object):
         self.__tStep += 1
 
         # advance t
-        self.__t += self.__deltaT
+        self.__t = self.__deltaT*self.__tStep
 
 
     def __assembleInfluenceMatrix(self):
