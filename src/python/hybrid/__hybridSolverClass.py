@@ -48,12 +48,14 @@ __all__ = ['HybridSolver']
 # External packages
 import numpy as _numpy
 #import time as _time
+
+# Import point in polygon search function
 from matplotlib.nxutils import points_inside_poly as _points_inside_poly
 from scipy.interpolate import griddata as _griddata
 
 # Import pHyFlow packages
-from pHyFlow import options as pHyFlowOptions
 from pHyFlow.aux.customDecorators import simpleGetProperty
+from pHyFlow.blobs import blobOptions
 from pHyFlow.lagrangian import LagrangianSolver as _LagrangianSolverClass
 from pHyFlow.eulerian import EulerianSolver as _EulerianSolverClass
 
@@ -476,6 +478,16 @@ class HybridSolver(object):
             gBlobNewList = self.__interpolate_strength_from_ns(xBlobNewList,yBlobNewList) #TODO: conservation of circulation
             print 'Structured probe interpolation not working!\nNeed to fix the error in structured probe interpolation !!'
             #raise NotImplementedError('Structured probe interpolation not working!\nNeed to fix the error in structured probe interpolation !!')
+            gBlobNewList2 = self.__scipyInterpolate_strength_from_nsprobes(xBlobNewList,yBlobNewList) #TODO: conservation of circulation
+            
+            error = (_numpy.array(gBlobNewList) - _numpy.array(gBlobNewList2))/_numpy.array(gBlobNewList2)
+            print error
+            print _numpy.abs(error).max()
+
+        elif self.__interpolationParams['algorithm'] == 'scipy_probes':
+            print 'scipy interpolation from probes !!'
+            gBlobNewList = self.__scipyInterpolate_strength_from_nsprobes(xBlobNewList,yBlobNewList) #TODO: conservation of circulation
+            
 
         #----------------------------------------------------------------------        
         # Determine the change in circulation
@@ -936,54 +948,98 @@ class HybridSolver(object):
             # Make references to navier-stokes structured grid location
             cmGlobal = self.multiEulerian[subDomainID].cmGlobal
             thetaLocal = self.multiEulerian[subDomainID].thetaLocal
-        
+ 
             # Make references to probe grid parameters
             probeGridParams = self.multiEulerian[subDomainID].probeGridParams
-                
+            
             # Determine the origin in global coordinates
             originGrid = probeGridParams['origin'] + cmGlobal # (x,y) origin in global coordinate system
-                
+
+            
             # Determine the grid spacing of probe grid
             hGrid = probeGridParams['L']/probeGridParams['N'] # (hx',hy') in local coordinate system
-                
+            
+            
             # Distance of the particles from the grid origin
             LxBlob =   (xBlobNewList[i]-originGrid[0])*_numpy.cos(thetaLocal) \
-                     + (yBlobNewList[i]-originGrid[1])*_numpy.sin(thetaLocal)
+                     + (yBlobNewList[i]-originGrid[1])*_numpy.sin(thetaLocal)  
                              
             LyBlob = - (xBlobNewList[i]-originGrid[0])*_numpy.sin(thetaLocal) \
                      + (yBlobNewList[i]-originGrid[1])*_numpy.cos(thetaLocal)
-                         
-            # Indexing the particles w.r.t to the origin
-            xLIndex = _numpy.int64(_numpy.floor(LxBlob/hGrid[0]))
-            yLIndex = _numpy.int64(_numpy.floor(LyBlob/hGrid[1]))          
-                
-            # Distance of each blob from it's lower left grid box
-            xPrime = LxBlob - xLIndex*hGrid[0]
-            yPrime = LyBlob - yLIndex*hGrid[1]
             
+             # Indexing the particles w.r.t to the origin
+            xLIndex = _numpy.int64(_numpy.floor(LxBlob/hGrid[0]))
+            yLIndex = _numpy.int64(_numpy.floor(LyBlob/hGrid[1]))
+                
+
+            # Distance of each blob from it's lower left grid box
+            xPrime = LxBlob - xLIndex*hGrid[0]# - 0.5*hGrid[0]
+            yPrime = LyBlob - yLIndex*hGrid[1]# - 0.5*hGrid[0]
+
             # Linear Interpolation weights
             h1 =    (xPrime - hGrid[0]) * (yPrime-hGrid[1]) / (hGrid[0]*hGrid[1])
             h2 =       - xPrime         * (yPrime-hGrid[1]) / (hGrid[0]*hGrid[1])
             h3 =         xPrime         *     yPrime        / (hGrid[0]*hGrid[1])
-            h4 =       - yPrime         * (xPrime-hGrid[0]) / (hGrid[0]*hGrid[1])        
+            h4 =       - yPrime         * (xPrime-hGrid[0]) / (hGrid[0]*hGrid[1])      
                 
             # Retrieve the interpolated vorticity from ns grid to interpolation grid
-            wGrid = self.multiEulerian[subDomainID].getVorticity().copy()
+            wGrid = _numpy.copy(self.multiEulerian[subDomainID].getVorticity())
                 
-            # Interpolating the (vorticity * grid area) = circulation from the grid the blobs
-            # * Note: we must follow Stock's definition of the grid spacing
-            #       grid spacing = nominal particle spacing
-            #           :math:`\Delta x_{grid} = \sigma_{blob}` 
-            gBlobNew = (h1*wGrid[yLIndex,xLIndex]       +\
-                        h2*wGrid[yLIndex,xLIndex+1]     +\
-                        h3*wGrid[yLIndex+1,xLIndex+1]   +\
-                        h4*wGrid[yLIndex+1,xLIndex]) * (hGrid[0]*hGrid[1]) # Circulation = vort * area        
+            # Interpolating the (vorticity * grid area) = circulation from the grid the blobs       
+            gBlobNew = (h1*wGrid[xLIndex,yLIndex]       +\
+                        h2*wGrid[xLIndex,yLIndex+1]     +\
+                        h3*wGrid[xLIndex+1,yLIndex+1]   +\
+                        h4*wGrid[xLIndex+1,yLIndex]) * (self.lagrangian.blobs.h**2) # Circulation = vort * area     
 
             gBlobNewList.append(gBlobNew)
             
         self.__totalCirculationAdded = _numpy.sum(gBlobNewList, axis=1)
             
         return gBlobNewList
+
+
+    def __scipyInterpolate_strength_from_nsprobes(self, xBlobNewList, yBlobNewList):
+        r"""
+        Use the scipy interpolate function to interpolate from probe grid
+        
+        
+        :First Added:   2014-03-05
+        :Last Modified: 2014-03-05
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version      
+        """
+        
+        # Total circulation removed
+        self.__totalCirculationAdded = []
+        
+        # A list of new vortex strengths
+        gBlobNewList = []
+        
+        # Iterate through all the sub domains (each mesh) of the navier-stokes
+        for i,subDomainID in enumerate(self.multiEulerian.subDomainKeys):
+        
+            # Stack coordinates
+            x,y = self.multiEulerian.subDomains[subDomainID].probeGridMesh
+            
+            # Reshape the data to (M,2)
+            xy = _numpy.vstack((x.flatten(),y.flatten())).T
+            
+            # Retrieve the vorticity
+            w = self.multiEulerian.subDomains[subDomainID].getVorticity()
+            
+            # Reshape the vorticity data
+            ww = w.flatten()
+            
+            # Interpolate vorticity to grid
+            wBlobNew = _griddata(xy,ww,(xBlobNewList[i],yBlobNewList[i]), method=self.__interpolationParams['method'])
+                 
+            gBlobNew = wBlobNew * (self.lagrangian.blobs.h**2)
+            
+            gBlobNewList.append(gBlobNew)
+            
+        self.__totalCirculationAdded = _numpy.sum(gBlobNewList, axis=1)
+            
+        return gBlobNewList  
         
         
     def __scipyInterpolate_strength_from_ns(self,xBlobNewList,yBlobNewList):

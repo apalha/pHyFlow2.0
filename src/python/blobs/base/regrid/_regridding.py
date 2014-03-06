@@ -28,7 +28,7 @@
 __all__ = ['Regrid','PopulationControl']
 
 import numpy
-from pHyFlow import options
+from pHyFlow.blobs import blobOptions
 from pHyFlow.cpp.blobs.remesh import *
 
 import scipy.sparse 
@@ -151,7 +151,7 @@ def Regrid(xBlob,yBlob,wBlob,sigma,overlap,xBounds,yBounds,interpKernel=0,c=0.0)
         #
         # the numbering is the internal numbering used when determining the indices
         #
-        if interpKernel == options.M4PRIME_INTERPKERNEL:
+        if interpKernel == blobOptions.M4PRIME_INTERPKERNEL:
             kernelSize = 4
         
         xLIndices = numpy.int64(numpy.ceil((xBlob-xBounds[0]-2.0*h+0.5*h)/h))-1 # the x index
@@ -434,7 +434,7 @@ def _interp_kernel_2d(x,y,interpKernel,c):
     # compute the interpolation kernels by tensor product using the chosen
     # interpolation kernel
     
-    if interpKernel == options.M4PRIME_INTERPKERNEL: # M4' interpolating kernel
+    if interpKernel == blobOptions.M4PRIME_INTERPKERNEL: # M4' interpolating kernel
         interpolationWeights = _M4prime(x,c) * _M4prime(y,c)
     
     # return the interpolation weights

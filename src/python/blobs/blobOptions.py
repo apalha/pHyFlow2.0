@@ -26,15 +26,22 @@ Several different kernel implementations are implemented in one unified function
 ##############################################################################
 
 """    
-    Reviews:    1. Added FMM_METHOD and DIRECT_METHOD options 
-                   for computing the induced velocities. Added
-                   FE_INTEGRATOR and RK4_INTEGRATOR options for time integration.
-                   (2013-05-28)
-                
-                2. Added W_PLOT (vorticity) and V_PLOT (velocity)
-                   options for plotting the induced fields. Added
-                   WFUNCTION_PLOT and WBLOB_PLOT options for plotting vorticity
-                   field. (2013-06-27)
+Reviews:    
+
+    1. (2013-05-28), Artur Palha
+       Added FMM_METHOD and DIRECT_METHOD options 
+       for computing the induced velocities. Added
+       FE_INTEGRATOR and RK4_INTEGRATOR options for time integration.
+       
+            
+    2. (2013-06-27), Artur Palha
+       Added W_PLOT (vorticity) and V_PLOT (velocity)
+       options for plotting the induced fields. Added
+       WFUNCTION_PLOT and WBLOB_PLOT options for plotting vorticity
+       field. 
+    3. (2014-03-06), Lento Manickathan
+       Options moved and renamed to blobOptions
+       
 """
 
 # general variables to simplify choosing options
@@ -77,17 +84,6 @@ M4PRIME_INTERPKERNEL = 0
 # define the type of diffusion method
 REGRID_WEE_DIFFUSION = 0
 
-# package wide runtime options
-vortex = {}
-
-# hardware
-#    cpu :: all routines use cpu version if available
-#    gpu :: all routines use gpu version if available
-vortex['hardware'] = {'value':0,'description':str('-----------------------------------------------------------------------\n  \'hardware\'      | %d :: all routines use cpu version if available\n                  |\n                  | %d :: all routines use gpu version if available' % (CPU_HARDWARE, GPU_HARDWARE))} 
-# gpublocksize
-#    the size of the gpu block
-vortex['gpublocksize'] = {'value':256,'description':'-----------------------------------------------------------------------\n  \'gpublocksize\'  | [int] :: an integer specifying the size of the\n                  |          memory block size on the gpu             '} 
-
 
 # verbose options
 
@@ -102,7 +98,19 @@ biot_savart_options = ('direct','fmm')
 
 # diffusion method options
 diffusion_method_options = ('regrid_wee')
-                           
+
+# package wide runtime options
+vortex = {}
+
+
+# hardware
+#    cpu :: all routines use cpu version if available
+#    gpu :: all routines use gpu version if available
+vortex['hardware'] = {'value':0,'description':str('-----------------------------------------------------------------------\n  \'hardware\'      | %d :: all routines use cpu version if available\n                  |\n                  | %d :: all routines use gpu version if available' % (CPU_HARDWARE, GPU_HARDWARE))} 
+# gpublocksize
+#    the size of the gpu block
+vortex['gpublocksize'] = {'value':256,'description':'-----------------------------------------------------------------------\n  \'gpublocksize\'  | [int] :: an integer specifying the size of the\n                  |          memory block size on the gpu             '} 
+
 
 def help_vortex():
     """

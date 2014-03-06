@@ -28,8 +28,6 @@ Define panel options
 
 """
 
-import pHyFlow.options as _options
-
 # Panel kernels
 PANEL_KERNEL = {'default'   : 'csv', # Constant Strength Vortex panel
                 'available' : ('csv', 'css')} # Constant Strength Vortex, Constant Strength Source Panels
@@ -60,6 +58,14 @@ SOLVER_COMPUTATION_ASSEMBLE = {'default'  : 'all',
 #---------------------------------------------------------------------------
 # Boolean options list
 
+# hardware options
+CPU_HARDWARE = 0 # the cpu hardware option
+GPU_HARDWARE = 1 # the gpu hardware option
+
+# method options for induced velocity
+FMM_METHOD = 0 # the FMM method (N.log(N) complexity) option
+DIRECT_METHOD = 1 # the direct calculation (N.N complexity) option
+
 # Panel kernels
 _PANEL_KERNEL_CSV = 1
 _PANEL_KERNEL_CSS = 0
@@ -69,8 +75,8 @@ _PROBLEM_TYPE_FIXED = 0
 _PROBLEM_TYPE_MOVING = 1
 
 # Velocity computation
-_VELOCITY_COMPUTATION_METHOD_DIRECT = _options.DIRECT_METHOD
-_VELOCITY_COMPUTATION_HARDWARE_CPU  = _options.CPU_HARDWARE
+_VELOCITY_COMPUTATION_METHOD_DIRECT = DIRECT_METHOD
+_VELOCITY_COMPUTATION_HARDWARE_CPU  = CPU_HARDWARE
 
 
 

@@ -27,7 +27,7 @@ Several different kernel implementations are implemented in one unified function
 __all__ = ['velocity','vorticity','vorticity_blobs']
 
 import numpy
-from pHyFlow import options
+from pHyFlow.blobs import blobOptions
 
 from pHyFlow.cpp.blobs import kernels
 
@@ -138,28 +138,28 @@ def velocity(xBlob,yBlob,wBlob,sigma,k=2,kernel=1,\
     fullOption = 100*method + 10*hardware + kernel
       
     # compute the induced velocities using the different options
-    if fullOption == 100*options.DIRECT_METHOD + 10*options.CPU_HARDWARE + options.GAUSS_KERNEL: # direct calculation of Gaussian kernel on the CPU
+    if fullOption == 100*blobOptions.DIRECT_METHOD + 10*blobOptions.CPU_HARDWARE + blobOptions.GAUSS_KERNEL: # direct calculation of Gaussian kernel on the CPU
         vx,vy = _velocity_direct_cpu_gauss(xBlob,yBlob,wBlob,sigma,k,xEval,yEval)
         
-    elif fullOption == 100*options.DIRECT_METHOD + 10*options.CPU_HARDWARE + options.CUTOFF_KERNEL: # direct calculation of cutoff kernel on the CPU
+    elif fullOption == 100*blobOptions.DIRECT_METHOD + 10*blobOptions.CPU_HARDWARE + blobOptions.CUTOFF_KERNEL: # direct calculation of cutoff kernel on the CPU
         vx,vy = _velocity_direct_cpu_cutoff(xBlob,yBlob,wBlob,sigma,xEval,yEval)
         
-    elif fullOption == 100*options.DIRECT_METHOD + 10*options.GPU_HARDWARE + options.GAUSS_KERNEL: # direct calculation of Gaussian kernel on the GPU
+    elif fullOption == 100*blobOptions.DIRECT_METHOD + 10*blobOptions.GPU_HARDWARE + blobOptions.GAUSS_KERNEL: # direct calculation of Gaussian kernel on the GPU
         vx,vy = _velocity_direct_gpu_gauss(xBlob,yBlob,wBlob,sigma,k,xEval,yEval,blocksize)
         
-    elif fullOption == 100*options.DIRECT_METHOD + 10*options.GPU_HARDWARE + options.CUTOFF_KERNEL: # direct calculation of cutoff kernel on the GPU
+    elif fullOption == 100*blobOptions.DIRECT_METHOD + 10*blobOptions.GPU_HARDWARE + blobOptions.CUTOFF_KERNEL: # direct calculation of cutoff kernel on the GPU
         vx,vy = _velocity_direct_gpu_cutoff(xBlob,yBlob,wBlob,sigma,xEval,yEval,blocksize)
         
-    elif fullOption == 100*options.FMM_METHOD + 10*options.CPU_HARDWARE + options.GAUSS_KERNEL: # FMM calculation of Gauss kernel on the CPU
+    elif fullOption == 100*blobOptions.FMM_METHOD + 10*blobOptions.CPU_HARDWARE + blobOptions.GAUSS_KERNEL: # FMM calculation of Gauss kernel on the CPU
         vx,vy = _velocity_fmm_cpu_gauss(xBlob,yBlob,wBlob,sigma,k,xEval,yEval,Ndirect,tol,cutoff)
         
-    elif fullOption == 100*options.FMM_METHOD + 10*options.GPU_HARDWARE + options.GAUSS_KERNEL: # FMM calculation of Gauss kernel on the GPU
+    elif fullOption == 100*blobOptions.FMM_METHOD + 10*blobOptions.GPU_HARDWARE + blobOptions.GAUSS_KERNEL: # FMM calculation of Gauss kernel on the GPU
         vx,vy = _velocity_fmm_gpu_gauss(xBlob,yBlob,wBlob,sigma,k,xEval,yEval,Ndirect,tol,cutoff)
     
-    elif fullOption == 100*options.FMM_METHOD + 10*options.CPU_HARDWARE + options.CUTOFF_KERNEL: # FMM calculation of cutoff kernel on the CPU
+    elif fullOption == 100*blobOptions.FMM_METHOD + 10*blobOptions.CPU_HARDWARE + blobOptions.CUTOFF_KERNEL: # FMM calculation of cutoff kernel on the CPU
         raise Exception('FMM calculation of cutoff kernel on the CPU not yet available') 
     
-    elif fullOption == 100*options.FMM_METHOD + 10*options.GPU_HARDWARE + options.CUTOFF_KERNEL: # FMM calculation of cutoff kernel on the GPU
+    elif fullOption == 100*blobOptions.FMM_METHOD + 10*blobOptions.GPU_HARDWARE + blobOptions.CUTOFF_KERNEL: # FMM calculation of cutoff kernel on the GPU
         raise Exception('FMM calculation of cutoff kernel on the GPU not yet available')
 
     # return the computed velocities at the (xEval, yEval) points
@@ -783,19 +783,19 @@ def vorticity(xBlob,yBlob,wBlob,sigma,k=2,kernel=1,\
     fullOption = 100*method + 10*hardware + kernel
       
     # compute the induced vorticity using the different options
-    if fullOption == 100*options.DIRECT_METHOD + 10*options.CPU_HARDWARE + options.GAUSS_KERNEL: # direct calculation of Gaussian kernel on the CPU
+    if fullOption == 100*blobOptions.DIRECT_METHOD + 10*blobOptions.CPU_HARDWARE + blobOptions.GAUSS_KERNEL: # direct calculation of Gaussian kernel on the CPU
         w = _vorticity_direct_cpu_gauss(xBlob,yBlob,wBlob,sigma,k,xEval,yEval)
         
-    elif fullOption == 100*options.DIRECT_METHOD + 10*options.CPU_HARDWARE + options.CUTOFF_KERNEL: # direct calculation of cutoff kernel on the CPU
+    elif fullOption == 100*blobOptions.DIRECT_METHOD + 10*blobOptions.CPU_HARDWARE + blobOptions.CUTOFF_KERNEL: # direct calculation of cutoff kernel on the CPU
         w = _vorticity_direct_cpu_cutoff(xBlob,yBlob,wBlob,sigma,xEval,yEval)
         
-    elif fullOption == 100*options.DIRECT_METHOD + 10*options.GPU_HARDWARE + options.GAUSS_KERNEL: # direct calculation of Gaussian kernel on the GPU
+    elif fullOption == 100*blobOptions.DIRECT_METHOD + 10*blobOptions.GPU_HARDWARE + blobOptions.GAUSS_KERNEL: # direct calculation of Gaussian kernel on the GPU
         w = _vorticity_direct_gpu_gauss(xBlob,yBlob,wBlob,sigma,k,xEval,yEval,blocksize)
         
-    elif fullOption == 100*options.DIRECT_METHOD + 10*options.GPU_HARDWARE + options.CUTOFF_KERNEL: # direct calculation of cutoff kernel on the GPU
+    elif fullOption == 100*blobOptions.DIRECT_METHOD + 10*blobOptions.GPU_HARDWARE + blobOptions.CUTOFF_KERNEL: # direct calculation of cutoff kernel on the GPU
         w = _vorticity_direct_gpu_cutoff(xBlob,yBlob,wBlob,sigma,xEval,yEval,blocksize)
         
-    elif fullOption < 100*options.DIRECT_METHOD: # FMM calculation is not implemented yet
+    elif fullOption < 100*blobOptions.DIRECT_METHOD: # FMM calculation is not implemented yet
         raise Exception('FMM method not implemented yet')
         
     # return the computed vorticity at the (xEval, yEval) points

@@ -27,7 +27,7 @@ Several different kernel implementations are implemented in one unified function
 __all__ = ['convection','diffusion_wee']
 
 import numpy
-from pHyFlow import options
+from pHyFlow.blobs import blobOptions
 
 from pHyFlow.blobs.base.induced import velocity
 from pHyFlow.blobs.base.regrid import Regrid

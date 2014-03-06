@@ -24,7 +24,7 @@ Several different kernel implementations are implemented in one unified function
 # -*- coding: utf-8 -*-
 
 # load module options
-import options
+#import options
 
 # load auxiliary modules aux
 import aux

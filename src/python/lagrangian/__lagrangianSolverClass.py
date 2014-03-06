@@ -49,10 +49,10 @@ __all__ = ['LagrangianSolver']
 import numpy as _numpy
 
 # pHyFlow modules
-from pHyFlow import options as _pHyFlowOptions
 from pHyFlow.aux.customDecorators import simpleGetProperty
 
 # pHyFlow blob modules
+from pHyFlow.blobs import blobOptions
 from pHyFlow.blobs import Blobs as _BlobsClass
 from pHyFlow.blobs.base.induced import velocity as _blobs_velocity
 
@@ -412,21 +412,21 @@ class LagrangianSolver(object):
 
         # convert the hardware flag into an int to use in _base_convection
         if self.blobs.velocityComputationParams['hardware'] == 'gpu': 
-            blobs_hardware = _pHyFlowOptions.GPU_HARDWARE
+            blobs_hardware = blobOptions.GPU_HARDWARE
         else: 
-            blobs_hardware = _pHyFlowOptions.CPU_HARDWARE
+            blobs_hardware = blobOptions.CPU_HARDWARE
 
         # convert the method flag into an int to use in _base_convection
         if self.blobs.velocityComputationParams['method'] == 'fmm': 
-            blobs_method = _pHyFlowOptions.FMM_METHOD
+            blobs_method = blobOptions.FMM_METHOD
         else: 
-            blobs_method = _pHyFlowOptions.DIRECT_METHOD
+            blobs_method = blobOptions.DIRECT_METHOD
     
         # convert the time integration method into an int to use in _base_convection
         if self.blobs.timeIntegrationParams['method'] == 'rk4': 
-            blobs_integrator = _pHyFlowOptions.RK4_INTEGRATOR
+            blobs_integrator = blobOptions.RK4_INTEGRATOR
         elif self.blobs.timeIntegrationParams['method'] == 'euler':
-            blobs_integrator = _pHyFlowOptions.FE_INTEGRATOR
+            blobs_integrator = blobOptions.FE_INTEGRATOR
             
         #----------------------------------------------------------------------
 
@@ -435,7 +435,7 @@ class LagrangianSolver(object):
         # Time integrate the vortex blobs
 
         # If integration method is RK4
-        if blobs_integrator == _pHyFlowOptions.RK4_INTEGRATOR:
+        if blobs_integrator == blobOptions.RK4_INTEGRATOR:
 
             # Make references to vortex-blobs
             xBlob, yBlob, gBlob = self.blobs.x, self.blobs.y, self.blobs.g 
@@ -530,7 +530,7 @@ class LagrangianSolver(object):
                 #--------------------------------------------------------------
             
             
-        elif blobs_integrator == _pHyFlowOptions.FE_INTEGRATOR:
+        elif blobs_integrator == blobOptions.FE_INTEGRATOR:
             raise NotImplementedError('FE time integration not available !')
         
         #----------------------------------------------------------------------           
@@ -546,15 +546,15 @@ class LagrangianSolver(object):
 
         # convert the hardware flag into an int to use in _base_convection
         if self.blobs.velocityComputationParams['hardware'] == 'gpu': 
-            blobs_hardware = _pHyFlowOptions.GPU_HARDWARE
+            blobs_hardware = blobOptions.GPU_HARDWARE
         else: 
-            blobs_hardware = _pHyFlowOptions.CPU_HARDWARE
+            blobs_hardware = blobOptions.CPU_HARDWARE
 
         # convert the method flag into an int to use in _base_convection
         if self.blobs.velocityComputationParams['method'] == 'fmm': 
-            blobs_method = _pHyFlowOptions.FMM_METHOD
+            blobs_method = blobOptions.FMM_METHOD
         else: 
-            blobs_method = _pHyFlowOptions.DIRECT_METHOD
+            blobs_method = blobOptions.DIRECT_METHOD
             
         #----------------------------------------------------------------------
 

@@ -55,7 +55,7 @@ EULERIAN_INITIAL_CONDITIONS = {'default': 'lagrangian_field',
 
 # Interpolation parameters
 INTERPOLATION_ALGORITHM = {'default': 'scipy_griddata',
-                           'available': ('scipy_griddata','structured_probes')}
+                           'available': ('scipy_griddata','structured_probes','scipy_probes')}
                       
 # Method of interpolation                      
 INTERPOLATION_METHOD = {'default': 'linear',

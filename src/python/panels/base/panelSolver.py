@@ -22,7 +22,7 @@ This module handles all panel method related operations in python
 # Last changed: 2013-10-08
 
 
-from pHyFlow import options
+from pHyFlow.panels import panelOptions
 from pHyFlow.cpp.panels import kernels #,sourcePanel
 #from pHyFlow.vortex.induced import velocity
 
@@ -140,13 +140,13 @@ def influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
 
     # Choose the computation type
 
-    if fullOption == 100*options.DIRECT_METHOD + 10*options.CPU_HARDWARE:
+    if fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.CPU_HARDWARE:
         A = kernels.vortex._vortexPanel_Cython_cpu.assemble_influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,cosAlpha,sinAlpha)
 
-    elif fullOption == 100*options.DIRECT_METHOD + 10*options.GPU_HARDWARE:
+    elif fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.GPU_HARDWARE:
        print "DIRECT + GPU + Constant strength VORTEX :: Not Implemented!"                      
                          
-    elif fullOption < 100*options.DIRECT_METHOD:
+    elif fullOption < 100*panelOptions.DIRECT_METHOD:
         print "FMM :: Not Implemented!"
 
     # return the influence Matrix
@@ -258,13 +258,13 @@ def inducedVelocity(strength,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
 
     # Choose the computation type
     
-    if fullOption == 100*options.DIRECT_METHOD + 10*options.CPU_HARDWARE:
+    if fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.CPU_HARDWARE:
         vx,vy = kernels.vortex._vortexPanel_Cython_cpu.inducedVelocity(strength,xEval,yEval,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,cosAlpha,sinAlpha)
 
-    elif fullOption == 100*options.DIRECT_METHOD + 10*options.GPU_HARDWARE:
+    elif fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.GPU_HARDWARE:
        print "DIRECT + GPU + Constant strength VORTEX :: Not Implemented!"                      
                          
-    elif fullOption < 100*options.DIRECT_METHOD:
+    elif fullOption < 100*panelOptions.DIRECT_METHOD:
         print "FMM :: Not Implemented!"        
 
     # return the induced velocities

@@ -80,8 +80,10 @@ import types as __types
 import inspect as __inspect
 
 # pHyFlow packages
-from pHyFlow import options # import options definitions for pHyFlow
-#from pHyFlow.aux import ErrorOutput as _ErrorOutput # import error output functions
+from pHyFlow.aux import ErrorOutput as _ErrorOutput # import error output functions
+
+# import blob options
+from pHyFlow.blobs import blobOptions # import options definitions for pHyFlow
 
 # import required base functions from where to build up the class
 from pHyFlow.blobs.base.induced import velocity as _base_velocity
@@ -606,12 +608,12 @@ class Blobs(object):
         """
 
         # convert the hardware flag into an int to use in _base_velocity
-        if self.__velocityComputationParams['hardware'] == 'gpu': hardware = options.GPU_HARDWARE
-        else: hardware = options.CPU_HARDWARE
+        if self.__velocityComputationParams['hardware'] == 'gpu': hardware = blobOptions.GPU_HARDWARE
+        else: hardware = blobOptions.CPU_HARDWARE
 
         # convert the method flag into an int to use in _base_velocity
-        if self.__velocityComputationParams['method'] == 'fmm': method = options.FMM_METHOD
-        else: method = options.DIRECT_METHOD
+        if self.__velocityComputationParams['method'] == 'fmm': method = blobOptions.FMM_METHOD
+        else: method = blobOptions.DIRECT_METHOD
 
         # compute the velocity at the evaluation points
         # computes de velocity with fmm or direct depending on tol
@@ -734,16 +736,16 @@ class Blobs(object):
         """
 
         # convert the hardware flag into an int to use in _base_convection
-        if self.__velocityComputationParams['hardware'] == 'gpu': hardware = options.GPU_HARDWARE
-        else: hardware = options.CPU_HARDWARE
+        if self.__velocityComputationParams['hardware'] == 'gpu': hardware = blobOptions.GPU_HARDWARE
+        else: hardware = blobOptions.CPU_HARDWARE
 
         # convert the method flag into an int to use in _base_convection
-        if self.__velocityComputationParams['method'] == 'fmm': method = options.FMM_METHOD
-        else: method = options.DIRECT_METHOD
+        if self.__velocityComputationParams['method'] == 'fmm': method = blobOptions.FMM_METHOD
+        else: method = blobOptions.DIRECT_METHOD
 
         # convert the time integration method into an int to use in _base_convection
-        if self.__timeIntegrationParams['method'] == 'rk4': integrator = options.RK4_INTEGRATOR
-        elif self.__timeIntegrationParams['method'] == 'euler': integrator = options.FE_INTEGRATOR
+        if self.__timeIntegrationParams['method'] == 'rk4': integrator = blobOptions.RK4_INTEGRATOR
+        elif self.__timeIntegrationParams['method'] == 'euler': integrator = blobOptions.FE_INTEGRATOR
 
         # convection step
         xBlobTemp,yBlobTemp,gBlobTemp = _base_convection(self.__deltaTc,self.__x,self.__y,self.__g,self.__sigma,
@@ -1772,10 +1774,10 @@ class Blobs(object):
         """
         
         # integrationMethod
-        if timeIntegrationParams['method'] not in options.time_integrator_options:
+        if timeIntegrationParams['method'] not in blobOptions.time_integrator_options:
             raise ValueError(('timeIntegrationParams[\'method\'] must be one of ' +\
-                             '\'%s\','*(len(options.time_integrator_options)-1) +\
-                             '\'%s\'.' + ' It is %s.') % (options.time_integrator_options + (str(timeIntegrationParams['method']),)))
+                             '\'%s\','*(len(blobOptions.time_integrator_options)-1) +\
+                             '\'%s\'.' + ' It is %s.') % (blobOptions.time_integrator_options + (str(timeIntegrationParams['method']),)))
 
 
     def __read_timeIntegrationParams(self,timeIntegrationParams):
@@ -1959,15 +1961,15 @@ class Blobs(object):
         """
         
         # check first the biot-savart computation option
-        if velocityComputationParams['method'] not in options.biot_savart_options:
+        if velocityComputationParams['method'] not in blobOptions.biot_savart_options:
             raise ValueError(('velocityComputationParams[\'mehtod\'] must be one of ' +\
-                             '\'%s\','*(len(options.biot_savart_options)-1) +\
-                             '\'%s\'.' + ' It is %s.') % (options.biot_savart_options + (str(velocityComputationParams['method']),)))
+                             '\'%s\','*(len(blobOptions.biot_savart_options)-1) +\
+                             '\'%s\'.' + ' It is %s.') % (blobOptions.biot_savart_options + (str(velocityComputationParams['method']),)))
         # check the hardware option
-        if velocityComputationParams['hardware'] not in options.hardware_options:
+        if velocityComputationParams['hardware'] not in blobOptions.hardware_options:
             raise ValueError(('velocityComputationParams[\'hardware\'] must be one of ' +\
-                             '\'%s\','*(len(options.hardware_options)-1) +\
-                             '\'%s\'.' + ' It is %s.') % (options.hardware_options + (str(velocityComputationParams['hardware']),)))
+                             '\'%s\','*(len(blobOptions.hardware_options)-1) +\
+                             '\'%s\'.' + ' It is %s.') % (blobOptions.hardware_options + (str(velocityComputationParams['hardware']),)))
 
     
     def __read_velocityComputationParams(self,velocityComputationParams):
@@ -2051,10 +2053,10 @@ class Blobs(object):
         """
         
         # check first the diffusion method used
-        if diffusionParams['method'] not in options.diffusion_method_options:
+        if diffusionParams['method'] not in blobOptions.diffusion_method_options:
             raise ValueError(('diffusionParams[\'method\'] must be one of ' +\
-                              '\'%s\','*(len(options.diffusion_method_options)-1) +\
-                              '\'%s\'.' + ' It is %s.') % (options.diffusion_method_options + (str(diffusionParams['method']),)))
+                              '\'%s\','*(len(blobOptions.diffusion_method_options)-1) +\
+                              '\'%s\'.' + ' It is %s.') % (blobOptions.diffusion_method_options + (str(diffusionParams['method']),)))
 
         # check the specific parameters for each diffusion method
 

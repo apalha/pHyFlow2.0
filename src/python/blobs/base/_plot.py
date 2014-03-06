@@ -30,7 +30,7 @@ __all__ = ['plotvorticity','plotvelocity','plotblobs']
 import numpy
 import pylab
 import dolfin
-from pHyFlow import options
+from pHyFlow.blobs import blobOptions
 
 from pHyFlow.blobs.base.induced import velocity
 from pHyFlow.blobs.base.induced import vorticity,vorticity_blobs
@@ -337,20 +337,20 @@ def plotvorticity(xBounds,yBounds,xBlob,yBlob,wBlob,sigma,overlap,k=2,kernel=1,\
                    1- Added title option. (2013-07-16)
     """    
     
-    if wType == options.WBLOB_VORTICITY: # use blobs circulation
-        if plotType == options.PYLAB_PLOT: # use pylab plot
+    if wType == blobOptions.WBLOB_VORTICITY: # use blobs circulation
+        if plotType == blobOptions.PYLAB_PLOT: # use pylab plot
             figureHandle = _plotvorticity_blobs_pylab(xBounds,yBounds,xBlob,yBlob,wBlob,sigma,overlap,figureHandle,title)
         
-        if plotType == options.DOLFIN_PLOT: # use dolfin plot
+        if plotType == blobOptions.DOLFIN_PLOT: # use dolfin plot
             figureHandle = _plotvorticity_blobs_dolfin(xBounds,yBounds,xBlob,yBlob,wBlob,sigma,overlap,figureHandle,title,interactive)
         
-    elif wType == options.WFUNCTION_VORTICITY: # use blobs function
-        if plotType == options.PYLAB_PLOT: # use pylab plot                
+    elif wType == blobOptions.WFUNCTION_VORTICITY: # use blobs function
+        if plotType == blobOptions.PYLAB_PLOT: # use pylab plot                
             figureHandle = _plotvorticity_function_pylab(xBounds,yBounds,\
                                                          xBlob,yBlob,wBlob,sigma,k,kernel,\
                                                          nPlotPoints,hardware,blocksize,method,figureHandle,title)
                                                          
-        if plotType == options.DOLFIN_PLOT: # use dolfin plot                
+        if plotType == blobOptions.DOLFIN_PLOT: # use dolfin plot                
             figureHandle = _plotvorticity_function_dolfin(xBounds,yBounds,\
                                                           xBlob,yBlob,wBlob,sigma,k,kernel,\
                                                           nPlotPoints,hardware,blocksize,method,figureHandle,title,interactive)                                                         
