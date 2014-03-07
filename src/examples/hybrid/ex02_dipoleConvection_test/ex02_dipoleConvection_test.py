@@ -108,7 +108,6 @@ lagrangian = pHyFlow.lagrangian.LagrangianSolver(blobs,panels=None)
 
 #------------------------------------------------------------------------------
 
-
 #-----------------------------------------------------------------------------    
 # Setup the navier-stokes problem - Eulerian domain
 
@@ -148,6 +147,9 @@ lagrangian = pHyFlow.lagrangian.LagrangianSolver(blobs,panels=None)
 
 meshFilePath = './geometry/dipoleConvection_Re-625_vertices-2k_MPI.xml.gz'
 boundaryDomainsFilePath = './geometry/dipoleConvection_Re-625_vertices-2k_MPI_facet_region.xml.gz'
+
+xMeshBounds = np.array([-0.5,0.5])
+yMeshBounds = np.array([-0.25,0.25])
 #---------------------------
 
 
@@ -158,12 +160,12 @@ geometry = {'mesh' : meshFilePath,
             'thetaLocal': 0.} # radians
 
 # Probe Grid Parameters
-probeL = np.array([1.0,0.5]) # guess
-origin = np.array([-0.5,-0.25])
-probeN = np.int64(np.round(probeL / h))
-probeL = probeN*h # to ensure the correct grid spacing
-origin = -np.round(probeN*0.5)*h
+probeL = np.array([1.0,0.5]) # initial guess from the probe grid length
+probeN = np.int64(np.round(probeL / h)) + 1 # number space + 1 = number of points
+probeL = (probeN-1)*h # determine the new length
+origin = -np.round(probeN*0.5)*h # cmLocal = (0.,0.)
 
+# Append data to dict
 probeGridParams = {'origin' : origin,
                    'L' : probeL,
                    'N' : probeN}          
@@ -172,11 +174,12 @@ probeGridParams = {'origin' : origin,
 cfl = 0.95 # CFL number
 uMax = 12.0
 
-
 # Initialize the navierStokes problem
 eulerian = pHyFlow.eulerian.EulerianSolver(geometry,probeGridParams,
                                            uMax=uMax,nu=nu,cfl=cfl,
                                            deltaT=5e-5)
+
+eulerian.plotVorticity = True
   
 # Concatenate all the navier-stokes domains
 # TODO: temporary, will implement a multi-ns class
@@ -258,10 +261,10 @@ interpolationRegions = {}
 for subDomain in multiEulerian.subDomainKeys:
 
     # Get the limits of the navier-stokes boundary
-    xMin = multiEulerian[subDomain].getBoundaryCoordinates()[0].min()
-    xMax = multiEulerian[subDomain].getBoundaryCoordinates()[0].max()
-    yMin = multiEulerian[subDomain].getBoundaryCoordinates()[1].min()
-    yMax = multiEulerian[subDomain].getBoundaryCoordinates()[1].max()
+    xMin = xMeshBounds[0]
+    xMax = xMeshBounds[1]
+    yMin = yMeshBounds[0]
+    yMax = yMeshBounds[1]
     
     # Define the boundary polygon (closed loop)
     xBoundaryPolygon = np.array([xMin+dBdry, xMax-dBdry, xMax-dBdry,xMin+dBdry,xMin+dBdry])
@@ -284,7 +287,7 @@ couplingParams={'adjustLagrangian':True,
                 'adjustLagrangianAt':'start',
                 'eulerianInitialConditions': 'lagrangian_field'}
 
-interpolationParams={'algorithm':'scipy_griddata',
+interpolationParams={'algorithm':'structuredProbes_manual',
                      'method':'linear'}
 
 # Initialize the hybrid problem
@@ -300,20 +303,15 @@ hybrid = pHyFlow.hybrid.HybridSolver(lagrangian=lagrangian,
 
 # Export the navier-stokes and blobs
 
-# Define navier-stokes export files
-nsVFileName = './data/ns_velocity.pvd'
-nsVFile = dolfin.File(nsVFileName)
+# Define eulerian export files
+eulerianFile = pHyFlow.IO.File('./data/eulerian.pvd')
 
-nsWFileName = './data/ns_vorticity.pvd'
-nsWFile = dolfin.File(nsWFileName)
-
-blobsFileName = './data/blobs.pvd'
-blobsFile = pHyFlow.IO.File(blobsFileName)
-
+# Define the blob export file
+blobsFile = pHyFlow.IO.File('./data/blobs.pvd')
 
 # Export initial data
-nsVFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.u1, hybrid.multiEulerian.t)
-blobsFile << blobs
+eulerianFile << hybrid.multiEulerian['eulerian']
+blobsFile << hybrid.lagrangian.blobs
 
 #------------------------------------------------------------------------------
 
@@ -336,6 +334,7 @@ totalCirculationTime[0] =  hybrid.lagrangian.blobs.g.sum()
 for timeStep in range(1,nTimeSteps+1):
     
     startTime = time.time()
+    
     # Evolve the coupled navier-stokes and vortex method
     hybrid.evolve(cmGlobalNew, thetaLocalNew, cmDotGlobalNew, thetaDotLocalNew)
     
@@ -345,8 +344,8 @@ for timeStep in range(1,nTimeSteps+1):
     
     # Export initial data
     if timeStep % 1 == 0:
-        nsVFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.u1, hybrid.multiEulerian.t)
-        nsWFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.vorticity(), hybrid.multiEulerian.t)
+        # Export data
+        eulerianFile << hybrid.multiEulerian['eulerian']
         blobsFile << hybrid.lagrangian.blobs
     
     numBlobsTime[timeStep] =  hybrid.lagrangian.blobs.numBlobs

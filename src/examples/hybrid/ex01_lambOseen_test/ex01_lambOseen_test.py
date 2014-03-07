@@ -290,7 +290,7 @@ hybrid = pHyFlow.hybrid.HybridSolver(lagrangian=lagrangian, # either vortex-blob
 #-----------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Evolve
+# Export results
 
 # Export the navier-stokes and blobs
 
@@ -325,6 +325,7 @@ totalCirculationTime[0] =  hybrid.lagrangian.blobs.g.sum()
 for timeStep in range(1,nTimeSteps+1):
     
     startTime = time.time()
+
     # Evolve the coupled navier-stokes and vortex method
     hybrid.evolve(cmGlobalNew, thetaLocalNew, cmDotGlobalNew, thetaDotLocalNew)
 
