@@ -260,6 +260,28 @@ class File:
     def __saveDolfinObject(self, dataObject):
         r"""
         Function to save the dolfin data object
+
+        Usage
+        -----
+        .. code-block :: python
+
+            __saveDolfinObject(dataObject)
+
+        Parameters
+        ----------
+        dataObject : pHyFlow.eulerian.EulerianSolver
+                     The dataObject to be saved to the file.
+
+        Returns
+        -------
+
+        Attributes
+        ----------
+
+        :First Added:   2014-03-07
+        :Last Modified: 2014-03-07
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version        
         """
         
         # Make dolfin data file object

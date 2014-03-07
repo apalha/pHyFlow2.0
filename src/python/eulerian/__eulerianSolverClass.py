@@ -986,7 +986,8 @@ class EulerianSolver(object):
         xProbes, yProbes : numpy.ndarray(float64), shape (nxProbes,nyProbes)
                            the *local* :math:`x,y` coordinates of the probe grid mesh.
         """
-        # TODO: transform to global coordinate system
+        # TODO: make sure that this being in local coordinates
+        # does not cause any problem
         return self.__xyProbes
 
     @simpleGetProperty        

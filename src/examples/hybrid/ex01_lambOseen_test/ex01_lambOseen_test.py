@@ -145,8 +145,8 @@ dolfin.File(boundaryDomainsFilePath) << boundaryDomains
 # Define the geometry parameters
 geometry = {'mesh' : meshFilePath,
             'boundaryDomains': boundaryDomainsFilePath,
-            'cmGlobal': np.array([0.,1.]),
-            'thetaLocal': 0.} # radians
+            'cmGlobal': np.array([1.,0.]),
+            'thetaLocal': np.pi*0.25} # radians
 
 # Probe Grid Parameters
 probeL = np.array([3.0,3.0]) # guess

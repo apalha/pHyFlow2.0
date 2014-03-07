@@ -21,7 +21,7 @@ Implemented NS Algorithms
 
 
 :First Added:   2014-02-25
-:Last Modified: 2014-02-25                         
+:Last Modified: 2014-03-07                     
 :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
 :License:       GNU GPL version 3 or any later version
 """
@@ -47,8 +47,6 @@ __all__ = ['HybridSolver']
 
 # External packages
 import numpy as _numpy
-import pylab as py
-py.ion()
 #import time as _time
 
 # Import point in polygon search function
@@ -807,8 +805,8 @@ class HybridSolver(object):
     def __interpolateVorticity_structuredProbes_manual(self,xBlobNewList,yBlobNewList):
         r"""
         
-        #TODO: !!!! BUG HERE !!!! USING SCIPY
         # TODO: Re-define the interpolation 
+        
         Function to interpolate the circulation (vorticity * area) from the
         navier-stokes domain.
         
@@ -890,12 +888,16 @@ class HybridSolver(object):
             # Make references to navier-stokes structured grid location
             cmGlobal = self.multiEulerian[subDomainID].cmGlobal
             thetaLocal = self.multiEulerian[subDomainID].thetaLocal
+
+            # Determine the rotational matrix
+            rotMat = _numpy.array([[_numpy.cos(thetaLocal), -_numpy.sin(thetaLocal)],
+                                   [_numpy.sin(thetaLocal), _numpy.cos(thetaLocal)]]) 
  
             # Make references to probe grid parameters
             probeGridParams = self.multiEulerian[subDomainID].probeGridParams
             
-            # Determine the origin in global coordinates
-            originGrid = probeGridParams['origin'] + cmGlobal # (x,y) origin in global coordinate system
+            # Determine the origin in global coordinates (rotate and displace)
+            originGrid = _numpy.dot(rotMat,probeGridParams['origin']) + cmGlobal # (x,y) origin in global coordinate system
             
             # Determine the grid spacing of probe grid
             hGrid = probeGridParams['L']/(probeGridParams['N']-1) # (hx',hy') in local coordinate system
@@ -907,18 +909,10 @@ class HybridSolver(object):
             LyBlob = - (xBlobNewList[i]-originGrid[0])*_numpy.sin(thetaLocal) \
                      + (yBlobNewList[i]-originGrid[1])*_numpy.cos(thetaLocal)
             
-            #print LxBlob
-            #print LyBlob
-            #            py.figure()
-            #            py.plot(LxBlob,LyBlob,'b.')
-            #            print originGrid
-            #            py.figure()
-            #            py.plot(xBlobNewList[i],yBlobNewList[i],'b.')
-             # Indexing the particles w.r.t to the origin
+            # Indexing the particles w.r.t to the origin
             xLIndex = _numpy.int64(_numpy.floor(LxBlob/hGrid[0]))
             yLIndex = _numpy.int64(_numpy.floor(LyBlob/hGrid[1]))
-                
-
+             
             # Distance of each blob from it's lower left grid box
             xPrime = LxBlob - xLIndex*hGrid[0]
             yPrime = LyBlob - yLIndex*hGrid[1]
@@ -938,9 +932,9 @@ class HybridSolver(object):
                         h3*wGrid[yLIndex+1,xLIndex+1]   +\
                         h4*wGrid[yLIndex+1,xLIndex]) * (self.lagrangian.blobs.h**2) # Circulation = vort * area     
 
-
+            # Append the data to the list
             gBlobNewList.append(gBlobNew)
-            
+        # Determine the total circulation in each domains
         self.__totalCirculationAdded = _numpy.array([listItem.sum() for listItem in gBlobNewList])
             
         return gBlobNewList
@@ -966,13 +960,20 @@ class HybridSolver(object):
         # Iterate through all the sub domains (each mesh) of the navier-stokes
         for i,subDomainID in enumerate(self.multiEulerian.subDomainKeys):
         
-            # Get the coordinates
+            # Get the mesh positions and local rotational angle
             cmGlobal = self.multiEulerian.subDomains[subDomainID].cmGlobal
-            # Stack coordinates
-            x,y = self.multiEulerian.subDomains[subDomainID].probeGridMesh + cmGlobal.reshape(2,1,1)
+            thetaLocal = self.multiEulerian.subDomains[subDomainID].thetaLocal
             
-            # Reshape the data to (M,2)
-            xy = _numpy.vstack((x.flatten(),y.flatten())).T
+            # Get the local coordinates of the probeGrid mesh
+            xLocal,yLocal = self.multiEulerian.subDomains[subDomainID].probeGridMesh
+            
+            # Determine the rotational matrix
+            rotMat = _numpy.array([[_numpy.cos(thetaLocal), -_numpy.sin(thetaLocal)],
+                                   [_numpy.sin(thetaLocal), _numpy.cos(thetaLocal)]])
+                                   
+            # Reshape and update the coordinates of the mesh
+            xy = _numpy.dot(rotMat, _numpy.vstack((xLocal.flatten(),
+                                                   yLocal.flatten()))).T + cmGlobal
             
             # Retrieve the vorticity
             w = self.multiEulerian.subDomains[subDomainID].getVorticity()
@@ -980,13 +981,14 @@ class HybridSolver(object):
             # Reshape the vorticity data
             ww = w.flatten()
             
-            # Interpolate vorticity to grid
-            wBlobNew = _griddata(xy,ww,(xBlobNewList[i],yBlobNewList[i]), method=self.__interpolationParams['method'])
+            # Interpolate vorticity to grid, multiply by area to get the circulation
+            gBlobNew = _griddata(xy,ww,(xBlobNewList[i],yBlobNewList[i]), 
+                                 method=self.__interpolationParams['method']) * (self.lagrangian.blobs.h**2)
                  
-            gBlobNew = wBlobNew * (self.lagrangian.blobs.h**2)
-            
+            # Append data to the list
             gBlobNewList.append(gBlobNew)
             
+        # Determine circulation added to each interpolation region
         self.__totalCirculationAdded = _numpy.array([listItem.sum() for listItem in gBlobNewList])
             
         return gBlobNewList  
@@ -1036,7 +1038,7 @@ class HybridSolver(object):
             # Reference the solver
             solver = self.multiEulerian.subDomains[subDomainID]._EulerianSolver__solver
             
-            # Extract the coordinates
+            # Extract the coordinates (global coordinates)
             x,y = solver.X.dofmap().tabulate_all_coordinates(solver.mesh).reshape(-1,2).T.copy()
             
             # Reshape
