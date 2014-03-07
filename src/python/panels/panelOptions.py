@@ -20,7 +20,7 @@ Define panel options
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
 # First added:  2014-02-20                                                                                                          
-# Last changed: 2014-02-17
+# Last changed: 2014-03-06
 # -*- coding: utf-8 -*-
 ##############################################################################
 
@@ -45,12 +45,19 @@ VELOCITY_COMPUTATION_HARDWARE = {'default'      : 'cpu',
                                  'available'    : ('cpu')}
 
 # Solver computation parameters
-SOLVER_COMPUTATION_METHOD = {'default'  : 'bicgstab',
+# Method of solving the linear system of equation of the panel method
+# 'bicgstab' : BIConjugate Gradient STABilized iteration to solve A x = b
+# 'gmres' : Use Generalized Minimal RESidual iteration to solve A x = b
+# 'direct' : Directly solve the linear system A x = b
+SOLVER_COMPUTATION_METHOD = {'default'  : 'bicgstab', 
                              'available': ('direct', 'gmres', 'bicgstab')}
-
+                                                                             
 # Solver computation tolerance
+# Iterative solver relative and absolute tolerance
 SOLVER_COMPUTATION_TOL = {'default': 1e-12}
 
+# Parameters to assemble the influence matrix (A) of the panel problem
+# 'all' : recompute all the matrix elements (* Note: it is inefficient)
 SOLVER_COMPUTATION_ASSEMBLE = {'default'  : 'all',
                                'available': ('all')}
 

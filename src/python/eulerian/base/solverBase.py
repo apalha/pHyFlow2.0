@@ -10,7 +10,7 @@ import dolfin       # FEniCS/DOLFIN
 import numpy
 
 # Import pHyFlow packages
-from pHyFlow.aux.customDecorators import simpleGetProperty
+#from pHyFlow.aux.customDecorators import simpleGetProperty
 
 # Import eulerian functions
 from pHyFlow.eulerian.base import boundary
@@ -179,11 +179,14 @@ class solverBase(object):
         
         # Get the mesh from the mesh location
         self.mesh = dolfin.Mesh(mesh)
+        
+        # Store the local mesh coordinates
+        self.mesh_localCoordinates = self.mesh.coordinates().copy()
             
         # Get the boundaryDomain from the location
         self.boundaryDomains =  dolfin.MeshFunction('size_t', self.mesh, boundaryDomains)
         
-        self.cmLocal = dolfin.Point() # (0,0,0.)
+        self.cmLocal = dolfin.Point() # (0.,0.,0.)
 
         # Determine boundary coordinates        
         #self.boundary_DOFCoordinates, self.boundary_VectorDOFIndex = boundary.locate_boundaryDOFs(self.mesh,self.boundaryDomains,3)     
@@ -440,48 +443,53 @@ class solverBase(object):
         
         # Collect all the boundary conditions
         self.bcVelocity = [self.bcNoSlip, self.bcExt]
-
-
-    def rotateMesh(self,thetaLocal):
-        r"""
-        Function to rotate the mesh around the local  reference point
-        **cmLocal** at (0.,0.). I.e around its global reference point 
-        **cmGlobal**.
         
-        * Note: Positive rotation in anti-clockwise direction.
+    
+    def updateMeshPosition(self, cmGlobal, thetaLocal):
+        r"""
+        Function to update the position of the mesh.
         
         Usage
         -----
         .. code-block:: python
-
-            rotateMesh(thetaLocal)
+            
+            updateMeshPosition(cmGlobal, thetaLocal)
             
         Parameters
         ----------
-        thetaLocal : float
+        cmGlobal : numpy.ndarray(float64), shape (2,)
+                   the :math:`x,y` position of the mesh local reference
+                   point (0.,0.) in the global coordinates.   
+        
+        thetaLocal : float, unit (rad)
                      the local rotational angle :math:`\theta` of the mesh 
                      domain. Therefore, the rotation will be done about local 
                      reference point (0.,0.), i.e cmGlobal in the global
                      coordinate system.
-                     
+        
         Returns
         -------
-        None returned.
-
+        None
+        
         Attributes
         ----------
         mesh : dolfin.cpp.mesh.mesh
-               the fluid mesh class                           
-
-        :First Added:   2014-02-20
-        :Last Modified: 2014-02-21
+               the fluid mesh class at the new global position
+            
+        :First Added:   2014-03-06
+        :Last Modified: 2014-03-06
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version    
-
+        :Licence:       GNU GPL version 3 or any later version                
+               
         """
-        # Rotate the mesh around cmLocal
-        #   input takes angles in degrees
-        self.mesh.rotate(numpy.rad2deg(thetaLocal),2,self.cmLocal)
+        # Reset the mesh coordinates (global) to local coordinates
+        self.mesh.coordinates()[:] = self.mesh_localCoordinates
+     
+        # Rotate the mesh by thetaLocal around (0.,0.)
+        self.mesh.rotate(numpy.rad2deg(thetaLocal),2,self.cmLocal) # cmLocal = [0.,0.]
+    
+        # Move the mesh to new global position cmGlobal.
+        self.mesh.coordinates()[:] += cmGlobal #
         
 
     def epsilon(self, u):
@@ -551,16 +559,22 @@ class solverBase(object):
         
         # return the total forces
         return numpy.array([Fx, Fy])
-                                           
-                                           
-        
-        
-    @simpleGetProperty
-    def boundary_DOFCoordinates(self):
+                     
+                     
+    def vectorDOF_boundaryCoordinates(self):
         r"""
-        boundary_DOFCoordinates : numpy.ndarray(float64), shape (2,n_boundaryDOFs)
-                                  the :math:`x,y` boundary coordinates of the 
-                                  vector DOFs.
+        vectorDOF_boundaryCoordinates : numpy.ndarray(float64), shape (2,nVectorBoundaryDOFs)
+                                        the :math:`x,y` boundary coordinates of the 
+                                        vector DOFs.
         """
         # Extract the boundary coordinates from complete vector dof coordiantes
-        return (boundary.vectorDOF_coordinates(self.mesh,self.V)[:,self.boundary_VectorDOFIndex[0]]).copy()
+        return numpy.copy(boundary.vectorDOF_coordinates(self.mesh,self.V)[:,self.boundary_VectorDOFIndex[0]])
+        
+        
+    def vectorDOF_coordinates(self):
+        r"""
+        vectorDOF_coordinates : numpy.ndarray(float64), shape (2,nVectorDOFs)
+                                the :math:`x,y` coordinates of the vector DOFs.
+        """
+        # return the copy of the reshaped, unrepeated (unique) vector DOFs coordinates
+        return numpy.copy(self.V.dofmap().tabulate_all_coordinates(self.mesh).reshape(-1,2).T[:,::2])

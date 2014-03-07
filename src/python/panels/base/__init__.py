@@ -21,4 +21,5 @@ This module handles all panel method related operations in python
 # First added:  2013-02-12                                                                                          
 # Last changed: 2013-02-12
 
+# import panel solver
 import panelSolver

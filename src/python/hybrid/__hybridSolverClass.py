@@ -47,10 +47,13 @@ __all__ = ['HybridSolver']
 
 # External packages
 import numpy as _numpy
+import pylab as py
+py.ion()
 #import time as _time
 
 # Import point in polygon search function
 from matplotlib.nxutils import points_inside_poly as _points_inside_poly
+# Scipy interpolation for unstructured 2D grid data
 from scipy.interpolate import griddata as _griddata
 
 # Import pHyFlow packages
@@ -70,74 +73,234 @@ class HybridSolver(object):
     -----
     .. code-block:: python
     
-        Hybrid(lagrangian,multiEulerian,interpolationRegion)
+        Hybrid(lagrangian, multiEulerian, interpolationRegions,
+               couplingParams={'adjustLagrangian': True,
+                               'adjustLagrangianAt': 'start',
+                               'eulerianInitialConditions': 'lagrangian_field',
+               interpolationParams={'algorithm': 'structured_probes',
+                                    'method': 'linear'}
                
         
     Parameters
     ----------
-#    blobs : pHyFlow.vortex.VortexBlobs
-#            the vortex blob class containing all the parameters that define
-#            the vortex-blob problem
-#    
-#    panels : pHyFlow.panels.Panels
-#             the panel class containing all the parameters that define the
-#             panel problem.
-#    
-#    couplingParams : dict, optional
-#                     Dictionary containing parameters for coupling the
-#                     panels and the blobs together.
-#                     
-#                     'panelStrengthUpdate' : str
-#                                             String parameters specifying if
-#                                             panel strength should be updated
-#                                             during the mult-step time integration
-#                                             scheme (such as RK4).
-#                                             
-#                                             'constant' : solve for panel strength
-#                                                          only in the beginning.
-#                                              'varying' : constantly update
-#                                                          the panel strength depending
-#                                                          on the sub-step position
-#                                                          of the particles.
-                          
+    lagrangian : pHyFlow.lagrangian.LagrangianSolver
+                 the lagrangian solver class contains all the parameters 
+                 related to simulation the flow in lagrangian sub-domain.
+                 
+    multiEulerian : pHyFlow.eulerian.MultiEulerianSolver
+                    the multiEulerian is solver class containing all the 
+                    eulerian sub-domains of the hybrid problem. 
+                    
+    interpolationRegions : dict of dict, nBodies of dict
+                           the dictionary containing the 'surfacePolygon' and
+                           'boundaryPolygon' defining the boundaries of the
+                           interpolation region for each eulerian sub-domains.
+                           The geometry is identified by the keys of the 
+                           eulerian sub-domain found in 'multiEulerian'. The 
+                           coordinates are defined in local coordinate system 
+                           of the eulerian grid and will be transformed (rotated 
+                           + moved) during the evolution step.
+                           
+                           Format : {'<eulerianSubDomainKey>' : {'surfacePolygon': surfacePolygonArray,
+                                                                 'boundaryPolygon': boundaryPolygonArray}}
+                           
+                           'eulerianSubDomainKey' : str, nBodies of keys
+                                                    the name (key) of the eulerian
+                                                    sub-domain used in 'multiEulerian'
+                                                    that is used to define it.
+                                                    
+                            'surfacePolygon': numpy.ndarray(float64), shape (nPoints, 2)
+                                              the local :math:`x` and :math:`y` coordinates of
+                                              the interpolation polygon around the surface of
+                                              the eulerian no-slip boundary (surface). The
+                                              surface polygon should be closed loop.
+                                              
+                                              Stock [1]_ has determined that polygon should be
+                                              more that :math:`d_{surf} h_{blob}` from the body
+                                              to give room for the width of the interpolation
+                                              kernel and the extra room for potential inaccuracies.
+                                              
+                                              From stock : dSurf = dClip + 2
+                                              where dClip = 1 (at high Re) is used to avoid noise
+                                              in interpolation.
+                                              
+                            'boundaryPolygon' : numpy.ndarray(float64), shape (nPoints, 2)
+                                                the local :math:`x` and :math:`y` coordinates of
+                                                the interpolation polygon around the exterior
+                                                mesh boundary of the eulerian sub-domain. The
+                                                boundary polygon be closed loop.
+                                                
+                                                Stock has defined that boundary polygon should be
+                                                :math:`d_{bdry} h_{blob}` from the eulerian 
+                                                exterior mesh boundary to give room for width of the
+                                                interpolation kernel.
+                                                
+                                                From stock:  dBdry = 2
+   
+    couplingParams : dict, optional
+                     Dictionary containing parameters for coupling the
+                     lagrangian and the multiEulerian solvers.
+                     
+                     'adjustLagrangian' : bool, default (True)
+                                          the boolean status determining whether
+                                          we should correct/adjust/modify the
+                                          lagrangian solution during the evolution
+                                          step. If False, then the coupling is only
+                                          done from lagrangian to eulerian.
+                                          
+                                          True : Correct the blobs
+                                          False : Don't correct the blobs. Only trans
+                                          
+                     'adjustLagrangianAt': str, default ('start')
+                                           the string determine when to correct the
+                                           lagrangian solution. 
+                                           
+                                           'start' : correct the blobs before we 
+                                                     evolve (convect + diffuse) the
+                                                     particles.
+                                                     
+                                           'end' : correct the blobs only after we
+                                                   evolve the lagrangian and the 
+                                                   eulerian subdomains to t_{n+1}.
+                                                                                                        
+                     'eulerianInitialConditions': str, default ('lagrangian_field')
+                                                  the string determine what the initial
+                                                  condition of the eulerian subdomain
+                                                  should be. 
+                                                  
+                                                  'lagrangian_field' : replace the velocity field
+                                                                       of the eulerian subdomains
+                                                                       with the lagrangian velocity
+                                                                       field.
+                                                                       
+                                                  'eulerian_field' : keep the currect velocity
+                                                                     of the eulerian subdomains.
+
+    interpolationParams : dict, optional
+                          dictionary containing the parameters for the 
+                          interpolation of the vorticity (circulation) from the
+                          eulerian subdomains to the lagrangian domain.
+    
+                          'algorithm' : str, default ('unstructured_scipy')
+                                        the algorithm that should be used to 
+                                        interpolated the vorticity from eulerian
+                                        domain onto lagrangian blobs.
+                                        
+                                        'unstructured_scipy' : this is a direct interpolation from
+                                                               the eulerian Finite Element vorticity
+                                                               function space DOF coordinates onto
+                                                               the lagrangian blobs using the scipy's
+                                                               'griddata' interpolation function.
+                                                               
+                                        'structuredProbes_manual' : this is manual interpolation of the vorticity
+                                                                    from the structured grid probes of the
+                                                                    eulerian subdomain onto lagrangian blobs
+                                                                    using bi-linear interpolation. The 
+                                                                    interpolation is done directly by manually
+                                                                    determining the weights of the bi-linear
+                                                                    interpolation.
+                                                                    
+                                         'structuredProbes_scipy' : this is an interpolation of the vorticity
+                                                                    from the structured grid probes using
+                                                                    the scipy's 'griddata' interpolation function.
+
     Attribute
     ---------
-#    blobs : pHyFlow.vortex.VortexBlobs
-#            the vortex-blobs class is assigned
-#            
-#    deltaT
-#    
-#    panels : pHyFlow.panels.Panels
-#             the panel blass    
-#             
-#    t
-#    tStep
-#    vInf    
-#
-#    __couplingParams : dict
-#                       Dictionary containing parameters for coupling the
-#                       panels and the blobs together.  
+    deltaTEulerian
+    deltaTLagrangian
+    nu
+    t
+    tStep
+    vInf
+
+    interpolationRegion : dict of dict, nBodies of dict
+                          the dictionary containing the global coordinates
+                          of the 'surfacePolygon' and 'boundaryPolygon'
+                          defining the boundaries of the interpolation region
+                          for each eulerian sub-domains.
+            
+
+    lagrangian : pHyFlow.lagrangian.LagrangianSolver
+    
+    multiEulerian : pHyFlow.eulerian.MultiEulerianSolver
+    
+    __couplingParams : dict
+                       the dictionary containing parameters for coupling the
+                       lagrangian and the multiEulerian solvers.
+
+    __epsilon : float
+
+    __interpolationParams : dict
+                            dictionary containing the parameters for the 
+                            interpolation of the vorticity (circulation) from the
+                            eulerian subdomains to the lagrangian domain.
+
+    __interpolationRegions : dict of dict, nBodies of dict
+                             the dictionary containing the local coordinates
+                             of the 'surfacePolygon' and 'boundaryPolygon'
+                             defining the boundaries of the interpolation region
+                             for each eulerian sub-domains.
+
+    __lossInCirculation  : float
+    __totalCirculationAdded  : float
+    __totalCirculationAfterAdd  : float
+    __totalCirculationBeforeRemove  : float
+   
+    __vxyBoundary : numpy.ndarray(float64), shape (2, nEulerianBoundaryDOFs)
+                    the current/old (not the new) boundary velocity at the
+                    eulerian boundary vector DOFs. This variables is used
+                    to determine the velocity at the sub-steps of the 
+                    eulerian evolution.
     
     Methods
     -------
-#    evolve
-#    evaluateVelocity
-#    __coupled_convection
-#    __advanceTime
-#    __set
-#    __mute_blobs_evolve
-#    
-#    :First Added:   2014-02-26
-#    :Last Modified: 2014-02-26                         
-#    :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
-#    :License:       GNU GPL version 3 or any later version   
-   
+    evolve
+        evolve the coupled problem
+    
+    __correctBlobs
+        correct the strengths of the blobs from eulerian
+
+    __generateBlobCoordinates
+        generate new blobs (only coordinates) inside the interpolation region
+
+    __interpolateVorticity_structuredProbes_manual
+        interpolate vorticity from the structured probes manually
+
+    __interpolateVorticity_structuredProbes_scipy
+        interpolate vorticity from the structured probes using scipy
+
+    __interpolateVorticity_unstructured_scipy
+        interpolate vorticity directly from the function space of vorticity using scipy
+        
+    __multiStep_eulerian
+        evolve the multiEulerian class with k substep to the lagrangian t
+
+    __removeBlobs
+        remove blobs inside the interpolation region
+
+    __set_deltaTEulerian    
+        determine the deltaT of eulerian subdomains such that it is a multiple
+        of the lagrangian deltaT
+        
+    __set_eulerianInitialConditions
+        replace the eulerian initial conditions with lagrangian
+        
+    __set_variables
+        check and set variables
+
+    :First Added:   2014-02-26
+    :Last Modified: 2014-03-07
+    :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+    :License:       GNU GPL version 3 or any later version      
     """
     """
     Revisions
     ---------
     2014-02-26 : Lento Manickathan
                  - First added.
+
+    2014-03-07 : Lento Manickathan
+                - Documentation updated
 
     """
     
@@ -148,7 +311,6 @@ class HybridSolver(object):
                  interpolationParams={'algorithm':hybridOptions.INTERPOLATION_ALGORITHM['default'],
                                       'method':hybridOptions.INTERPOLATION_METHOD['default']}):
         
-        
         #---------------------------------------------------------------------
         # Check/Set input parameters
             
@@ -158,7 +320,6 @@ class HybridSolver(object):
         self.__set_variables('interpolationRegions', interpolationRegions)
         self.__set_variables('couplingParams',couplingParams)
         self.__set_variables('interpolationParams',interpolationParams)
-        
         #---------------------------------------------------------------------
                 
         #---------------------------------------------------------------------
@@ -167,7 +328,7 @@ class HybridSolver(object):
         # Should we use the solution of the lagrangian domain as the 
         # initial conditions for the eulerian domain
         if self.__couplingParams['eulerianInitialConditions'] == 'lagrangian_field':
-            self.__set_eulerianIC_fromLagrangianField()
+            self.__set_eulerianInitialConditions()
             
         #---------------------------------------------------------------------            
 
@@ -176,17 +337,18 @@ class HybridSolver(object):
         
         # Function to modify the eulerian time-step size such that
         # the lagrangian time-step is a multiple of eulerian time step
-        self.__set_eulerian_deltaT()
+        self.__set_deltaTEulerian()
            
         # Get the boundary velocity of the navier-stokes at the initial 
         # time-step.
-        #self.__vxyEulerianBoundary = self.navierStokes.getBoundaryVelocity()
-        self.__get_eulerian_initialBoundaryVelocity()
-        
+        self.__vxyEulerianBoundary = self.multiEulerian.getBoundaryVelocity()
+        #self.__get_eulerian_initialBoundaryVelocity()
         #---------------------------------------------------------------------
 
         #---------------------------------------------------------------------        
-        # Verify the coupling parameters
+        # Verify the coupling between lagrangian and eulerian
+        # Check if :math:`\Delta x_{probes} = h_{blob}`
+        # Check if :math:`nu_{Eulerian} = nu_{Lagrangian}`
 
         for i,subDomainID in enumerate(self.multiEulerian.subDomainKeys):
                 
@@ -194,7 +356,7 @@ class HybridSolver(object):
             probeGridParams = self.multiEulerian[subDomainID].probeGridParams
 
             # Determine the grid spacing of probe grid
-            hGrid = probeGridParams['L']/probeGridParams['N'] # (hx',hy') in local coordinate system
+            hGrid = probeGridParams['L']/(probeGridParams['N']-1) # (hx',hy') in local coordinate system
 
             # Ensure that grid spacing and blob spacing are same
             if _numpy.abs(hGrid[1]-hGrid[0]) > _numpy.spacing(1):
@@ -204,8 +366,13 @@ class HybridSolver(object):
                     
             if _numpy.abs(hGrid[0]-self.lagrangian.blobs.h) > _numpy.spacing(1):
                 print "NS sub-domain : %s, hGrid : %g, hBlob : %g" % (subDomainID,hGrid[0], self.lagrangian.blobs.h)
-                raise ValueError('Ensure grid spacing and blob spacing are the same !')        
-        
+                raise ValueError('Ensure grid spacing and blob spacing are the same !') 
+                
+            if (self.multiEulerian[subDomainID].nu - self.lagrangian.blobs.nu) > _numpy.spacing(1):
+                print "Eulerian nu\t: %g" % self.multiEulerian[subDomainID].nu              
+                print "Lagrangian nu\t: %g" % self.lagrangian.blobs.nu  
+                raise ValueError("The kinematic viscosity 'nu' for eulerian and lagrangian subdomains does not match !!")
+                
         #---------------------------------------------------------------------             
             
                 
@@ -225,17 +392,22 @@ class HybridSolver(object):
         Algorithm for the hybrid method
           - to couple navier-stokes with vortex-panels
           - see Daeninck _[1] and Stock _[2]
+
+        1. Update the position of the interpolation region
+            - Rotate and move the coordinates        
+
+            * Note: Not implemented !!         
         
-        1. 'Correct' the Lagrangian domain.
+        2. 'Correct' the Lagrangian domain.
              'Correct' the strengths of the vortex-particles that are 
              inside the interpolation region of the navier-stokes  domain.
              
-             1.1 Interpolate the solution of the navier-stokes domain on
+             2.1 Interpolate the solution of the navier-stokes domain on
                   to a structured grid (defined by probe mesh). The grid
                   spacing should of nominal particle spacing 
                   :math:`\Delta x_{grid} = \delta_{blob}`. 
          
-             1.2 Determine the blobs that are present in the interpolation
+             2.2 Determine the blobs that are present in the interpolation
                    region. The interpolation region is defined by two
                    polygons: surface polygon and boundary polygon. The 
                    surface polygon is :math:`d_{surf} \Delta x_{grid}` from
@@ -244,10 +416,10 @@ class HybridSolver(object):
                    boundary. From Stock: :math:`d_{surf}=3, d_{bdry}=2` for
                    high-Re.
                    
-             1.3 'Correct'/'Adjust'/'Reset' the strength of the blobs inside
+             2.3 'Correct'/'Adjust'/'Reset' the strength of the blobs inside
                     the region.
                    
-             1.4 Determine particles that are too-close the body. If
+             2.4 Determine particles that are too-close the body. If
                    the particles are within surface polygon, replace
                    with zero-circulation strength. This comes from the
                    assumption that all the vorticity near the body is
@@ -255,42 +427,42 @@ class HybridSolver(object):
                    particles does not enter the body during the diffusion
                    process.
             
-        2. Advance Lagrangian field (t -> t_{n+1})
+        3. Advance Lagrangian field (t -> t_{n+1})
              Time step the coupled vortex-panel using a multi-step
              time integration method.
              * Note: initially particles carry zero circulation but
              far-field velocity field is approximated by panels.
              
-             2.1 Determine the panel strengths to cancel the slip velocity
+             3.1 Determine the panel strengths to cancel the slip velocity
                    at the solid boundary (panel collocation points.)
              
-             2.2 Determine the aggregate velocity field of vortex blobs,
+             3.2 Determine the aggregate velocity field of vortex blobs,
                    the panels and the free-stream to convect the particles.
                     
-             2.3 Convect the blobs. 
+             3.3 Convect the blobs. 
                    If panel-strength is to be updated every sub-step, 
                    repeat steps (2.1 and 2.2) in between the RK steps.
                   
-             2.4 Diffuse the vortex blobs (when necessary).
+             3.4 Diffuse the vortex blobs (when necessary).
              
-             2.5 Redistribute and perform population control (when necessary)
+             3.5 Redistribute and perform population control (when necessary)
               
-             2.6 Advance the internal time of vortex-panel class.
+             3.6 Advance the internal time of vortex-panel class.
              
-        3. Determine the Eulerian boundary condition at (t_{n+1}).
+        4. Determine the Eulerian boundary condition at (t_{n+1}).
               Find the induced velocity acting on the navier-stokes 
               boundary dof coordinates.
               
-              3.1 Evaluate the aggregate induced velocity of panels,
+              4.1 Evaluate the aggregate induced velocity of panels,
                   blobs and free-stream at the navier-stokes dof
                   coordinates.
                   
-        4. Advance the eulerian domain (t -> t_{n+1})
+        5. Advance the eulerian domain (t -> t_{n+1})
              With the boundary conditions at t_{n+1}, solve for the
              velocity field and the pressure field at navier-stokes
              domain.
         
-             4.1 Evolve the navier-stokes using the boundary
+             5.1 Evolve the navier-stokes using the boundary
                   conditions. (update internal time)
                   
         Now, both Eulerian and hybrid domain at :math:`t_{n+1}`
@@ -310,12 +482,18 @@ class HybridSolver(object):
         Usage
         -----
         .. code-block:: python
-        #
-        #            evolve()
+        
+            evolve(cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew)
 
         Parameters
         ----------
-        #        None.
+        cmGlobalNew
+        
+        thetaLocalNew
+        
+        cmDotGlobalNew
+        
+        thetaDotLocalNew
         
         Returned
         --------
@@ -323,39 +501,36 @@ class HybridSolver(object):
 
         Attributes
         ----------
-        #        blobs : pHyFlow.vortex.VortexBlobs
-        #                the position and the strength of the blobs are updated
-        #                
-        #                x : numpy.ndarray(float64), shape (blobs.numBlobs, )
-        #                    the :math:`x`-position of the particle.
-        #                y : numpy.ndarray(float64), shape (blobs.numBlobs, )
-        #                    the :math:`y`-postion of the particles.
-        #                g : numpy.ndarray(float64), shape (blobs.numBlobs, )
-        #                    the circulation :math:`\Gamma` of the particles.
-        #                    
-        #        panels : pHyFlow.panels.Panels
-        #                 the strength of the panels are updated.
-        #                 
-        #                 sPanel : numpy.ndarray(float64), shape (panels.nPanelTotal, )
-        #                          the strength :math:`\gamma` of the panels.
-        #                  
-        #                 * Note: position update not implemented yet.
-        #         
-        #        t : float
-        #            the current time
-        #            
-        #        tStep : int
-        #                the current time step
+        lagrangian
+            blobs
+                x
+                y
+                g
+                t
+                tStep
+            panels
+                sPanel
+        
+        multiEulerian
+            eulerian
+                t
+                tStep
+                __solver
+                    u1
+                    p1
+                    vorticity
+                    
+        __vxyBoundary
          
         :First Added:   2014-02-26
-        :Last Modified: 2014-02-26
+        :Last Modified: 2014-03-07
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version
 
         """
         
         #----------------------------------------------------------------------
-        # Step 1 or 4: 'Correct' the Lagrangian domain.
+        # Step 2 or 4: 'Correct' the Lagrangian domain.
              
         # (a) Retrieve interpolated vorticity from navier-stokes domain
         # (b) Determine the blobs that are present in the interpolation region
@@ -367,7 +542,7 @@ class HybridSolver(object):
         # If lagrangian field is to update at the start 
         if self.__couplingParams['adjustLagrangianAt'] == 'start':
             if self.__couplingParams['adjustLagrangian'] == True:
-                self.__correct_blobStrength()   
+                self.__correctBlobs()   
         #----------------------------------------------------------------------                        
 
         #----------------------------------------------------------------------            
@@ -398,25 +573,22 @@ class HybridSolver(object):
         # If lagrangian field is to update at the end    
         if self.__couplingParams['adjustLagrangianAt'] == 'end':
             if self.__couplingParams['adjustLagrangian'] == True:
-                self.__correct_blobStrength()
+                self.__correctBlobs()
 
         #----------------------------------------------------------------------            
 
         #----------------------------------------------------------------------
         # Step 5 : Additional
 
-        # (a) Check if everything worked, assert t_{ns} == t_{vortex} 
-        #        self.vortex.blobs._advanceTime()
-
-        if _numpy.abs(self.lagrangian.t - self.multiEulerian.t) > _numpy.spacing(100):
-            raise ValueError('the simulation is not to sync !'\
-                             'eulerian t : %g\n '\
-                             'lagrangian t : %g' % (self.multiEulerian.t,self.lagrangian.t))
+        # Check if the solver are synchronized to the correct time
+        if _numpy.abs(self.lagrangian.t - self.multiEulerian.t) > _numpy.spacing(10):
+            print 'Eulerian t\t: %g' % self.multiEulerian.t
+            print 'Lagrangian t\t: %g' % self.lagrangian.t
+            raise ValueError('the simulation is not to sync !')
         #----------------------------------------------------------------------
 
-            
     
-    def __correct_blobStrength(self):
+    def __correctBlobs(self):
         r"""
 
         
@@ -447,14 +619,22 @@ class HybridSolver(object):
         #           blobs.
 
         #----------------------------------------------------------------------
+        # Step 1 : Update the position of the interpolation regions
+
+        # Calculate the global positions of the interpolation regions
+        self.__updatePosition_interpolationRegions()
+        
+        #----------------------------------------------------------------------
+
+
+        #----------------------------------------------------------------------
         # Step 1: Removed the current blobs inside the interpolation regions
 
         # Check the circulation before we remove
         self.__totalCirculationBeforeRemove = self.lagrangian.blobs.g.sum()
 
         # Remove blobs
-        self.__remove_old_blobs() #TODO: conservation of circulation
-        
+        self.__removeBlobs() #TODO: conservation of circulation
         #----------------------------------------------------------------------
         
         #----------------------------------------------------------------------
@@ -462,7 +642,7 @@ class HybridSolver(object):
         #         region.        
 
         # Returns the list of new particles in each sub-domain
-        xBlobNewList, yBlobNewList = self.__generate_blob_coordinates()
+        xBlobNewList, yBlobNewList = self.__generateBlobCoordinates()
         #----------------------------------------------------------------------
         
         #----------------------------------------------------------------------
@@ -471,29 +651,22 @@ class HybridSolver(object):
         #         region.
 
         # Return the list of corrected strengths
-        if self.__interpolationParams['algorithm'] == 'scipy_griddata':
-            gBlobNewList = self.__scipyInterpolate_strength_from_ns(xBlobNewList, yBlobNewList) #TODO: conservation of circulation
-            print 'scipy_griddata !!'
-        elif self.__interpolationParams['algorithm'] == 'structured_probes':
-            gBlobNewList = self.__interpolate_strength_from_ns(xBlobNewList,yBlobNewList) #TODO: conservation of circulation
-            print 'Structured probe interpolation not working!\nNeed to fix the error in structured probe interpolation !!'
-            #raise NotImplementedError('Structured probe interpolation not working!\nNeed to fix the error in structured probe interpolation !!')
-            gBlobNewList2 = self.__scipyInterpolate_strength_from_nsprobes(xBlobNewList,yBlobNewList) #TODO: conservation of circulation
+        #TODO: conservation of circulation
+        if self.__interpolationParams['algorithm'] == 'structuredProbes_manual':
+            gBlobNewList = self.__interpolateVorticity_structuredProbes_manual(xBlobNewList,yBlobNewList)
             
-            error = (_numpy.array(gBlobNewList) - _numpy.array(gBlobNewList2))/_numpy.array(gBlobNewList2)
-            print error
-            print _numpy.abs(error).max()
-
-        elif self.__interpolationParams['algorithm'] == 'scipy_probes':
-            print 'scipy interpolation from probes !!'
-            gBlobNewList = self.__scipyInterpolate_strength_from_nsprobes(xBlobNewList,yBlobNewList) #TODO: conservation of circulation
-            
+        elif self.__interpolationParams['algorithm'] == 'structuredProbes_scipy':
+            gBlobNewList = self.__interpolateVorticity_structuredProbes_scipy(xBlobNewList,yBlobNewList)
+        
+        elif self.__interpolationParams['algorithm'] == 'unstructured_scipy':
+            gBlobNewList = self.__interpolateVorticity_unstructured_scipy(xBlobNewList, yBlobNewList)
+        #----------------------------------------------------------------------        
 
         #----------------------------------------------------------------------        
         # Determine the change in circulation
         
         # Determine the change in circulation
-        self.__epsilon = _numpy.array(self.__totalCirculationRemoved / self.__totalCirculationAdded)
+        self.__epsilon = self.__totalCirculationRemoved / self.__totalCirculationAdded
 
         # Conserve circulation
         #gBlobNewList = _numpy.array(gBlobNewList*self.__epsilon)
@@ -505,94 +678,16 @@ class HybridSolver(object):
 
         # Add the new blobs to lagrangian field        
         self.lagrangian.blobs.addBlobs(_numpy.concatenate(xBlobNewList),
-                                   _numpy.concatenate(yBlobNewList),
-                                   _numpy.concatenate(gBlobNewList))
+                                       _numpy.concatenate(yBlobNewList),
+                                       _numpy.concatenate(gBlobNewList))
         
         # Check the circulation after we add
         self.__totalCirculationAfterAdd = self.lagrangian.blobs.g.sum()
         
         self.__lossInCirculation = self.__totalCirculationAfterAdd - self.__totalCirculationBeforeRemove
-        
+ 
 
-    def __remove_old_blobs(self):
-        r"""
-        Function to remove the old blobs inside the interpolation domain.
-        
-        Description
-        -----------
-        Step 1 of correcting blob strengths
-        
-        Methodology
-        -----------
-        1. Determine the current blobs that are present inside the outer
-           boundary of the interpolation region.
-           
-           1.1 Find blobs that are inside the bounding box of the interpolation
-               region.
-               
-           1.2 Find the blobs (which are inside the interpolation region),
-               that are also inside the outer boundary (boundary polygon) of
-               the interpolation region.
-        
-        2. Remove the blobs that are inside the boundary (outer) polygon.
-    
-        Parameters
-        ----------
-        
-        Returns
-        -------
-        
-        Attributes
-        ----------
-        
-        :First Added:   2014-02-28
-        :Last Modified: 2014-02-28
-        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version
-        """
-        
-        # Total circulation removed
-        self.__totalCirculationRemoved = []
-        
-        # Iterate through all the sub domains (each mesh) of the navier-stokes
-        for subDomainID in self.multiEulerian.subDomainKeys:
-            
-            # Make reference to the boundary polygon
-            #   Format: closed loop polygon
-            #   Shape : (:,2)  [x in column 1, y in column2]
-            #   Reasoning : necessary of _points_in_poly function
-            xyPolygon = self.__interpolationRegions[subDomainID]['boundaryPolygon']
-            
-            # Determine the bounding box of the interpolation region
-            xyMin_boundingBox = xyPolygon.min(axis=0)
-            xyMax_boundingBox = xyPolygon.max(axis=0)
-            
-            # Make reference to old uncorrected blobs
-            xBlob = self.lagrangian.blobs.x
-            yBlob = self.lagrangian.blobs.y
-            
-            # Find the blobs that are inside the bounding box of the 
-            # interpolation region
-            iBoundingBox = _numpy.where((xBlob > xyMin_boundingBox[0]) & 
-                                        (xBlob < xyMax_boundingBox[0]) & 
-                                        (yBlob > xyMin_boundingBox[1]) & 
-                                        (yBlob < xyMax_boundingBox[1]))[0]
-        
-            # Determine blobs (which are inside bounding box)
-            # that are also inside the interpolation region.                                        
-            iInside = _points_inside_poly(_numpy.array([xBlob[iBoundingBox], yBlob[iBoundingBox]]).T,
-                                          xyPolygon)
-
-            #TODO: for conservation of circulation
-            # Determine the circulation that is removed
-            self.__totalCirculationRemoved.append(_numpy.sum(self.lagrangian.blobs.g[iBoundingBox[iInside]]))
-        
-            if iBoundingBox[iInside].shape[0] !=0:
-                # Remove old blobs inside polygon
-                self.lagrangian.blobs.removeBlobs(iBoundingBox[iInside])
-
-    
-    def __generate_blob_coordinates(self):
+    def __generateBlobCoordinates(self):
         r"""
         Function to generate blobs inside the interpolation region
         
@@ -664,8 +759,8 @@ class HybridSolver(object):
             # Generate mesh-grid of blobs defined by the bounding box        
         
             # Determine the bounding box of the interpolation region
-            xyMin_boundingBox = self.__interpolationRegions[subDomainID]['boundaryPolygon'].min(axis=0)
-            xyMax_boundingBox = self.__interpolationRegions[subDomainID]['boundaryPolygon'].max(axis=0)        
+            xyMin_boundingBox = self.interpolationRegions[subDomainID]['boundaryPolygon'].min(axis=0)
+            xyMax_boundingBox = self.interpolationRegions[subDomainID]['boundaryPolygon'].max(axis=0)        
         
             #----------------------------------------------------------------------
             # Generate temporary set of blobs (in sync with the remeshing grid)
@@ -688,13 +783,13 @@ class HybridSolver(object):
             
             # Concatenate the polygons
             # If there is no surface polygon
-            if self.__interpolationRegions[subDomainID]['surfacePolygon'] is None:
-                xyPolygon = self.__interpolationRegions[subDomainID]['boundaryPolygon']
+            if self.interpolationRegions[subDomainID]['surfacePolygon'] is None:
+                xyPolygon = self.interpolationRegions[subDomainID]['boundaryPolygon']
             # If there is two polygon lines defining the interpolation region
             else:
                 # Concatenate surface and boundary polygon.
-                xyPolygon = _numpy.vstack((self.__interpolationRegions[subDomainID]['surfacePolygon'],
-                                           self.__interpolationRegions[subDomainID]['boundaryPolygon']))
+                xyPolygon = _numpy.vstack((self.interpolationRegions[subDomainID]['surfacePolygon'],
+                                           self.interpolationRegions[subDomainID]['boundaryPolygon']))
             
             # Determine which one of them are inside the interpolation grid
             iInside = _points_inside_poly(_numpy.array([xBlobNew, yBlobNew]).T,
@@ -707,166 +802,13 @@ class HybridSolver(object):
         
         # return the list of new particles of all the domains.
         return xBlobNewList, yBlobNewList
-        
-        
-    def __multiStep_eulerian(self,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew):
-        r"""
-        Function to advance the navier-stokes eulerian domain.
-        
-        * Note: navier-stokes motion not implemeneted !
-        
-        Description
-        -----------
-        The time step size of the eulerian domain is smaller than the
-        time-step size of the lagrangian.        
-        Therefore we advance the navier-stokes eulerian field using
-        k time steps (Forward Euler). The boundary conditions at each 
-        sub-step of the FE is obtained by linear interpolation from the boundary
-        at t_n and t_{n+1}
-        
-        Parameters
-        ----------
-        
-        Returns
-        -------
-        
-        Attributes
-        ----------
-        
-        :First Added:   2014-02-28
-        :Last Modified: 2014-02-28
-        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version     
-        """
-    
-        #----------------------------------------------------------------------                         
-        # Determine the boundary coordinates of the navier-stokes domains.
-        # IMPORTANT : at t_{n+1}
-        x,y = self.multiEulerian.getBoundaryCoordinates() # we assume that the coordinates are at t_{n+1}
-        #----------------------------------------------------------------------                         
-        
-        #----------------------------------------------------------------------                         
-        # Determine the dirichlet velocity boundary condition at t_{n+1}
-        vxNew, vyNew = self.lagrangian.evaluateVelocity(x.copy(),y.copy())
-        #----------------------------------------------------------------------
-        
-        #----------------------------------------------------------------------                         
-        # (a) Evolve the navier-stokes problem 
-        # The navier-stokes problem is evolved using 'k' sub-steps from t_n to t_{n+1}
-        # The boundary condition at each sub-step of the evolve obtained by
-        # linear interpolation of the boundary at t_n and t_{n+1}
-        # Reference : Daeninck 2006, (3.3.3 Coupling)
-        
-        # Determine the velocity differential at the boundary
-        # We can use this to determine the velocity at each sub steps.
-        #dVxyEulerianBoundary = (vxyEulerianBoundaryNew - self.__vxyEulerianBoundary)/self.nEulerianSubSteps
-        dVx = (vxNew - self.__vxyEulerianBoundary[0])/self.nEulerianSubSteps
-        dVy = (vyNew - self.__vxyEulerianBoundary[1])/self.nEulerianSubSteps
-        
-        # Multi-step navier-stoke from 1 to nSubSteps
-        for k in range(1,self.nEulerianSubSteps+1):
-            
-            print k
-            # Determine the boundary condition at the current sub-step
-            #vxyEulerianBoundary_subStep = self.__vxyEulerianBoundary + (dVxyEulerianBoundary * k)
-            vx_substep = self.__vxyEulerianBoundary[0] + (dVx * k)
-            vy_substep = self.__vxyEulerianBoundary[1] + (dVy * k)
-            
-            #  Evolve the navier-stokes to the next sub-step
-            #self.multiEulerian.evolve(vxyEulerianBoundary_subStep[0], vxyEulerianBoundary_subStep[1],
-            #                          cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew) # TODO: moving ns domain not implemented !
-            self.multiEulerian.evolve(vx_substep, vy_substep,
-                                      cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew) # TODO: moving ns domain not implemented !
-                            
-        if _numpy.abs(vxNew - vx_substep).max() > _numpy.spacing(1):
-            print _numpy.abs(vxNew-vx_substep).max()
-            raise ValueError()
-        if _numpy.abs(vyNew-vy_substep).max() > _numpy.spacing(1):
-            print _numpy.abs(vyNew-vy_substep).max()
-            raise ValueError()
-            
-        # Update the boundary parameters
-        #self.__vxEulerianBoundary[] = _numpy.copy(vxyEulerianBoundaryNew) # to be safe
-        self.__vxyEulerianBoundary[0] = _numpy.copy(vxNew) # to be safe
-        self.__vxyEulerianBoundary[1] = _numpy.copy(vyNew) # to be safe
-        #----------------------------------------------------------------------
-        
 
-    def __singleStep_navierStokes(self,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew):
-        r"""
-        Function to advance the navier-stokes eulerian domain.
-        
-        * Note: navier-stokes motion not implemeneted !
-        
-        Description
-        -----------
-        The time step size of the eulerian domain is smaller than the
-        time-step size of the lagrangian.        
-        Therefore we advance the navier-stokes eulerian field using
-        k time steps (Forward Euler). The boundary conditions at each 
-        sub-step of the FE is obtained by linear interpolation from the boundary
-        at t_n and t_{n+1}
-        
-        Parameters
-        ----------
-        
-        Returns
-        -------
-        
-        Attributes
-        ----------
-        
-        :First Added:   2014-02-28
-        :Last Modified: 2014-02-28
-        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version     
-        """
-    
-        #----------------------------------------------------------------------                         
-        # Determine the boundary coordinates of the navier-stokes domains.
-        # IMPORTANT : at t_{n+1}
-        x,y = self.multiEulerian.getBoundaryCoordinates() # we assume that the coordinates are at t_{n+1}
-        #----------------------------------------------------------------------                         
-        
-        #----------------------------------------------------------------------                         
-        # Determine the dirichlet velocity boundary condition at t_{n+1}
-        vxyEulerianBoundary = self.lagrangian.evaluateVelocity(x.copy(),y.copy())
-        #----------------------------------------------------------------------                        
-        
-        #----------------------------------------------------------------------                           
-        #  Evolve the navier-stokes to the next step
-        self.multiEulerian.evolve(vxyEulerianBoundary[0], vxyEulerianBoundary[1],
-                                  cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew) # TODO: moving ns domain not implemented !
-                            
-        #----------------------------------------------------------------------
 
-    def __set_eulerian_deltaT(self):
-        """
-        Function to modify the eulerian time-step size.
-        
-        :First Added:   2014-02-28
-        :Last Modified: 2014-02-28
-        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version         
-        """        
-        
-        # Determine the eulerian time-step size
-        deltaTE = self.multiEulerian.deltaT
-        
-        # Determine the lagrangina time-step size
-        deltaTL = self.lagrangian.deltaT
-        
-        # Determine the number of sub-step
-        self.nEulerianSubSteps = _numpy.int64(_numpy.ceil(deltaTL/deltaTE))
-
-        # Modify the navier-stokes time-step
-        self.multiEulerian.deltaT = deltaTL/self.nEulerianSubSteps
-        
-        
-    def __interpolate_strength_from_ns(self,xBlobNewList,yBlobNewList):
+    def __interpolateVorticity_structuredProbes_manual(self,xBlobNewList,yBlobNewList):
         r"""
         
         #TODO: !!!! BUG HERE !!!! USING SCIPY
+        # TODO: Re-define the interpolation 
         Function to interpolate the circulation (vorticity * area) from the
         navier-stokes domain.
         
@@ -954,11 +896,9 @@ class HybridSolver(object):
             
             # Determine the origin in global coordinates
             originGrid = probeGridParams['origin'] + cmGlobal # (x,y) origin in global coordinate system
-
             
             # Determine the grid spacing of probe grid
-            hGrid = probeGridParams['L']/probeGridParams['N'] # (hx',hy') in local coordinate system
-            
+            hGrid = probeGridParams['L']/(probeGridParams['N']-1) # (hx',hy') in local coordinate system
             
             # Distance of the particles from the grid origin
             LxBlob =   (xBlobNewList[i]-originGrid[0])*_numpy.cos(thetaLocal) \
@@ -967,14 +907,21 @@ class HybridSolver(object):
             LyBlob = - (xBlobNewList[i]-originGrid[0])*_numpy.sin(thetaLocal) \
                      + (yBlobNewList[i]-originGrid[1])*_numpy.cos(thetaLocal)
             
+            #print LxBlob
+            #print LyBlob
+            #            py.figure()
+            #            py.plot(LxBlob,LyBlob,'b.')
+            #            print originGrid
+            #            py.figure()
+            #            py.plot(xBlobNewList[i],yBlobNewList[i],'b.')
              # Indexing the particles w.r.t to the origin
             xLIndex = _numpy.int64(_numpy.floor(LxBlob/hGrid[0]))
             yLIndex = _numpy.int64(_numpy.floor(LyBlob/hGrid[1]))
                 
 
             # Distance of each blob from it's lower left grid box
-            xPrime = LxBlob - xLIndex*hGrid[0]# - 0.5*hGrid[0]
-            yPrime = LyBlob - yLIndex*hGrid[1]# - 0.5*hGrid[0]
+            xPrime = LxBlob - xLIndex*hGrid[0]
+            yPrime = LyBlob - yLIndex*hGrid[1]
 
             # Linear Interpolation weights
             h1 =    (xPrime - hGrid[0]) * (yPrime-hGrid[1]) / (hGrid[0]*hGrid[1])
@@ -986,19 +933,20 @@ class HybridSolver(object):
             wGrid = _numpy.copy(self.multiEulerian[subDomainID].getVorticity())
                 
             # Interpolating the (vorticity * grid area) = circulation from the grid the blobs       
-            gBlobNew = (h1*wGrid[xLIndex,yLIndex]       +\
-                        h2*wGrid[xLIndex,yLIndex+1]     +\
-                        h3*wGrid[xLIndex+1,yLIndex+1]   +\
-                        h4*wGrid[xLIndex+1,yLIndex]) * (self.lagrangian.blobs.h**2) # Circulation = vort * area     
+            gBlobNew = (h1*wGrid[yLIndex,xLIndex]       +\
+                        h2*wGrid[yLIndex,xLIndex+1]     +\
+                        h3*wGrid[yLIndex+1,xLIndex+1]   +\
+                        h4*wGrid[yLIndex+1,xLIndex]) * (self.lagrangian.blobs.h**2) # Circulation = vort * area     
+
 
             gBlobNewList.append(gBlobNew)
             
-        self.__totalCirculationAdded = _numpy.sum(gBlobNewList, axis=1)
+        self.__totalCirculationAdded = _numpy.array([listItem.sum() for listItem in gBlobNewList])
             
         return gBlobNewList
 
 
-    def __scipyInterpolate_strength_from_nsprobes(self, xBlobNewList, yBlobNewList):
+    def __interpolateVorticity_structuredProbes_scipy(self, xBlobNewList, yBlobNewList):
         r"""
         Use the scipy interpolate function to interpolate from probe grid
         
@@ -1018,8 +966,10 @@ class HybridSolver(object):
         # Iterate through all the sub domains (each mesh) of the navier-stokes
         for i,subDomainID in enumerate(self.multiEulerian.subDomainKeys):
         
+            # Get the coordinates
+            cmGlobal = self.multiEulerian.subDomains[subDomainID].cmGlobal
             # Stack coordinates
-            x,y = self.multiEulerian.subDomains[subDomainID].probeGridMesh
+            x,y = self.multiEulerian.subDomains[subDomainID].probeGridMesh + cmGlobal.reshape(2,1,1)
             
             # Reshape the data to (M,2)
             xy = _numpy.vstack((x.flatten(),y.flatten())).T
@@ -1037,12 +987,12 @@ class HybridSolver(object):
             
             gBlobNewList.append(gBlobNew)
             
-        self.__totalCirculationAdded = _numpy.sum(gBlobNewList, axis=1)
+        self.__totalCirculationAdded = _numpy.array([listItem.sum() for listItem in gBlobNewList])
             
         return gBlobNewList  
         
         
-    def __scipyInterpolate_strength_from_ns(self,xBlobNewList,yBlobNewList):
+    def __interpolateVorticity_unstructured_scipy(self,xBlobNewList,yBlobNewList):
         r"""
         Function to interpolate the circulation (vorticity * area) from the
         navier-stokes domain using SCIPY GRIDDATA function.
@@ -1102,36 +1052,190 @@ class HybridSolver(object):
             
             gBlobNewList.append(gBlobNew)
             
-        self.__totalCirculationAdded = _numpy.sum(gBlobNewList, axis=1)
+        self.__totalCirculationAdded = _numpy.array([listItem.sum() for listItem in gBlobNewList])
             
         return gBlobNewList        
+
+
+    def __multiStep_eulerian(self,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew):
+        r"""
+        Function to advance the navier-stokes eulerian domain.
         
+        * Note: navier-stokes motion not implemeneted !
+        
+        Description
+        -----------
+        The time step size of the eulerian domain is smaller than the
+        time-step size of the lagrangian.        
+        Therefore we advance the navier-stokes eulerian field using
+        k time steps (Forward Euler). The boundary conditions at each 
+        sub-step of the FE is obtained by linear interpolation from the boundary
+        at t_n and t_{n+1}
+        
+        Parameters
+        ----------
+        
+        Returns
+        -------
+        
+        Attributes
+        ----------
+        
+        :First Added:   2014-02-28
+        :Last Modified: 2014-02-28
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version     
+        """
     
-    def __get_eulerian_initialBoundaryVelocity(self):
-        r"""        
-        Function to determine the initial eulerian boundary conditions.
-        This is vital for the multi-step eulerian scheme.
+        #----------------------------------------------------------------------                         
+        # Determine the boundary coordinates of the navier-stokes domains.
+        # IMPORTANT : at t_{n+1}
+        xBoundary,yBoundary = self.multiEulerian.getBoundaryCoordinates() # we assume that the coordinates are at t_{n+1}
+        #----------------------------------------------------------------------                         
+        
+        #----------------------------------------------------------------------                         
+        # Determine the dirichlet velocity boundary condition at t_{n+1}
+        vxBoundaryNew, vyBoundaryNew = self.lagrangian.evaluateVelocity(xBoundary.copy(), yBoundary.copy())
+        #----------------------------------------------------------------------
+        
+        #----------------------------------------------------------------------                         
+        # (a) Evolve the navier-stokes problem 
+        # The navier-stokes problem is evolved using 'k' sub-steps from t_n to t_{n+1}
+        # The boundary condition at each sub-step of the evolve obtained by
+        # linear interpolation of the boundary at t_n and t_{n+1}
+        # Reference : Daeninck 2006, (3.3.3 Coupling)
+        
+        # Determine the velocity differential at the boundary
+        # We can use this to determine the velocity at each sub steps.
+        #dVxyEulerianBoundary = (vxyEulerianBoundaryNew - self.__vxyEulerianBoundary)/self.nEulerianSubSteps
+        dVx = (vxBoundaryNew - self.__vxyEulerianBoundary[0])/self.nEulerianSubSteps
+        dVy = (vyBoundaryNew - self.__vxyEulerianBoundary[1])/self.nEulerianSubSteps
+        
+        # Multi-step navier-stoke from 1 to nSubSteps
+        for k in range(1,self.nEulerianSubSteps+1):
+            
+            print 'Eulerian-substep: %g' % k
+            
+            # Determine the boundary condition at the current sub-step
+            #vxyEulerianBoundary_subStep = self.__vxyEulerianBoundary + (dVxyEulerianBoundary * k)
+            vxBoundary_substep = self.__vxyEulerianBoundary[0] + (dVx * k)
+            vyBoundary_substep = self.__vxyEulerianBoundary[1] + (dVy * k)
+            
+            #  Evolve the navier-stokes to the next sub-step
+            # TODO: moving ns domain not implemented !
+            self.multiEulerian.evolve(vxBoundary_substep, vyBoundary_substep,
+                                      cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew) 
+            
+        # Update the boundary parameters
+        self.__vxyEulerianBoundary[0] = _numpy.copy(vxBoundaryNew)
+        self.__vxyEulerianBoundary[1] = _numpy.copy(vyBoundaryNew)
+        #----------------------------------------------------------------------
+
+
+    def __removeBlobs(self):
+        r"""
+        Function to remove the old blobs inside the interpolation domain.
+        
+        Description
+        -----------
+        Step 1 of correcting blob strengths
+        
+        Methodology
+        -----------
+        1. Determine the current blobs that are present inside the outer
+           boundary of the interpolation region.
+           
+           1.1 Find blobs that are inside the bounding box of the interpolation
+               region.
+               
+           1.2 Find the blobs (which are inside the interpolation region),
+               that are also inside the outer boundary (boundary polygon) of
+               the interpolation region.
+        
+        2. Remove the blobs that are inside the boundary (outer) polygon.
+    
+        Parameters
+        ----------
+        
+        Returns
+        -------
+        
+        Attributes
+        ----------
+        
+        :First Added:   2014-02-28
+        :Last Modified: 2014-02-28
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version
         """
         
-        #----------------------------------------------------------------------
-        # Determine the boundary coordinates of the navier-stokes.
-        x,y = self.multiEulerian.getBoundaryCoordinates() # we assume that the coordinates are at t_{n+1}
+        # Total circulation removed
+        self.__totalCirculationRemoved = []
         
-        #----------------------------------------------------------------------
-        # Determine the induced velocity at the navier-stokes boundary at t_{n}
-        vx, vy = self.lagrangian.evaluateVelocity(x.copy(),y.copy())
-        
-        #----------------------------------------------------------------------
-        # Allocate variable space
-        self.__vxyEulerianBoundary = _numpy.zeros((2,x.shape[0]))
-        
+        # Iterate through all the sub domains (each mesh) of the navier-stokes
+        for subDomainID in self.multiEulerian.subDomainKeys:
             
-        # Store the induced velocity
-        self.__vxyEulerianBoundary[0] = _numpy.copy(vx)
-        self.__vxyEulerianBoundary[1] = _numpy.copy(vy)
-
+            # Make reference to the boundary polygon
+            #   Format: closed loop polygon
+            #   Shape : (:,2)  [x in column 1, y in column2]
+            #   Reasoning : necessary of _points_in_poly function
+            # Remove all the blobs inside the outer boundary of the interpolation
+            # region, including inside the surface (or very near surface blobs).
+            xyPolygon = self.interpolationRegions[subDomainID]['boundaryPolygon']
+            
+            # Determine the bounding box of the interpolation region
+            xyMin_boundingBox = xyPolygon.min(axis=0)
+            xyMax_boundingBox = xyPolygon.max(axis=0)
+            
+            # Make reference to old uncorrected blobs
+            xBlob = self.lagrangian.blobs.x
+            yBlob = self.lagrangian.blobs.y
+            
+            # Find the blobs that are inside the bounding box of the 
+            # interpolation region
+            iBoundingBox = _numpy.where((xBlob > xyMin_boundingBox[0]) & 
+                                        (xBlob < xyMax_boundingBox[0]) & 
+                                        (yBlob > xyMin_boundingBox[1]) & 
+                                        (yBlob < xyMax_boundingBox[1]))[0]
         
-    def __set_eulerianIC_fromLagrangianField(self):
+            # Determine blobs (which are inside bounding box)
+            # that are also inside the interpolation region.                                        
+            iInside = _points_inside_poly(_numpy.array([xBlob[iBoundingBox], yBlob[iBoundingBox]]).T,
+                                          xyPolygon)
+
+            #TODO: for conservation of circulation
+            # Determine the circulation that is removed
+            self.__totalCirculationRemoved.append(_numpy.sum(self.lagrangian.blobs.g[iBoundingBox[iInside]]))
+        
+            if iBoundingBox[iInside].shape[0] != 0:
+                # Remove old blobs inside polygon
+                self.lagrangian.blobs.removeBlobs(iBoundingBox[iInside])
+
+
+    def __set_deltaTEulerian(self):
+        """
+        Function to modify the eulerian time-step size.
+        
+        :First Added:   2014-02-28
+        :Last Modified: 2014-02-28
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version         
+        """        
+        
+        # Determine the eulerian time-step size
+        deltaTE = self.multiEulerian.deltaT
+        
+        # Determine the lagrangina time-step size
+        deltaTL = self.lagrangian.deltaT
+        
+        # Determine the number of sub-step
+        self.nEulerianSubSteps = _numpy.int64(_numpy.ceil(deltaTL/deltaTE))
+
+        # Modify the navier-stokes time-step
+        self.multiEulerian.deltaT = deltaTL/self.nEulerianSubSteps
+        
+        
+    def __set_eulerianInitialConditions(self):
         r"""
         Function to replace the eulerian (navier-stokes) initial conditions
         with the lagrangian solutions.
@@ -1285,9 +1389,7 @@ class HybridSolver(object):
                     if var[key]['boundaryPolygon'].shape[1] != 2:
                         raise ValueError("interpolationRegions[%s]['boundaryPolygon'] must be of shape (nPoints,2)."\
                                          "It has shape %s." % (key, str(var[key]['boundaryPolygon'].shape)))                                      
-                                         
-        
-               
+                                          
             # Everything okay
             self.__interpolationRegions = var
         #----------------------------------------------------------------------
@@ -1315,7 +1417,8 @@ class HybridSolver(object):
                                  % (str(hybridOptions.EULERIAN_INITIAL_CONDITIONS['available']),var['eulerianInitialConditions']))
                                  
             self.__couplingParams = var
-                                
+        #---------------------------------------------------------------------             
+            
         #---------------------------------------------------------------------
         elif varName == 'interpolationParams':
             if type(var) != dict:
@@ -1333,45 +1436,104 @@ class HybridSolver(object):
                                  
             self.__interpolationParams = var
             
+
+    def __updatePosition_interpolationRegions(self):
+        r"""
+        Function to update the position of the interpolation regions
+        """
+
+        self.interpolationRegions = {}
+        
+        # Iterate through all the sub domains (each mesh) of the navier-stokes
+        for subDomainID in self.multiEulerian.subDomainKeys:
+            
+            self.interpolationRegions[subDomainID] = {}
+            # Make reference to the new position
+            cmGlobal = self.multiEulerian[subDomainID].cmGlobal
+            
+            # Make reference to the new local rotational angle
+            thetaLocal = self.multiEulerian[subDomainID].thetaLocal
+            
+            # Determine the rotational matrix
+            rotMat = _numpy.array([[_numpy.cos(thetaLocal), -_numpy.sin(thetaLocal)],
+                                   [_numpy.sin(thetaLocal), _numpy.cos(thetaLocal)]])
+            
+            # 'boundaryPolygon' : Rotate and move to new position
+            self.interpolationRegions[subDomainID]['boundaryPolygon'] =\
+                    _numpy.dot(rotMat, self.__interpolationRegions[subDomainID]['boundaryPolygon'].T).T \
+                        + cmGlobal
+            
+            # 'surfacePolygon' : Rotate and move to new position
+            if self.__interpolationRegions[subDomainID]['surfacePolygon'] is not None:
+                self.interpolationRegions[subDomainID]['surfacePolygon'] =\
+                    _numpy.dot(rotMat, self.__interpolationRegions[subDomainID]['surfacePolygon'].T).T \
+                        + cmGlobal
+            
+            # if surface polygon does not exist, no need to transform                        
+            else:
+                self.interpolationRegions[subDomainID]['surfacePolygon'] = None
+        
+            
     #--------------------------------------------------------------------------
     # All attributes
-            
-    #    @simpleGetProperty
-    #    def tStep(self):
-    #        r"""
-    #        tStep : int
-    #                the current time step of the simulation
-    #        """
-    #        return self.blobs.tStep
-    #            
-    #    # Current time t
-    #    @simpleGetProperty
-    #    def t(self):
-    #        r"""
-    #        t : float
-    #            the current time of the simulation
-    #        """
-    #        return self.blobs.t
-    #    
-    #    # Time-step size
-    #    @simpleGetProperty
-    #    def deltaT(self):
-    #        r"""
-    #        deltaT : float
-    #                 the time step size of the simulation :math:`|Delta t`
-    #        """
-    #        return self.blobs.deltaTc
-    #    
-    #    # Free-stream velocity
-    #    @simpleGetProperty
-    #    def vInf(self):
-    #        """
-    #        vInf : numpy.ndarray(float64), shape (2,)
-    #               the :math:`x,y` component of the free-stream velocity
-    #        """
-    #        return self.blobs.vInf
+    
+    # Time-step size
+    @simpleGetProperty
+    def deltaTEulerian(self):
+        r"""
+        deltaTEulerian : float
+                         the time step size of the eulerian subdomain
+                         :math:`|Delta t_E`
+        """
+        return self.multiEulerian.deltaT
+ 
+    # Time-step size
+    @simpleGetProperty
+    def deltaTLagrangian(self):
+        r"""
+        deltaTLagrangian : float
+                           the time step size of the lagrangian subdomain
+                           :math:`|Delta t_L`
+        """
+        return self.lagrangian.deltaTc       
         
-      
+    # Free-stream velocity
+    @simpleGetProperty
+    def nu(self):
+        """
+        nu : float
+             the fluid kinematic viscosity.
+        """
+        return self.lagrangian.blobs.nu             
+            
+    # Current time t
+    @simpleGetProperty
+    def t(self):
+        r"""
+        t : float
+            the current time of the simulation
+        """
+        return self.lagrangian.t       
+       
+    @simpleGetProperty
+    def tStep(self):
+        r"""
+        tStep : int
+                the current time step of the simulation
+        """
+        return self.lagrangian.tStep
+    
+    # Free-stream velocity
+    @simpleGetProperty
+    def vInf(self):
+        """
+        vInf : numpy.ndarray(float64), shape (2,)
+               the :math:`x,y` component of the free-stream velocity
+        """
+        return self.lagrangian.vInf
+
+
+
        
 #    def evaluateVelocity(self,xTarget,yTarget):
 #        """
@@ -1422,4 +1584,79 @@ class HybridSolver(object):
 #                            + self.vInf.reshape(2,-1)
 #        
 #        # return the induced velocity
-#        return vx,vy      
+#        return vx,vy
+       
+
+#-------------------------------------------------------------------------------
+      
+#    def __singleStep_navierStokes(self,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew):
+#        r"""
+#        Function to advance the navier-stokes eulerian domain.
+#        
+#        * Note: navier-stokes motion not implemeneted !
+#        
+#        Description
+#        -----------
+#        The time step size of the eulerian domain is smaller than the
+#        time-step size of the lagrangian.        
+#        Therefore we advance the navier-stokes eulerian field using
+#        k time steps (Forward Euler). The boundary conditions at each 
+#        sub-step of the FE is obtained by linear interpolation from the boundary
+#        at t_n and t_{n+1}
+#        
+#        Parameters
+#        ----------
+#        
+#        Returns
+#        -------
+#        
+#        Attributes
+#        ----------
+#        
+#        :First Added:   2014-02-28
+#        :Last Modified: 2014-02-28
+#        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+#        :Licence:       GNU GPL version 3 or any later version     
+#        """
+#    
+#        #----------------------------------------------------------------------                         
+#        # Determine the boundary coordinates of the navier-stokes domains.
+#        # IMPORTANT : at t_{n+1}
+#        x,y = self.multiEulerian.getBoundaryCoordinates() # we assume that the coordinates are at t_{n+1}
+#        #----------------------------------------------------------------------                         
+#        
+#        #----------------------------------------------------------------------                         
+#        # Determine the dirichlet velocity boundary condition at t_{n+1}
+#        vxyEulerianBoundary = self.lagrangian.evaluateVelocity(x.copy(),y.copy())
+#        #----------------------------------------------------------------------                        
+#        
+#        #----------------------------------------------------------------------                           
+#        #  Evolve the navier-stokes to the next step
+#        self.multiEulerian.evolve(vxyEulerianBoundary[0], vxyEulerianBoundary[1],
+#                                  cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew) # TODO: moving ns domain not implemented !
+#                            
+#        #----------------------------------------------------------------------       
+      
+
+#    def __get_eulerian_initialBoundaryVelocity(self):
+#        r"""        
+#        Function to determine the initial eulerian boundary conditions.
+#        This is vital for the multi-step eulerian scheme.
+#        """
+#        
+#        #----------------------------------------------------------------------
+#        # Determine the boundary coordinates of the navier-stokes.
+#        x,y = self.multiEulerian.getBoundaryCoordinates() # we assume that the coordinates are at t_{n+1}
+#        
+#        #----------------------------------------------------------------------
+#        # Determine the induced velocity at the navier-stokes boundary at t_{n}
+#        vx, vy = self.lagrangian.evaluateVelocity(x.copy(),y.copy())
+#        
+#        #----------------------------------------------------------------------
+#        # Allocate variable space
+#        self.__vxyEulerianBoundary = _numpy.zeros((2,x.shape[0]))
+#        
+#            
+#        # Store the induced velocity
+#        self.__vxyEulerianBoundary[0] = _numpy.copy(vx)
+#        self.__vxyEulerianBoundary[1] = _numpy.copy(vy)      

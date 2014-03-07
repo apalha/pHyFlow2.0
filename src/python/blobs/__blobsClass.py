@@ -503,26 +503,25 @@ class Blobs(object):
 
             self.addBlobs(xNew,yNew,gNew)
 
+
         Parameters
         ----------
-            Parameters
-            ----------
-            xNew : numpy.array(float64), (1,nBlobsNew)
-                   the x coordinates of the new blobs.
-            yNew : numpy.array(float64), (1,nBlobsNew)
-                   the y coordinates of the new blobs.
-            gNew : numpy.array(float64), (1,nBlobsNew)
-                   the circulation g of the new blobs.
+        xNew : numpy.array(float64), (1,nBlobsNew)
+               the x coordinates of the new blobs.
+        yNew : numpy.array(float64), (1,nBlobsNew)
+               the y coordinates of the new blobs.
+        gNew : numpy.array(float64), (1,nBlobsNew)
+               the circulation g of the new blobs.
 
         Returns
         -------
-
+        None returned.
 
         Attributes
         ----------
-            x
-            y
-            g
+        x
+        y
+        g
 
         :First Added:   2014-02-10
         :Last Modified: 2014-02-10
@@ -554,46 +553,46 @@ class Blobs(object):
     
         Parameters
         ----------
-            xEval : numpy.array(float64)
-                    the x coordinates of the points where to evaluate the
-                    induced velocities
-                    (if value is None, xEval = self.x)
-                    shape: (nEval,)
-            yEval : numpy.array(float64)
-                    the y coordinates of the points where to evaluate the
-                    induced velocities
-                    (if value is None, yEval = self.y)
-                    shape: (nEval,)
-            Ndirect : int (optional)
-                      the number of neighbor blobs where to perform direct calculation
-                      (default value is 35)
-                      shape: single value
-            tol : float64 (optional)
-                  the tolerance (error) with which the induced velocities are computed
-                  (default value is 1.0e-6, if tol=0.0 then direct calculation
-                  is performed instead of FMM)
+        xEval : numpy.array(float64)
+                the x coordinates of the points where to evaluate the
+                induced velocities
+                (if value is None, xEval = self.x)
+                shape: (nEval,)
+        yEval : numpy.array(float64)
+                the y coordinates of the points where to evaluate the
+                induced velocities
+                (if value is None, yEval = self.y)
+                shape: (nEval,)
+        Ndirect : int (optional)
+                  the number of neighbor blobs where to perform direct calculation
+                  (default value is 35)
                   shape: single value
-            cutoff : float64 (optional)
-                     the radius over which the velocity field is approximately 1/r^2
-                     (default value is None, which corresponds to 5.0*xopt)
-                     shape: single value
+        tol : float64 (optional)
+              the tolerance (error) with which the induced velocities are computed
+              (default value is 1.0e-6, if tol=0.0 then direct calculation
+              is performed instead of FMM)
+              shape: single value
+        cutoff : float64 (optional)
+                 the radius over which the velocity field is approximately 1/r^2
+                 (default value is None, which corresponds to 5.0*xopt)
+                 shape: single value
 
         Returns
         -------
-            vx :: numpy.ndarray(float64)
-                  the x component of the induced velocities in each of the 
-                  (xEval,yEval) points
-                  shape: (nEval,)
-                  
-            vy :: numpy.ndarray(float64)
-                  the y component of the induced velocities in each of the 
-                  (xEval,yEval) points
-                  shape: (nEval,)
-            
+        vx :: numpy.ndarray(float64)
+              the x component of the induced velocities in each of the 
+              (xEval,yEval) points
+              shape: (nEval,)
+              
+        vy :: numpy.ndarray(float64)
+              the y component of the induced velocities in each of the 
+              (xEval,yEval) points
+              shape: (nEval,)
+        
             
         Attributes
         ----------
-            None changed            
+        None changed            
                   
         :First Added:   2014-01-21
         :Last Modified: 2014-01-21
@@ -638,50 +637,50 @@ class Blobs(object):
     
         Parameters
         ----------
-            xEval : numpy.array(float64)
-                    the x coordinates of the points where to evaluate the
-                    induced velocities
-                    (if value is None, xEval = self.x)
-                    shape: (nEval,)
-            yEval : numpy.array(float64)
-                    the y coordinates of the points where to evaluate the
-                    induced velocities
-                    (if value is None, yEval = self.y)
-                    shape: (nEval,)
-                    
-            Ndirect :: int (optional)
-                       the number of neighbor blobs where to perform direct calculation
-                       (default value is 35)
-                       shape: single value
-            
-            tol :: float64
-                   the tolerance (error) with which the induced velocities are computed
-                   (default value is 1.0e-6, if tol=0.0 then direct calculation
-                   is performed instead of FMM)
+        xEval : numpy.array(float64)
+                the x coordinates of the points where to evaluate the
+                induced velocities
+                (if value is None, xEval = self.x)
+                shape: (nEval,)
+        yEval : numpy.array(float64)
+                the y coordinates of the points where to evaluate the
+                induced velocities
+                (if value is None, yEval = self.y)
+                shape: (nEval,)
+                
+        Ndirect :: int (optional)
+                   the number of neighbor blobs where to perform direct calculation
+                   (default value is 35)
                    shape: single value
-            
-            cutoff :: float64
-                      the radius over which the velocity field is approximately 1/r^2
-                      (default value is None, which corresponds to 5.0*xopt)
-                      shape: single value
-                    
+        
+        tol :: float64
+               the tolerance (error) with which the induced velocities are computed
+               (default value is 1.0e-6, if tol=0.0 then direct calculation
+               is performed instead of FMM)
+               shape: single value
+        
+        cutoff :: float64
+                  the radius over which the velocity field is approximately 1/r^2
+                  (default value is None, which corresponds to 5.0*xopt)
+                  shape: single value
+                
         
         Returns
         -------
-            vx :: numpy.ndarray(float64)
-                  the x component of the induced velocities in each of the 
-                  (xEval,yEval) points
-                  shape: (nEval,)
-                  
-            vy :: numpy.ndarray(float64)
-                  the y component of the induced velocities in each of the 
-                  (xEval,yEval) points
-                  shape: (nEval,)
-            
+        vx :: numpy.ndarray(float64)
+              the x component of the induced velocities in each of the 
+              (xEval,yEval) points
+              shape: (nEval,)
+              
+        vy :: numpy.ndarray(float64)
+              the y component of the induced velocities in each of the 
+              (xEval,yEval) points
+              shape: (nEval,)
+        
             
         Attributes
         ----------
-            None changed            
+        None changed            
                   
         :First Added:   2014-01-21
         :Last Modified: 2014-01-21
@@ -716,12 +715,13 @@ class Blobs(object):
 
         Parameters
         ----------
-
+        None
+        
         Attributes
         ----------
-            x
-            y
-            g
+        x
+        y
+        g
 
 
         :First Added:   2014-02-10
@@ -837,12 +837,13 @@ class Blobs(object):
     
         Parameters
         ----------
-    
+        None
+        
         Attributes
         ----------
-            x
-            y
-            g
+        x
+        y
+        g
                   
         :First Added:   2014-01-20
         :Last Modified: 2014-01-20
@@ -881,9 +882,9 @@ class Blobs(object):
              
         Attributes
         ----------
-            x
-            y
-            g
+        x
+        y
+        g
                   
                   
         :First Added:   2014-01-15
@@ -951,9 +952,9 @@ class Blobs(object):
 
         Attributes
         ----------
-            x
-            y
-            g
+        x
+        y
+        g
 
 
         :First Added:   2014-02-10
@@ -995,40 +996,146 @@ class Blobs(object):
         else:
             raise TypeError('iBlobs must be of type int64 or bool, it is a %s.' % str(iBlobs.dtype))
 
+    def _advanceTime(self):
+        r"""
+        _advanceTime updates all time related variables: self.__tStep and self.__t.
+
+        Usage
+        -----
+        .. code-block :: python
+
+            self.__advanceTime()
+
+        Parameters
+        ----------
+
+        Attributes
+        ----------
+        __tStep
+        __t
+
+        :First Added:   2014-02-10
+        :Last Modified: 2014-03-06
+        :Copyright:     Copyright (C) 2014 Artur Palha, Lento Manickathan **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
+
+        """
+
+        """
+        Reviews:
+
+        """
+
+        # advance tStep
+        self.__tStep += 1
+
+        # advance t
+        #self.__t += self.__deltaTc
+        self.__t = self.__deltaTc * self.__tStep
+
+
+    
+    def _diffusion(self):
+        """
+        Function to perform the diffusion of the vortex blobs
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            self._diffusion()
+            
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        None returned.
+        
+        Attributes
+        ----------
+        x
+        y
+        g
+        
+        :First Added:   2014-02-10
+        :Last Modified: 2014-03-06
+        :Copyright:     Copyright (C) 2014 Artur Palha, Lento Manickathan **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
+
+        """        
+        # select the diffusion method to use
+        if self.__diffusionParams['method'] == 'regrid_wee':
+            # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
+            # on regrid of the blobs into a grid that
+            # does not need to have a node at the point [0.0, 0.0], for that it
+            # uses the original grid placement of particles to redistribute them.
+            # in here it is assumed that the redistribution grid always contains the
+            # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
+            # yBounds variables are computes in order to redistribute particles
+            # into a grid that contains the point [0.0, 0.0]. Essentially, the
+            # redistribution is done into the following initial grid:
+            #
+            #       -------------------------
+            #       |       |       |       |
+            #       |   X   |   X   |   X   |
+            #       |  (3)  |  (7)  |  (11) |
+            #       -------------------------
+            #       |       |       |      O|
+            #       |   X   |   X   |   X   |
+            #       |  (2)  |  (6)  |  (10) |
+            #       -------------------------
+            #       |       |       |       |
+            #       |   X   |   X   |   X   |
+            #       |  (1)  |  (5)  |  (9)  |
+            #       -------------------------
+            #
+            # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
+            # terms appear.
+            xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+            yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+
+            # perform diffusion and store the results directly in the object
+            self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
+                                                             self.__x,self.__y,self.__g,
+                                                             self.__sigma,xBounds,yBounds,
+                                                             overlap=self.__overlap)
+
 
     def __check_wField(self,wField):
         """
-            A function that reads the input wField given to self.__init__.
+        A function that reads the input wField given to self.__init__.
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            self.__check_wField(wField)
             
-            Usage
-            -----
-            .. code-block:: python
-            
-                self.__check_wField(wField)
-                
-            Parameters
-            ----------
-            wField : tuple of three numpy.array(float64) (1) or tuple of a function
-                     and two numpy.array(float64) (2)
-                     (1) (`xBlobs`, `yBlobs`, `gBlob`) defines the initial distribution of
-                         vortex blobs. `xBlobs` contains the x coordinates, `yBlobs`
-                         contains the y coordinates and `gBlobs` contains the circulations.
-                         Blobs are recursively redistributed into a regular mesh. This
-                         mesh is assumed to have a particle located at (0,0). All
-                         arrays must have shape (1,nBlobs).
-                     (2) (`wExactFunction`, `xBounds`, `yBounds`) defines the initial
-                         distribution of vorticity and the region of interest, in x
-                         is the region between `xBounds` [0] and `xBounds` [1] and in y
-                         is the region between `yBounds` [0] and `yBounds` [1]. It is
-                         assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
-                         Vortex blobs are then generated inside this region with the
-                         overlap `overlap` and spacing `h`.
-            
-            
-            :First Added:   2013-12-19
-            :Last Modified: 2013-12-19
-            :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
-            :License:       GNU GPL version 3 or any later version
+        Parameters
+        ----------
+        wField : tuple of three numpy.array(float64) (1) or tuple of a function
+                 and two numpy.array(float64) (2)
+                 (1) (`xBlobs`, `yBlobs`, `gBlob`) defines the initial distribution of
+                     vortex blobs. `xBlobs` contains the x coordinates, `yBlobs`
+                     contains the y coordinates and `gBlobs` contains the circulations.
+                     Blobs are recursively redistributed into a regular mesh. This
+                     mesh is assumed to have a particle located at (0,0). All
+                     arrays must have shape (1,nBlobs).
+                 (2) (`wExactFunction`, `xBounds`, `yBounds`) defines the initial
+                     distribution of vorticity and the region of interest, in x
+                     is the region between `xBounds` [0] and `xBounds` [1] and in y
+                     is the region between `yBounds` [0] and `yBounds` [1]. It is
+                     assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
+                     Vortex blobs are then generated inside this region with the
+                     overlap `overlap` and spacing `h`.
+        
+        
+        :First Added:   2013-12-19
+        :Last Modified: 2013-12-19
+        :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
             
         """
         
@@ -1050,37 +1157,37 @@ class Blobs(object):
     
     def __read_wField(self,wField):
         """
-            A function that reads the input wField given to self.__init__.
+        A function that reads the input wField given to self.__init__.
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            self.__read_input_wField(wField)
             
-            Usage
-            -----
-            .. code-block:: python
-            
-                self.__read_input_wField(wField)
-                
-            Parameters
-            ----------
-            wField : tuple of three numpy.array(float64) (1) or tuple of a function
-                     and two numpy.array(float64) (2)
-                     (1) (`xBlobs`, `yBlobs`, `gBlob`) defines the initial distribution of
-                         vortex blobs. `xBlobs` contains the x coordinates, `yBlobs`
-                         contains the y coordinates and `gBlobs` contains the circulations.
-                         Blobs are recursively redistributed into a regular mesh. This
-                         mesh is assumed to have a particle located at (0,0). All
-                         arrays must have shape (1,nBlobs).
-                     (2) (`wExactFunction`, `xBounds`, `yBounds`) defines the initial
-                         distribution of vorticity and the region of interest, in x
-                         is the region between `xBounds` [0] and `xBounds` [1] and in y
-                         is the region between `yBounds` [0] and `yBounds` [1]. It is
-                         assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
-                         Vortex blobs are then generated inside this region with the
-                         overlap `overlap` and spacing `h`.
-            
-            
-            :First Added:   2013-12-19
-            :Last Modified: 2013-12-19
-            :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
-            :License:       GNU GPL version 3 or any later version
+        Parameters
+        ----------
+        wField : tuple of three numpy.array(float64) (1) or tuple of a function
+                 and two numpy.array(float64) (2)
+                 (1) (`xBlobs`, `yBlobs`, `gBlob`) defines the initial distribution of
+                     vortex blobs. `xBlobs` contains the x coordinates, `yBlobs`
+                     contains the y coordinates and `gBlobs` contains the circulations.
+                     Blobs are recursively redistributed into a regular mesh. This
+                     mesh is assumed to have a particle located at (0,0). All
+                     arrays must have shape (1,nBlobs).
+                 (2) (`wExactFunction`, `xBounds`, `yBounds`) defines the initial
+                     distribution of vorticity and the region of interest, in x
+                     is the region between `xBounds` [0] and `xBounds` [1] and in y
+                     is the region between `yBounds` [0] and `yBounds` [1]. It is
+                     assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
+                     Vortex blobs are then generated inside this region with the
+                     overlap `overlap` and spacing `h`.
+        
+        
+        :First Added:   2013-12-19
+        :Last Modified: 2013-12-19
+        :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
             
         """
         
@@ -1099,31 +1206,31 @@ class Blobs(object):
         
     def __check_input_wField_blobs(self,wField):
         """
-            A function that checks the input wField when given as three
-            numpy.array with x and y coordinates of the blobs and circulation
-            of the blobs.
+        A function that checks the input wField when given as three
+        numpy.array with x and y coordinates of the blobs and circulation
+        of the blobs.
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            self.__check_input_wField_blobs(wField)
             
-            Usage
-            -----
-            .. code-block:: python
-            
-                self.__check_input_wField_blobs(wField)
-                
-            Parameters
-            ----------
-            wField : tuple of three numpy.array(float64) 
-                     (`xBlobs`, `yBlobs`, `gBlob`) defines the initial distribution of
-                     vortex blobs. `xBlobs` contains the x coordinates, `yBlobs`
-                     contains the y coordinates and `gBlobs` contains the circulations.
-                     Blobs are recursively redistributed into a regular mesh. This
-                     mesh is assumed to have a particle located at (0,0). All
-                     arrays must have shape (1,nBlobs).
-                     
-            
-            :First Added:   2013-12-19
-            :Last Modified: 2013-12-19
-            :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
-            :License:       GNU GPL version 3 or any later version
+        Parameters
+        ----------
+        wField : tuple of three numpy.array(float64) 
+                 (`xBlobs`, `yBlobs`, `gBlob`) defines the initial distribution of
+                 vortex blobs. `xBlobs` contains the x coordinates, `yBlobs`
+                 contains the y coordinates and `gBlobs` contains the circulations.
+                 Blobs are recursively redistributed into a regular mesh. This
+                 mesh is assumed to have a particle located at (0,0). All
+                 arrays must have shape (1,nBlobs).
+                 
+        
+        :First Added:   2013-12-19
+        :Last Modified: 2013-12-19
+        :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
             
         """
         
@@ -1153,31 +1260,31 @@ class Blobs(object):
 
     def __read_input_wField_blobs(self,wField):
         """
-            A function that reads the input wField when given as three
-            numpy.array with x and y coordinates of the blobs and circulation
-            of the blobs.
+        A function that reads the input wField when given as three
+        numpy.array with x and y coordinates of the blobs and circulation
+        of the blobs.
 
-            Usage
-            -----
-            .. code-block:: python
+        Usage
+        -----
+        .. code-block:: python
 
-                self.__read_input_wField_blobs(wField)
+            self.__read_input_wField_blobs(wField)
 
-            Parameters
-            ----------
-            wField : tuple of three numpy.array(float64)
-                     (`xBlobs`, `yBlobs`, `gBlob`) defines the initial distribution of
-                     vortex blobs. `xBlobs` contains the x coordinates, `yBlobs`
-                     contains the y coordinates and `gBlobs` contains the circulations.
-                     Blobs are recursively redistributed into a regular mesh. This
-                     mesh is assumed to have a particle located at (0,0). All
-                     arrays must have shape (1,nBlobs).
+        Parameters
+        ----------
+        wField : tuple of three numpy.array(float64)
+                 (`xBlobs`, `yBlobs`, `gBlob`) defines the initial distribution of
+                 vortex blobs. `xBlobs` contains the x coordinates, `yBlobs`
+                 contains the y coordinates and `gBlobs` contains the circulations.
+                 Blobs are recursively redistributed into a regular mesh. This
+                 mesh is assumed to have a particle located at (0,0). All
+                 arrays must have shape (1,nBlobs).
 
 
-            :First Added:   2013-12-19
-            :Last Modified: 2013-12-19
-            :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
-            :License:       GNU GPL version 3 or any later version
+        :First Added:   2013-12-19
+        :Last Modified: 2013-12-19
+        :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
 
         """
 
@@ -1193,31 +1300,31 @@ class Blobs(object):
 
     def __check_input_wField_function(self,wField):
         """
-            A function that checks the input wField when given as a function
-            and the bounds.
+        A function that checks the input wField when given as a function
+        and the bounds.
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            self.__check_input_wField_function(wField)
             
-            Usage
-            -----
-            .. code-block:: python
-            
-                self.__check_input_wField_function(wField)
-                
-            Parameters
-            ----------
-            wField : tuple of a function and two numpy.array(float64) (2)
-                     (`wExactFunction`, `xBounds`, `yBounds`) defines the initial
-                     distribution of vorticity and the region of interest, in x
-                     is the region between `xBounds` [0] and `xBounds` [1] and in y
-                     is the region between `yBounds` [0] and `yBounds` [1]. It is
-                     assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
-                     Vortex blobs are then generated inside this region with the
-                     overlap `overlap` and spacing `h`.
-                     
-            
-            :First Added:   2013-12-19
-            :Last Modified: 2013-12-19
-            :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
-            :License:       GNU GPL version 3 or any later version
+        Parameters
+        ----------
+        wField : tuple of a function and two numpy.array(float64) (2)
+                 (`wExactFunction`, `xBounds`, `yBounds`) defines the initial
+                 distribution of vorticity and the region of interest, in x
+                 is the region between `xBounds` [0] and `xBounds` [1] and in y
+                 is the region between `yBounds` [0] and `yBounds` [1]. It is
+                 assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
+                 Vortex blobs are then generated inside this region with the
+                 overlap `overlap` and spacing `h`.
+                 
+        
+        :First Added:   2013-12-19
+        :Last Modified: 2013-12-19
+        :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
             
         """
         
@@ -1253,31 +1360,31 @@ class Blobs(object):
         
     def __read_input_wField_function(self,wField):
         """
-            A function that reads the input wField when given as a function
-            and the bounds. Returns x,y,g if correctly given in wField.
+        A function that reads the input wField when given as a function
+        and the bounds. Returns x,y,g if correctly given in wField.
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            self.__read_input_wField_function(wField)
             
-            Usage
-            -----
-            .. code-block:: python
-            
-                self.__read_input_wField_function(wField)
-                
-            Parameters
-            ----------
-            wField : tuple of a function and two numpy.array(float64) (2)
-                     (`wExactFunction`, `xBounds`, `yBounds`) defines the initial
-                     distribution of vorticity and the region of interest, in x
-                     is the region between `xBounds` [0] and `xBounds` [1] and in y
-                     is the region between `yBounds` [0] and `yBounds` [1]. It is
-                     assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
-                     Vortex blobs are then generated inside this region with the
-                     overlap `overlap` and spacing `h`.
-                     
-            
-            :First Added:   2013-12-19
-            :Last Modified: 2013-12-19
-            :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
-            :License:       GNU GPL version 3 or any later version
+        Parameters
+        ----------
+        wField : tuple of a function and two numpy.array(float64) (2)
+                 (`wExactFunction`, `xBounds`, `yBounds`) defines the initial
+                 distribution of vorticity and the region of interest, in x
+                 is the region between `xBounds` [0] and `xBounds` [1] and in y
+                 is the region between `yBounds` [0] and `yBounds` [1]. It is
+                 assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
+                 Vortex blobs are then generated inside this region with the
+                 overlap `overlap` and spacing `h`.
+                 
+        
+        :First Added:   2013-12-19
+        :Last Modified: 2013-12-19
+        :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
+        :License:       GNU GPL version 3 or any later version
             
         """
         
@@ -2173,87 +2280,6 @@ class Blobs(object):
             raise ValueError('deltaTc is too large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
 
         return deltaTd, stepDiffusion
-
-
-    def _advanceTime(self):
-        r"""
-        __advanceTime updates all time related variables: self.__tStep and self.__t.
-
-        Usage
-        -----
-        .. code-block :: python
-
-            self.__advanceTime()
-
-        Parameters
-        ----------
-
-        Attributes
-        ----------
-            __tStep
-            __t
-
-        :First Added:   2014-02-10
-        :Last Modified: 2014-02-10
-        :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
-        :License:       GNU GPL version 3 or any later version
-
-        """
-
-        """
-        Reviews:
-
-        """
-
-        # advance tStep
-        self.__tStep += 1
-
-        # advance t
-        #self.__t += self.__deltaTc
-        self.__t = self.__deltaTc * self.__tStep
-
-
-    
-    def __diffusion(self):
-        """
-        diffusion
-        """        
-        # select the diffusion method to use
-        if self.__diffusionParams['method'] == 'regrid_wee':
-            # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
-            # on regrid of the blobs into a grid that
-            # does not need to have a node at the point [0.0, 0.0], for that it
-            # uses the original grid placement of particles to redistribute them.
-            # in here it is assumed that the redistribution grid always contains the
-            # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
-            # yBounds variables are computes in order to redistribute particles
-            # into a grid that contains the point [0.0, 0.0]. Essentially, the
-            # redistribution is done into the following initial grid:
-            #
-            #       -------------------------
-            #       |       |       |       |
-            #       |   X   |   X   |   X   |
-            #       |  (3)  |  (7)  |  (11) |
-            #       -------------------------
-            #       |       |       |      O|
-            #       |   X   |   X   |   X   |
-            #       |  (2)  |  (6)  |  (10) |
-            #       -------------------------
-            #       |       |       |       |
-            #       |   X   |   X   |   X   |
-            #       |  (1)  |  (5)  |  (9)  |
-            #       -------------------------
-            #
-            # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
-            # terms appear.
-            xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
-            yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
-
-            # perform diffusion and store the results directly in the object
-            self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
-                                                             self.__x,self.__y,self.__g,
-                                                             self.__sigma,xBounds,yBounds,
-                                                             overlap=self.__overlap)
 
     #----------------------------------------------------
     # Definition of properties

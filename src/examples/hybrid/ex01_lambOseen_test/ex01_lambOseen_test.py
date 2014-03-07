@@ -23,7 +23,6 @@ import pylab as py
 import time
 py.ion()
 
-
 # pHyFlow
 import pHyFlow
 
@@ -31,12 +30,11 @@ import pHyFlow
 # Global parameters
 
 # Simulation parameters
-nTimeSteps = 100
+nTimeSteps = 10
 
 # Fluid Parameters
 Re = 100. # Reynolds number
 vInf = np.array([0.,0.]) # Free stream velocity
-
 
 # Define the lamb-oseen
 Gamma = 2.0*np.pi # Total circulation of the lamb-oseen
@@ -45,7 +43,6 @@ tau = 0.5 # viscous time
 tStart = tau/nu
 pVortex = np.array([0.,0.])
 
-
 # Exact Function : exact vorticity field
 def wLambOseen(x,y,t):
     
@@ -53,16 +50,16 @@ def wLambOseen(x,y,t):
                                                     (y-pVortex[1])*(y-pVortex[1]))/
                                                 (4.0*nu*t))
                                                 
-# Exact Function : exact velocity field
-def vLambOseen(x,y,t):
-    # Radius
-    r = np.sqrt((x-pVortex[0])*(x-pVortex[0]) + (y-pVortex[1])*(y-pVortex[1])) + np.spacing(1)
-    # Circumferential velocity
-    uTheta = (Gamma / (2.0*np.pi*r)) * (1.0 - np.exp( - (r*r)/(4.0*nu*t)))
-    # Angle
-    theta = np.arctan2((y-pVortex[1]),(x-pVortex[0]))
-    # Return the cartesian velocity field
-    return -np.sin(theta)*uTheta, np.cos(theta)*uTheta                                               
+## Exact Function : exact velocity field
+#def vLambOseen(x,y,t):
+#    # Radius
+#    r = np.sqrt((x-pVortex[0])*(x-pVortex[0]) + (y-pVortex[1])*(y-pVortex[1])) + np.spacing(1)
+#    # Circumferential velocity
+#    uTheta = (Gamma / (2.0*np.pi*r)) * (1.0 - np.exp( - (r*r)/(4.0*nu*t)))
+#    # Angle
+#    theta = np.arctan2((y-pVortex[1]),(x-pVortex[0]))
+#    # Return the cartesian velocity field
+#    return -np.sin(theta)*uTheta, np.cos(theta)*uTheta                                               
                                                 
 #-----------------------------------------------------------------------------    
 
@@ -70,9 +67,9 @@ def vLambOseen(x,y,t):
 # Setup the vortex blobs - Lagrangian domain
 
 # Define blob parameters
-overlap = 1.0               # overlap ratio
-nBlobs = (256*256)    # number of blobs
-h = 20.0/np.sqrt(nBlobs)    # blob spacing
+overlap = 1.0 # overlap ratio
+nBlobs = (256*256) # number of blobs
+h = 20.0/np.sqrt(nBlobs) # blob spacing
 
 # Estimate of delta T
 #   with optimized c2 of 1/3.
@@ -105,7 +102,6 @@ panels = None
 lagrangian = pHyFlow.lagrangian.LagrangianSolver(blobs,panels=None)
 
 #------------------------------------------------------------------------------
-
 
 #-----------------------------------------------------------------------------    
 # Setup the navier-stokes problem - Eulerian domain
@@ -143,19 +139,20 @@ meshFilePath = './data/unitSquareMesh_%gx%g_mesh.xml.gz' % (N,N)
 boundaryDomainsFilePath = './data/unitSquareMesh_%gx%g_boundaryDomains.xml.gz' % (N,N)
 dolfin.File(meshFilePath) << mesh
 dolfin.File(boundaryDomainsFilePath) << boundaryDomains
+
 #---------------------------
 
 # Define the geometry parameters
 geometry = {'mesh' : meshFilePath,
             'boundaryDomains': boundaryDomainsFilePath,
-            'cmGlobal': np.array([0.,0.]),
+            'cmGlobal': np.array([0.,1.]),
             'thetaLocal': 0.} # radians
 
 # Probe Grid Parameters
 probeL = np.array([3.0,3.0]) # guess
 #origin = np.array([-1.0,-1.0])
-probeN = np.int64(np.round(probeL / h))
-probeL = probeN*h # to ensure the correct grid spacing
+probeN = np.int64(np.round(probeL / h)) + 1
+probeL = (probeN-1)*h # to ensure the correct grid spacing
 origin = -np.round(probeN*0.5)*h
 
 probeGridParams = {'origin' : origin,
@@ -166,12 +163,14 @@ probeGridParams = {'origin' : origin,
 cfl = 0.95 # CFL number
 uMax = 1.5
 
-
 # Initialize the navierStokes problem
 eulerian = pHyFlow.eulerian.EulerianSolver(geometry,probeGridParams,
                                            uMax=uMax,nu=nu,cfl=cfl,
                                            deltaT=0.01)
   
+eulerian.plotVelocity = True
+eulerian.plotVorticity = True
+
 # Concatenate all the navier-stokes domains
 # TODO: temporary, will implement a multi-ns class
 class MultiEulerianSolver(object):
@@ -236,8 +235,7 @@ class MultiEulerianSolver(object):
                                          
    
 multiEulerian = MultiEulerianSolver(subDomains={'eulerian': eulerian})
-        
-                               
+                                       
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
@@ -246,17 +244,18 @@ multiEulerian = MultiEulerianSolver(subDomains={'eulerian': eulerian})
 # Use stocks parameters
 # ..[1] Stock, M., Gharakhani, A., & Stone, C. (2010). Modeling Rotor Wakes 
 #       with a Hybrid OVERFLOW-Vortex Method on a GPU Cluster.
-dBdry = 2*h + np.spacing(10e10)
+dBdry = 2*h + np.spacing(10e10) # ensure no floating-point error occurs, add a small increment
 
 interpolationRegions = {}
 
+# Iterate through subdomains
 for subDomain in multiEulerian.subDomainKeys:
 
     # Get the limits of the navier-stokes boundary
-    xMin = multiEulerian[subDomain].getBoundaryCoordinates()[0].min()
-    xMax = multiEulerian[subDomain].getBoundaryCoordinates()[0].max()
-    yMin = multiEulerian[subDomain].getBoundaryCoordinates()[1].min()
-    yMax = multiEulerian[subDomain].getBoundaryCoordinates()[1].max()
+    xMin = -1.0
+    xMax = 1.0
+    yMin = -1.0
+    yMax = 1.0
     
     # Define the boundary polygon (closed loop)
     xBoundaryPolygon = np.array([xMin+dBdry, xMax-dBdry, xMax-dBdry,xMin+dBdry,xMin+dBdry])
@@ -279,7 +278,7 @@ couplingParams={'adjustLagrangian':True,
                 'adjustLagrangianAt':'start',
                 'eulerianInitialConditions': 'lagrangian_field'}
 
-interpolationParams={'algorithm':'scipy_griddata',
+interpolationParams={'algorithm':'structuredProbes_manual',#'structuredProbes_scipy',#'unstructured_scipy',#'structuredProbes_scipy',
                      'method':'linear'}
 
 # Initialize the hybrid problem
@@ -295,20 +294,14 @@ hybrid = pHyFlow.hybrid.HybridSolver(lagrangian=lagrangian, # either vortex-blob
 
 # Export the navier-stokes and blobs
 
-# Define navier-stokes export files
-nsVFileName = './data/Re%s/ns_velocity.pvd' % str(Re)
-nsVFile = dolfin.File(nsVFileName)
+# Define eulerian export files
+eulerianFile = pHyFlow.IO.File('./data/eulerian.pvd')
 
-nsWFileName = './data/Re%s/ns_vorticity.pvd' % str(Re)
-nsWFile = dolfin.File(nsWFileName)
-
-blobsFileName = './data/Re%s/blobs.pvd' % str(Re)
-blobsFile = pHyFlow.IO.File(blobsFileName)
-
+# Define the blob export file
+blobsFile = pHyFlow.IO.File('./data/blobs.pvd')
 
 # Export initial data
-nsVFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.u1, hybrid.multiEulerian.t)
-nsWFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.vorticity(), hybrid.multiEulerian.t)
+eulerianFile << hybrid.multiEulerian['eulerian']
 blobsFile << hybrid.lagrangian.blobs
 
 #------------------------------------------------------------------------------
@@ -339,9 +332,8 @@ for timeStep in range(1,nTimeSteps+1):
     print "T\t\t\t: %g" % hybrid.lagrangian.t
     print 'Time to evolve\t\t: %g'  % (time.time() - startTime)
     
-    # Export initial data
-    nsVFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.u1, hybrid.multiEulerian.t)
-    nsWFile << (hybrid.multiEulerian['eulerian']._EulerianSolver__solver.vorticity(), hybrid.multiEulerian.t)
+    # Export data
+    eulerianFile << hybrid.multiEulerian['eulerian']
     blobsFile << hybrid.lagrangian.blobs
     
     numBlobsTime[timeStep] =  hybrid.lagrangian.blobs.numBlobs

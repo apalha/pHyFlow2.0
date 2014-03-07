@@ -90,8 +90,8 @@ class EulerianSolver(object):
                                   probeGrid = {'origin': origin,
                                                'L': L
                                                'N': N},
-                                uMax=uMax,nu=nu,cfl=cfl,deltaT,
-                                solverParams={'solver':'ipcs')
+                                  uMax=uMax,nu=nu,cfl=cfl,deltaT,
+                                  solverParams={'solver':'ipcs')
         
     Parameters
     ----------
@@ -172,12 +172,16 @@ class EulerianSolver(object):
     deltaTMax
     cfl
     cmGlobal
-    hMin
-    thetaLocal
-    uMax
+    hMin    
     nu
-    solverParams    
-    
+    probeGridMesh
+    probeGridParams
+    solverParams
+    t
+    thetaLocal
+    tStep
+    uMax
+        
     __boundaryDomainsFile : str
                             the facet boundary domain mesh data file location.                 
     
@@ -195,18 +199,22 @@ class EulerianSolver(object):
     __nu : float
            the fluid kinematic viscosity :math:`\nu`.
     
-    __probeGrid_L : numpy.ndarray(float64), shape (2,)
-                    the width :math:`L_x` and the height :math:`L_y` of the 
-                    probe mesh.
-    
-    __probeGrid_N : numpy.ndarray(float64), shape (2,)
-                    the number of probes :math:`N_x,N_y` in the :math:`x,y` 
-                    direction.
-    
-    __probeGrid_origin : numpy.ndarray(float64), shape (2,)
-                         the :math:`x,y` coordinate of the origin of the probe 
-                         mesh in the **local** coordinate system of the fluid
-                         mesh.
+    __probeGrid : dict
+                dictionary containing all the parameters of the probe grid for
+                extracting the vorticity data.                             
+
+                'origin' : numpy.ndarray(float64), shape (2,)
+                           the :math:`x,y` coordinate of the origin of the probe 
+                           mesh in the **local** coordinate system of the fluid
+                           mesh.
+                         
+                'L' : numpy.ndarray(float64), shape (2,)
+                      the width :math:`L_x` and the height :math:`L_y` of the 
+                      probe mesh.
+                
+                'N' : numpy.ndarray(float64), shape (2,)
+                      the number of probes :math:`N_x,N_y` in the :math:`x,y` 
+                      direction.
                          
     __probes : fenicstools.Probes.Probes
                the `probe` class containing all the information to `eval`
@@ -239,8 +247,7 @@ class EulerianSolver(object):
     
     Methods
     -------
-    getCoordintes
-
+    getCoordinates
     setVelocity
 
     getBoundaryCoordinates
@@ -275,18 +282,17 @@ class EulerianSolver(object):
     def __init__(self,geometry, probeGrid, uMax, nu, cfl,deltaT='max',
                  solverParams={'solver':eulerianOptions.SOLVER['default']}):
         
-        
         #---------------------------------------------------------------------
         # Check/Set input parameters
             
         # Initialize the parameters
-        self.__set('geometry', geometry)
-        self.__set('probeGrid', probeGrid)
-        self.__set('uMax', uMax)
-        self.__set('nu',nu)            
-        self.__set('cfl',cfl)  
-        self.__set('solverParams', solverParams)
-        
+        self.__set_variables('geometry', geometry)
+        self.__set_variables('probeGrid', probeGrid)
+        self.__set_variables('uMax', uMax)
+        self.__set_variables('nu',nu)            
+        self.__set_variables('cfl',cfl)  
+        self.__set_variables('solverParams', solverParams)
+        #---------------------------------------------------------------------
         
         #---------------------------------------------------------------------
         # Choose the solver: (Chorin or other solvers)
@@ -300,21 +306,14 @@ class EulerianSolver(object):
             self.__solver = _base.ipcs(self.__meshFile,self.__boundaryDomainsFile,
                                        self.__nu,self.__cfl,self.__uMax)
         else:
-            raise NotImplementedError('Solver type not implemented or unknown !!')
-            
-        #---------------------------------------------------------------------
-
-        #---------------------------------------------------------------------
-        # Update mesh position
-
-        # The rotating is done around the local reference point (0.,0.)
-        dThetaLocal = self.__thetaLocal - 0.0 # new - old angle
-        self.__solver.rotateMesh(dThetaLocal) # rotate by dThetaLocal
-
+            raise NotImplementedError('Solver type not implemented or unknown !!')            
         #---------------------------------------------------------------------
 
         #---------------------------------------------------------------------            
-        # Define the probe grid
+        # Define the probe grid, w.r.t to the local mesh
+        # * Note: the probes are defined/generated in the local coordinates system.
+        #         Therefore, we must probe the mesh, before we update the mesh
+        #         to global coordinate system.
         self.__xyProbes = _numpy.meshgrid(_numpy.linspace(0,self.__probeGrid['L'][0],
                                                           self.__probeGrid['N'][0]) + self.__probeGrid['origin'][0],
                                           _numpy.linspace(0,self.__probeGrid['L'][1],
@@ -326,11 +325,20 @@ class EulerianSolver(object):
                                             self.__solver.X)
         #---------------------------------------------------------------------
                                             
+        #---------------------------------------------------------------------
+        # Update mesh position (new rotational angle and global position)
+
+        # The rotating is done around the local reference point (0.,0.)
+        #dThetaLocal = self.__thetaLocal - 0.0 # new - old angle
+        #self.__solver.rotateMesh(dThetaLocal) # rotate by dThetaLocal
+        self.__solver.updateMeshPosition(self.__cmGlobal, self.__thetaLocal)
+        #---------------------------------------------------------------------
+
         #---------------------------------------------------------------------                                            
         # Define and initialize the time step counters and absolute time
 
         # assign the delta T        
-        self.__set('deltaT',deltaT)
+        self.__set_variables('deltaT',deltaT)
 
         # define the time step counter
         self.__tStep = 0
@@ -340,216 +348,15 @@ class EulerianSolver(object):
                           
         # We need to calculate the vorticity  
         self.__solver.recalculateVorticityFlag = True
-        self.__reprobeVorticityFlag = True                          
+        self.__reprobeVorticityFlag = True 
         
+        # plotting flags
+        self.plotVelocity = False
+        self.plotPressure = False
+        self.plotVorticity = True # most informative data
         #---------------------------------------------------------------------
-                                            
-           
-    def getCoordinates(self):
-        r"""
-        Function get all the coordinates of the velocity function space
-        :math:`\mathbf{V}`. With the returned coordinates, one cold calculate
-        the velocity field in the navier-stokes domain.
-        
-        The function acquires the DOF coordinates of the vector function space
-        by running FEniCS internal function to tabulate all the coordinates.
-        This will be in the local coordinate sytem and the will be transformed
-        to global coordinate system by **cmGlobal**.
-                
-        Usage
-        -----
-        .. code-block:: python
-        
-            x,y = getCoordinates()
-            
-        or
-        
-        .. code-block:: python
-        
-            xy = getCoordinates()
-        
-        Parameters
-        ----------
-        None
-        
-        Returns
-        -------
-        xyCoordinates : numpy.ndarray(float64), shape (2,N_DOFs)
-                        the global :math:`x,y`-coordinates of the vector 
-                        function space  :math:`\mathbf{V}` dofs :math:`N_{DOFs}}`.
-            
-        Attribute
-        ---------
-        None changed.
-                      
-        :First Added:   2013-12-18
-        :Last Modified: 2014-02-21
-        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version               
-        """
-        
-        # Retrive the dof coordinates of the vector function space (local coordinate system)
-        xyLocal = self.__solver.V.dofmap().tabulate_all_coordinates(self.__solver.mesh).reshape(-1,2).T[:,::2]
-        
-        # update to global coordiante system
-        xyGlobal = xyLocal + self.__cmGlobal.reshape(2,-1) 
-        
-        # Return the dof coordiantes (global coordinate system)        
-        return xyGlobal
-        
-
-
-    def setVelocity(self,vx,vy):
-        r"""
-        Function to replace the current `(initial)` velocity Field. The input
-        requires the :math:`x,y` component of the velocity at the vector
-        function space dof coordiantes from .. py:module:: getCoordinates
-        
-        Usage
-        -----
-        .. code-block:: python
-            
-            setVelocity(vx,vy)
-        
-        
-        Parameters
-        ----------
-        vx : numpy.ndarray(float64), shape (nDOFs,)
-             the :math:`x`-component of the velocity at the vector function
-             space :math:`\mathbf{V}` DOFs from .. py:module:: getCoordinates.
-                     
-        vy : numpy.ndarray(float64), shape (nDOFs,)
-             the :math:`y`-component of the velocity at the vector function
-             space :math:`\mathbf{V}` DOFs from .. py:module:: getCoordinates.
-        
-        Returns
-        -------
-        None
-        
-        Attribute
-        ----------
-        __solver.u1.vector : numpy.ndarray(float64), shape (2,nDOFs)
-                             the :math:`x,y` velocity at the vector function space 
-                             :math:`\mathbf{V}` DOFs.
-        
-        :First Added:   2013-12-18
-        :Last Modified: 2014-02-21
-        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version        
-        """
-        
-        # vField to assign
-        vField = _numpy.vstack((vx,vy)).T.flatten()
-        
-        # Apply new data
-        self.__solver.u1.vector()[:] = vField
-            
-            
-        
-    def getBoundaryCoordinates(self):
-        """
-        Returns the *global* boundary DOF coordinates :math:`x,y_{boundary}` of 
-        the vector function space :math:`\mathbf{V}`, where the dirichlet
-        velocity boundary condition should be applied.
-        
-        The boundary coordinates is located with the help of the 
-        **boundaryDomains** mesh function. The dirichlet velocity boundary
-        DOF coordinates is found by a internal FEniCS search initialization
-        of the module.
-        
-        The Dirichlet boundary is ID is found in 
-        .. py:module:: pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY
-        
-            External boundary: 3
-        
-        Usage
-        -----
-        .. code-block:: python
-        
-            xBoundary, yBoundary = getBoundaryCoordinates()
-            
-        or
-        
-        .. code-block :: python
-        
-            xyBoundary = getBoundaryCoordinates()
-            
-        Parameters
-        ----------
-        None
-            
-        Returns
-        -------
-        xyBoundary : numpy.ndarray(float64), shape (2,nDOFs)
-                     the global :math:`x,y` coordinates of the dirichlet boundary
-                      where the external velocity is applied.
-        
-        Attributes
-        ----------
-        None changed.
-        
-        :First Added:   2013-12-18
-        :Last Modified: 2014-02-21
-        :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version    
-        """
-        
-        # Get the boundary coordinates of the mesh (local coordinate system)
-        xyLocal = self.__solver.boundary_DOFCoordinates
-        
-        # in the global coordinate system
-        xyGlobal = xyLocal + self.__cmGlobal.reshape(2,-1)
-        
-        # returnt the boundary coordinates
-        return xyGlobal
-        
- 
-    def getBoundaryVelocity(self):
-        """
-        Returns the boundary velocity of the dirichlet velocity boundary
-        domain.
-        
-        The Dirichlet boundary is ID is found in 
-        .. py:module:: pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY
-        
-            External boundary: 3
-        
-        Usage
-        -----
-        .. code-block:: python
-        
-            vxBoundary, vyBoundary = getBoundaryVelocitys()
-            
-        Parameters
-        ----------
-        None
-            
-        Returns
-        -------
-        
-        
-        Attributes
-        ----------
-        None changed.
-        
-        :First Added:   2013-02-28
-        :Last Modified: 2014-02-28
-        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version    
-        """
-        
-        # Get the boundary coordinates of the mesh (local coordinate system)
-        boundary_VectorDOFIndex = self.__solver.boundary_VectorDOFIndex
-        
-        # in the global coordinate system
-        vx = self.__solver.u1.vector()[boundary_VectorDOFIndex[0]].copy()
-        vy = self.__solver.u1.vector()[boundary_VectorDOFIndex[1]].copy()
-        
-        # return the boundary velocities
-        return vx,vy
-        
-        
-
+                                    
+                                    
     def evolve(self,vxBoundary,vyBoundary,cmGlobal,thetaLocal,cmDotGlobal,
                thetaDotLocal):
         r"""
@@ -563,7 +370,7 @@ class EulerianSolver(object):
         
         The function will calculate the new velocity and the pressure fields.
         
-        * Note : [to be implemented] Moving mesh.
+        * Note : [not implemented] Moving mesh.
             
         
         Usage
@@ -626,10 +433,10 @@ class EulerianSolver(object):
         :Licence:       GNU GPL version 3 or any later version 
         
         """
-        # update the mesh position [Not Implemented]
-        #dThetaLocal = thetaLocal - self.__thetaLocal # new - old
-        #self.__solver.rotateMesh(dThetaLocal)  
-        #self.__updatePosition(cmGlobal,thetaLocal)
+        # update the mesh position [moving boundary problem not implemented !!]
+        #self.__thetaLocal = thetaLocalNew
+        #self.__cmGlobal = cmGlobalNew
+        #self.__solver.updateMeshPosition(cmGlobal, thetaLocal)
         
         # Set boundary conditions
         self.__solver.boundaryConditions(vxBoundary,vyBoundary)
@@ -638,10 +445,219 @@ class EulerianSolver(object):
         self.__solver.solve()
         
         # update the time
-        self.__advanceTime()
+        self.__advanceTime()  
+   
+   
+    def Forces(self):
+        r"""
+        Function to calculate the Pressure gradient forces (N).
+        
+        If the free-stream flow is in x-direction (1,0):
+            
+            Fx : Total drag force
+            Fy : Total lift force
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            F = Forces()
+            
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        F : numpy.ndarray(float64), shape (2,), unit (N)
+            the :math:`x,y` component of the total forces acting on the
+            geometry (defined by the no-slip boundary).
+            
+        :First Added:   2014-03-05
+        :Last Modified: 2014-03-05
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version  
+        """
+        return self.__solver.Forces()  
         
 
+    def FrictionalForces(self):
+        r"""
+        Function to calculate the frictional forces. 
+        
+        If the free-stream flow is in x-direction (1,0):
+            
+            Ffx : Friction drag
+            Ffy : Friction induced lift
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            Ff = FrictionalForces()
+            
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        Ff : numpy.ndarray(float64), shape (2,), unit (N)
+             the :math:`x,y` component of the frictional forces acting on the
+             geometry (defined by the no-slip boundary).
+            
+        :First Added:   2014-03-05
+        :Last Modified: 2014-03-05
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version         
+        
+        """
+        return self.__solver.FrictionalForces()
+  
 
+    def getBoundaryCoordinates(self):
+        """
+        Returns the *global* boundary DOF coordinates :math:`x,y_{boundary}` of 
+        the vector function space :math:`\mathbf{V}`, where the dirichlet
+        velocity boundary condition should be applied.
+        
+        The boundary coordinates is located with the help of the 
+        **boundaryDomains** mesh function. The dirichlet velocity boundary
+        DOF coordinates is found by a internal FEniCS search initialization
+        of the module.
+        
+        The Dirichlet boundary is ID is found in 
+        .. py:module:: pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY
+        
+            External boundary: 3
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            xBoundary, yBoundary = getBoundaryCoordinates()
+            
+        or
+        
+        .. code-block :: python
+        
+            xyBoundary = getBoundaryCoordinates()
+            
+        Parameters
+        ----------
+        None
+            
+        Returns
+        -------
+        xyBoundary : numpy.ndarray(float64), shape (2,nDOFs)
+                     the global :math:`x,y` coordinates of the dirichlet boundary
+                      where the external velocity is applied.
+        
+        Attributes
+        ----------
+        None changed.
+        
+        :First Added:   2013-12-18
+        :Last Modified: 2014-03-06
+        :Copyright:     Copyright (C) 2013 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version    
+        """
+        
+        # return the global coordinates of the vector dof boundaries
+        return self.__solver.vectorDOF_boundaryCoordinates()
+        
+ 
+    def getBoundaryVelocity(self):
+        """
+        Returns the boundary velocity of the dirichlet velocity boundary
+        domain.
+        
+        The Dirichlet boundary is ID is found in 
+        .. py:module:: pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY
+        
+            External boundary: 3
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            vxBoundary, vyBoundary = getBoundaryVelocitys()
+            
+        Parameters
+        ----------
+        None
+            
+        Returns
+        -------
+        None returned.
+        
+        Attributes
+        ----------
+        None changed.
+        
+        :First Added:   2013-02-28
+        :Last Modified: 2014-02-28
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version    
+        """
+        
+        # Get the boundary coordinates of the mesh (local coordinate system)
+        boundary_VectorDOFIndex = self.__solver.boundary_VectorDOFIndex
+        
+        # in the global coordinate system
+        vx = self.__solver.u1.vector()[boundary_VectorDOFIndex[0]].copy()
+        vy = self.__solver.u1.vector()[boundary_VectorDOFIndex[1]].copy()
+        
+        # return the boundary velocities
+        return vx,vy
+                      
+                
+    def getCoordinates(self):
+        r"""
+        Function get all the coordinates of the velocity function space
+        :math:`\mathbf{V}`. With the returned coordinates, one cold calculate
+        the velocity field in the navier-stokes domain.
+        
+        The function acquires the DOF coordinates of the vector function space
+        by running FEniCS internal function to tabulate all the coordinates.
+        This will be in the local coordinate sytem and the will be transformed
+        to global coordinate system by **cmGlobal**.
+                
+        Usage
+        -----
+        .. code-block:: python
+        
+            x,y = getCoordinates()
+            
+        or
+        
+        .. code-block:: python
+        
+            xy = getCoordinates()
+        
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        xyCoordinates : numpy.ndarray(float64), shape (2,N_DOFs)
+                        the global :math:`x,y`-coordinates of the vector 
+                        function space  :math:`\mathbf{V}` dofs :math:`N_{DOFs}}`.
+            
+        Attribute
+        ---------
+        None changed.
+                      
+        :First Added:   2013-12-18
+        :Last Modified: 2014-03-06
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version               
+        """
+
+        # retrieve the global dof coordinates of the vector function space
+        return self.__solver.vectorDOF_coordinates()
+        
 
     def getVorticity(self):
         r"""
@@ -686,31 +702,93 @@ class EulerianSolver(object):
             # Probe the data
             self.__probes(self.__solver.vorticity())
             
+            # Flow probed, no need to reprobe the current state
             self.__reprobeVorticityFlag = False
         
-        # else: don't do anything
         
         # Return the data as the shape Nx,Ny of Probes
         return self.__probes.array().reshape(self.__probeGrid['N'][1],self.__probeGrid['N'][0])
-        
 
-    def FrictionalForces(self):
-            r"""
-            Frictional Forces
-            """
-            return self.__solver.FrictionalForces()
-        
+
     def PressureForces(self):
         r"""
-        Pressure Forces
+        Function to calculate the Pressure gradient forces.
+        
+        If the free-stream flow is in x-direction (1,0):
+            
+            Fx : Pressure drag
+            Fy : Pressure induced lift
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            Fp = PressureForces()
+            
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        Fp : numpy.ndarray(float64), shape (2,), unit (N)
+             the :math:`x,y` component of the pressure forces acting on the
+             geometry (defined by the no-slip boundary).
+            
+        :First Added:   2014-03-05
+        :Last Modified: 2014-03-05
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version     
         """
         return self.__solver.PressureForces()
-    
-    def Forces(self):
+
+
+    def setVelocity(self,vx,vy):
         r"""
-        Pressure Forces
+        Function to replace the current `(initial)` velocity Field. The input
+        requires the :math:`x,y` component of the velocity at the vector
+        function space dof coordiantes from .. py:module:: getCoordinates
+        
+        Usage
+        -----
+        .. code-block:: python
+            
+            setVelocity(vx,vy)
+        
+        
+        Parameters
+        ----------
+        vx : numpy.ndarray(float64), shape (nDOFs,)
+             the :math:`x`-component of the velocity at the vector function
+             space :math:`\mathbf{V}` DOFs from .. py:module:: getCoordinates.
+                     
+        vy : numpy.ndarray(float64), shape (nDOFs,)
+             the :math:`y`-component of the velocity at the vector function
+             space :math:`\mathbf{V}` DOFs from .. py:module:: getCoordinates.
+        
+        Returns
+        -------
+        None
+        
+        Attribute
+        ----------
+        __solver.u1.vector : numpy.ndarray(float64), shape (2,nDOFs)
+                             the :math:`x,y` velocity at the vector function space 
+                             :math:`\mathbf{V}` DOFs.
+        
+        :First Added:   2013-12-18
+        :Last Modified: 2014-02-21
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version        
         """
-        return self.__solver.Forces()                
+        
+        # vField to assign
+        vField = _numpy.vstack((vx,vy)).T.flatten()
+        
+        # Apply new data
+        self.__solver.u1.vector()[:] = vField
+                   
+               
                
     def __advanceTime(self):
         """
@@ -732,11 +810,11 @@ class EulerianSolver(object):
         
         Attribute
         ---------
-        __tStep : int
-                  the current time step
-                  
-        __t : float
-              the current time instant
+        __reprobeVorticityFlag
+        __solver :
+            recalculateVorticityFlag
+        __tStep
+        __t
               
         :First Added:   2014-02-21
         :Last Modified: 2014-02-21
@@ -752,27 +830,12 @@ class EulerianSolver(object):
         # We need to recalculate the vorticity
         self.__solver.recalculateVorticityFlag = True
         self.__reprobeVorticityFlag = True
-        
-        
-    def __updatePosition(self, cmGlobalNew, thetaLocalNew):
-        r"""
-        Function to rotate the mesh
+       
+       
+    def __set_variables(self, varName, var):
         """
-        # update the mesh position [Not Implemented]
-        dThetaLocal = thetaLocalNew - self.__thetaLocal # new - old
-        self.__solver.rotateMesh(dThetaLocal)   
-        
-        # update the parameters [Not Implemented]
-        self.__thetaLocal = thetaLocalNew
-        self.__cmGlobal = cmGlobalNew
-        
-        
-        
-    def __set(self, varName, var):
+        Function to check/set the input parameters
         """
-        Function to check the input parameters
-        """
-        #---------------------------------------------------------------------
         # Check/set geometry data
         if varName == 'geometry':
             if type(var['mesh']) != str:
@@ -793,10 +856,8 @@ class EulerianSolver(object):
             self.__boundaryDomainsFile = var['boundaryDomains']
             self.__cmGlobal = var['cmGlobal']
             self.__thetaLocal = var['thetaLocal']
-        
-        #---------------------------------------------------------------------
-
-        #---------------------------------------------------------------------
+            #------------------------------------------------------------------
+            
         # Check probegrid parameters
         elif varName == 'probeGrid':
             if type(var['origin']) != _numpy.ndarray:
@@ -815,44 +876,34 @@ class EulerianSolver(object):
                 raise ValueError("probeGrid['N'] must have shape (2,). It has shape %s." % str(var['N'].shape))
             
             self.__probeGrid = var
-        
-        #---------------------------------------------------------------------                
+            #------------------------------------------------------------------
 
-        #---------------------------------------------------------------------                
         # Check uMax
         elif varName == 'uMax':
             if type(var) != float and type(var) != _numpy.float64:
                 raise TypeError('uMax must be a float. It is %s.' % str(type(var)))
             
             self.__uMax = var
+            #------------------------------------------------------------------
         
-        #---------------------------------------------------------------------
-
-        #---------------------------------------------------------------------            
         elif varName == 'nu':
             if type(var) != float and type(var) != _numpy.float64:
                 raise TypeError('nu must be a float. It is %s.' % str(type(var)))
             self.__nu = var
+            #------------------------------------------------------------------
 
-        #---------------------------------------------------------------------
-
-        #---------------------------------------------------------------------        
         elif varName == 'cfl':
             if type(var) != float and type(var) != _numpy.float64:
                 raise TypeError('cfl must be a float. It is %s.' % str(type(var)))
             self.__cfl = var        
+            #------------------------------------------------------------------
 
-        #---------------------------------------------------------------------
-
-        #---------------------------------------------------------------------        
         elif varName == 'solverParams':
             if var['solver'] not in eulerianOptions.SOLVER['available']:
                 raise ValueError(r"solverParams['solver'] must be in [%s]. It is %s" % (eulerianOptions.SOLVER['available'],var['solver'])) 
             self.__solverParams = var
+            #------------------------------------------------------------------
 
-        #---------------------------------------------------------------------            
-
-        #---------------------------------------------------------------------
         # Set delta T
         elif varName == 'deltaT':
             if type(var) == str:
@@ -864,17 +915,10 @@ class EulerianSolver(object):
                 
             # Set the time-step    
             self.__solver.set_deltaT(var)
-            
-
-
-
-    #--------------------------------------------------------------------- 
+            #------------------------------------------------------------------
         
-
     #--------------------------------------------------------------------------       
     # Attributes
-
-
 
     # Time step size
     @property
@@ -887,9 +931,8 @@ class EulerianSolver(object):
         
     @deltaT.setter
     def deltaT(self,deltaTNew):
-        self.__set('deltaT',deltaTNew)
-        
-        
+        self.__set_variables('deltaT',deltaTNew)
+                
     # Time step  max
     @simpleGetProperty
     def deltaTMax(self):
@@ -928,11 +971,20 @@ class EulerianSolver(object):
         """
         return self.__solver.hmin
         
+    # viscosity
+    @simpleGetProperty                            
+    def nu(self):
+        """
+        nu : float
+             the fluid kinematic viscosity :math:`\nu`.
+        """
+        return self.__nu
+                       
     @simpleGetProperty        
     def probeGridMesh(self):
         r"""
         xProbes, yProbes : numpy.ndarray(float64), shape (nxProbes,nyProbes)
-                           the :math:`x,y` coordinates of the probe grid mesh.
+                           the *local* :math:`x,y` coordinates of the probe grid mesh.
         """
         # TODO: transform to global coordinate system
         return self.__xyProbes
@@ -958,7 +1010,20 @@ class EulerianSolver(object):
                                 :math:`x,y` direction.
         """
         return self.__probeGrid
-                   
+     
+    # solver parameters 
+    @simpleGetProperty                           
+    def solverParams(self):
+        r"""
+        solverParams : dict
+                       the dictionary file containing all the solver parameters.
+                       
+                       'solver' : str
+                                  type of NS solver that should used to solve 
+                                  the incompressible laminar problem.
+        """
+        return self.__solverParams
+              
     @simpleGetProperty
     def t(self):
         r"""
@@ -996,26 +1061,7 @@ class EulerianSolver(object):
         """
         return self.__uMax
                             
-    # viscosity
-    @simpleGetProperty                            
-    def nu(self):
-        """
-        nu : float
-             the fluid kinematic viscosity :math:`\nu`.
-        """
-        return self.__nu
-               
-    # solver parameters 
-    @simpleGetProperty                           
-    def solverParams(self):
-        r"""
-        solverParams : dict
-                       the dictionary file containing all the solver parameters.
-                       
-                       'solver' : str
-                                  type of NS solver that should used to solve 
-                                  the incompressible laminar problem.
-        """
-        return self.__solverParams
+
+
         
     

@@ -61,7 +61,10 @@ probeGrid = {'origin': np.array([x0,y0]),
 
 # Initialize Navier-Stokes problem
 eulerian = pHyFlow.eulerian.EulerianSolver(geometry,probeGrid,uMax,nu,cfl)
-                                     
+
+eulerian.plotVelocity = True                                     
+eulerian.plotPressure = True                                     
+eulerian.plotVorticity = True                                                          
 #------------------------------------------------------------------------------
                                    
                                    
@@ -95,9 +98,8 @@ cmGlobalNew, thetaGlobalNew = cmGlobal,thetaLocal
 cmDotGlobal, thetaGlobal = np.array([0.,0.]), 0.
 
 saveDir = './data/'
-vFile = dolfin.File(saveDir + "velocity.pvd", "compressed")
-pFile = dolfin.File(saveDir + "pressure.pvd", "compressed")
-wFile = dolfin.File(saveDir + "vorticity.pvd", "compressed")
+eulerianFiles = pHyFlow.IO.File(saveDir+'eulerian.pvd')
+
 
 solver = eulerian._EulerianSolver__solver
 
@@ -132,14 +134,12 @@ for timeStep in range(1,nTimeSteps+1):
     # Export results
     if timeStep % 1 == 0:                
         #dolfin.plot(dolfin.sqrt(dolfin.inner(NSDomain._solver.u1,NSDomain._solver.u1)),key='vNorm')         
-        vFile << (eulerian._EulerianSolver__solver.u1, T)
-        pFile << (eulerian._EulerianSolver__solver.p1, T)
-        wFile << (eulerian._EulerianSolver__solver.vorticity(), T)
+        eulerianFiles << eulerian
 
     # Print info
     print "Step\t\t\t: %g" % timeStep
     print "T\t\t\t: %g" % T
-    print "Step duration\t\t: %g" % (time.time() - startTime)
+    print "Time to evolve\t\t: %g" % (time.time() - startTime)
     print "Difference in vel. norm : %g" % diff_u    
     print "----------------------------------------\n"
     

@@ -28,6 +28,11 @@ Define vortex-panel options
 
 """
 
-
+# Panel strength update statement
+# 'constant': the panel strength is only calculated at the beginning of the 
+#             convection step. It is kept constant throughout the RK4 time
+#             integration
+# 'varying' : the panel strength is recalculated during each sub-step of 
+#             rk4 time integration
 PANEL_STRENGTH_UPDATE = {'default': 'constant',
                          'available': ('constant', 'varying')}

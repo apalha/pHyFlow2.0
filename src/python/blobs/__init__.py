@@ -24,6 +24,7 @@
 # imported for the user to have access to lower level functions
 import base
 
+# blob optiosn
 import blobOptions
 
 # import vortex class

@@ -19,17 +19,11 @@ This module handles all panel method related operations in python
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
 # First added:  2013-09-09                                                                                                         
-# Last changed: 2013-10-08
+# Last changed: 2014-03-06
 
-
+# import panel options and c++ functions
 from pHyFlow.panels import panelOptions
-from pHyFlow.cpp.panels import kernels #,sourcePanel
-#from pHyFlow.vortex.induced import velocity
-
-# External packages
-#import numpy
-#from scipy.sparse.linalg import gmres, bicgstab
-
+from pHyFlow.cpp.panels import kernels
 
 __all__ = ['influenceMatrix','inducedVelocity']
 
@@ -37,10 +31,6 @@ __all__ = ['influenceMatrix','inducedVelocity']
 def influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
                     cosAlpha,sinAlpha,hardware=0,method=1):     
     r"""
-    
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    
-    
     
     Assemble the self-induction influence matrix for constant strength
     vortex panels. The operations are done using the appropriate hardware 
@@ -103,11 +93,7 @@ def influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
                the :math:`\sin\alpha` of the panel :math:`\mathbf{M}`,
                where the angle :math:`\alpha` is w.r.t to the panel 
                :math:`\mathbf{x}^\prime`-axis and the global
-               :math:`\mathbf{x}`-axis.                 
-                  
-    #    `panelKernel` : int (0 = constant source, 1 = constant vortex), optional, default = 1
-    #                    the type of panel kernel that should be used for the 
-    #                    computation.
+               :math:`\mathbf{x}`-axis.  
                   
     `hardware` : int (0 = CPU, 1 = GPU), optional, default = 0
                  the hardware to use to compute the induced velocities
@@ -133,7 +119,7 @@ def influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
     # compute optimized fullOption
     # the fullOtion is obtained as:
     #    100*method + 10*hardware
-    # this means that if method = 2, hardware = 0we get as
+    # this means that if method = 2, hardware = 0 we get as
     # full option:
     #    100*2 + 10*0 = 200 this reduces the options
     fullOption = 100*method + 10*hardware
@@ -218,10 +204,6 @@ def inducedVelocity(strength,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
     yEval : ndarray (float64), shape (nEval,)
             the :math:`y`-coordinates of the points where to evaluate the 
             induced velocities
-            
-    #    `panelKernel` : int (0 = constant source, 1 = constant vortex), optional, default = 1
-    #                    the type of panel kernel that should be used for the 
-    #                    computation.
                   
     `hardware` : int (0 = CPU, 1 = GPU), optional, default = 0
                  the hardware to use to compute the induced velocities
@@ -271,7 +253,8 @@ def inducedVelocity(strength,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
     return vx,vy        
   
   
-
+#------------------------------------------------------------------------------
+# Obsolete functions 
 #def solve(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,cosAlpha,
 #          sinAlpha,vxInduced,vyInduced,A=None,panelKernel=1,hardware=0,
 #          method=1):

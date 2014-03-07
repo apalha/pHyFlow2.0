@@ -38,6 +38,7 @@ __all__ = ['File']
 
 # External packages
 import numpy as _numpy
+import dolfin as _dolfin
 import os as _os
 import lxml.etree as _lET
 from __evtk.hl import pointsToVTK as _pointsToVTK
@@ -46,61 +47,60 @@ from __evtk.hl import linesToVTK as _linesToVTK
 # pHyFlow packages
 from pHyFlow.blobs import Blobs as _BlobsClass
 from pHyFlow.panels import Panels as _PanelsClass
-#from pHyFlow.panel.__panelsClass import Panels as _Panels
-
+from pHyFlow.eulerian import EulerianSolver as _EulerianSolverClass
 
 class File:
     r"""
-        Class used to save all the objects of pHyFlow.
+    Class used to save all the objects of pHyFlow.
 
-        If the filetype is 'pvd' then the object is saved into VTK file to be read by Paraview, MayaVI,
-        VTK or any other software that reads VTK files.
+    If the filetype is 'pvd' then the object is saved into VTK file to be read by Paraview, MayaVI,
+    VTK or any other software that reads VTK files.
 
-        If the filetype is 'xml' then the object is saved into xml file containing all data that enables the
-        reconstruction of the object at the moment it was saved.
+    If the filetype is 'xml' then the object is saved into xml file containing all data that enables the
+    reconstruction of the object at the moment it was saved.
 
-        Files saved are not a single file. For example 'pvd' files save the pvd file itself and all the associated
-        'vtu' files containing the data at each saves time instant. 'xml' files do the same, the main xml file is
-        saved and additional files containing data are also saved.
+    Files saved are not a single file. For example 'pvd' files save the pvd file itself and all the associated
+    'vtu' files containing the data at each saves time instant. 'xml' files do the same, the main xml file is
+    saved and additional files containing data are also saved.
 
-        Usage
-        -----
-        .. code-block:: python
+    Usage
+    -----
+    .. code-block:: python
 
-            file = File(filename)
+        file = File(filename)
 
-        Parameters
-        ----------
-        filename : string
-                   Contains the full path to the file where data is to be saved.
-                   .pvd files save the data to plot using VTK format
-                   .xml files save the data to be retrieved at another moment
+    Parameters
+    ----------
+    filename : string
+               Contains the full path to the file where data is to be saved.
+               .pvd files save the data to plot using VTK format
+               .xml files save the data to be retrieved at another moment
 
-        Attributes
-        ----------
-        __extension : string
-                      The extension of the file to save. Can be '.pvd' or '.xml'
-        __ filename : string
-                      The filename of the file to save, excluding the extension.
-        __filename__path : string
-                           The full path of the file to save including the filename. The extension is not included
-        __filename_path_full : string
-                               The full path of the file to save including the filename and extension.
-        __ fileType : string
-                      The type of file to save. Can be 'pvd' or 'xml'
-        __collection : lxml.etree.SubElement object
-                       The data files used in both the '.pvd' and '.xml' file types are contained inside a collection
-                       subelement. This is just a xml container for the time stamps of data.
-        __root : lxml.etree.Element object
-                 Both '.pvd. and '.xml' file types are xml files. root is the root of the xml tree structure of the files.
-        __tStep : int
-                  The time step stamp of the saved files. Each time data is saved the main file is updated with a new set of data
-                  corresponding to the current time step.
+    Attributes
+    ----------
+    __extension : string
+                  The extension of the file to save. Can be '.pvd' or '.xml'
+    __ filename : string
+                  The filename of the file to save, excluding the extension.
+    __filename__path : string
+                       The full path of the file to save including the filename. The extension is not included
+    __filename_path_full : string
+                           The full path of the file to save including the filename and extension.
+    __ fileType : string
+                  The type of file to save. Can be 'pvd' or 'xml'
+    __collection : lxml.etree.SubElement object
+                   The data files used in both the '.pvd' and '.xml' file types are contained inside a collection
+                   subelement. This is just a xml container for the time stamps of data.
+    __root : lxml.etree.Element object
+             Both '.pvd. and '.xml' file types are xml files. root is the root of the xml tree structure of the files.
+    __tStep : int
+              The time step stamp of the saved files. Each time data is saved the main file is updated with a new set of data
+              corresponding to the current time step.
 
-        :First Added:   2014-02-18
-        :Last Modified: 2014-02-19
-        :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
-        :License:       GNU GPL version 3 or any later version
+    :First Added:   2014-02-18
+    :Last Modified: 2014-02-19
+    :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
+    :License:       GNU GPL version 3 or any later version
 
     """
     def __init__(self,filename):
@@ -122,6 +122,8 @@ class File:
         # initialize the root and collection variables
         self.__root = None # for now both are None because no object has been associated to the file
         self.__collection =  None
+        
+        self.__dolfinObjects = None
 
         # initialize the time step
         self.__tStep = 0
@@ -150,7 +152,7 @@ class File:
         ----------
 
         :First Added:   2014-02-18
-        :Last Modified: 2014-02-19
+        :Last Modified: 2014-03-06
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
 
@@ -204,7 +206,7 @@ class File:
                 pvdTree.write(self.__filename_path + ('_%s' % bodyName) + self.__extension,pretty_print=True,xml_declaration=False,encoding=None)
 
         else:
-            raise TypeError('Only dataObjects of type pHyFlow.vortex.VortexBlobs or pHyFlow.panel.Panels can be plotted.')
+            raise TypeError('Only dataObjects of type pHyFlow.blobs.Blobs or pHyFlow.panels.Panels can be plotted.')
 
 
         # update the current time step and time instant
@@ -255,6 +257,36 @@ class File:
             raise TypeError('Only dataObjects of type pHyFlow.vortex.VortexBlobs can be plotted.')
 
 
+    def __saveDolfinObject(self, dataObject):
+        r"""
+        Function to save the dolfin data object
+        """
+        
+        # Make dolfin data file object
+        if self.__dolfinObjects is None:
+            self.__dolfinObjects = {}
+            
+            # Make velocity export function
+            if dataObject.plotVelocity == True:
+                self.__dolfinObjects['velocity'] = _dolfin.File(self.__filename_path + '_velocity.pvd', 'compressed')
+            # Make pressure export function                
+            if dataObject.plotPressure == True:
+                self.__dolfinObjects['pressure'] = _dolfin.File(self.__filename_path + '_pressure.pvd', 'compressed')
+            # Make vorticity export function                                
+            if dataObject.plotVorticity == True:
+                self.__dolfinObjects['vorticity'] = _dolfin.File(self.__filename_path + '_vorticity.pvd', 'compressed')
+                
+        # Export velocity
+        if dataObject.plotVelocity == True:
+            self.__dolfinObjects['velocity'] << (dataObject._EulerianSolver__solver.u1, dataObject.t)
+        # Export pressure            
+        if dataObject.plotPressure == True:
+            self.__dolfinObjects['pressure'] << (dataObject._EulerianSolver__solver.p1, dataObject.t)
+        # Export vorticity            
+        if dataObject.plotVorticity == True:
+            self.__dolfinObjects['vorticity'] << (dataObject._EulerianSolver__solver.vorticity(), dataObject.t)
+        
+
     def __lshift__(self,dataObject):
         r"""
         Save the object to the file. If data is already saved, add the new data with the current time stamp.
@@ -282,7 +314,9 @@ class File:
         :License:       GNU GPL version 3 or any later version
 
         """
-
         if self.__fileType == 'pvd':
-            self.__saveVTU(dataObject) # first save the vtu file with the new data
-            self.__updatePVD(dataObject) # second update the pvd file containing the information of the new time step
+            if isinstance(dataObject, _EulerianSolverClass):
+                self.__saveDolfinObject(dataObject)
+            else:
+                self.__saveVTU(dataObject) # first save the vtu file with the new data
+                self.__updatePVD(dataObject) # second update the pvd file containing the information of the new time step

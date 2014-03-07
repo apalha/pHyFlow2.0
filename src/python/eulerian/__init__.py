@@ -20,7 +20,10 @@
 # First added:  2013-07-01                                                                                                          
 # Last changed: 2014-02-20
 
+# import eulerian functions
 import base
+
+# import eulerian optiosn
 import eulerianOptions
 
 # import eulerian (Finite Element) solver class

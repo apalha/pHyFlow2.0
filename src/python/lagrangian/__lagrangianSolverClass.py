@@ -4,24 +4,55 @@ __doc__ = """
 LAGRANGIANSOLVER
 ================
 
-The main class for the vortex-panel coupled.
+The main class for coupling blobs and panel.
 
-* Note: No Turbulence scheme implemented (only laminar flow)
+* Note:
+    - No Turbulence scheme implemented (only laminar flow)
+    - No vorticity generation implemented.
 
 Description
 -----------
-This class wraps the vortex blobs and panel together.
+This class wraps the vortex blobs and panel togethers. Together, we are able
+to define the lagrangian domain of the hybrid problem. The solver is based on
+the formulation of Daeninck [1]_. 
+
+The solver implements a vortex elements (blobs) and boundary element method
+(panels) to simulate the viscous wall-bounded flow. In order to couple the
+methods, we enforce the no-slip boundary condition at the wall (panel
+collocation) points. 
 
 Methodology
 -----------
+1. Enforce no-slip boundary condition at the panel collocation points. 
+    - Determine the total slip velocity (blobs + freestream) at the panel collocation
+      points. 
+    - Solve the panel problem such that the strength of the panels ensure
+      no-slip velocity at the panel collocation points. 
 
+2. Compute the total induced velocity ( blobs + panels + freestream ), acting
+   on each blobs.
+
+3. Update the position of the particles.
+    - Optional : Repeat 1 and 2 during the RK sub-step of the convection.
+    
+4. Diffuse the particle strengths using the modified remeshing scheme.
+
+* Note: In this methodology, vorticity is not introduced to the flow. For this
+        we must couple with the eulerian solver.
 
 Implemented NS Algorithms
 -------------------------
+- Convection:
+    - 4th order Runge-kutta 
 
+References
+----------
+.. [1] Daeninck, G. (2006). D EVELOPMENTS IN HYBRID APPROACHES Vortex method 
+       with known separation location Vortex method with near-wall Eulerian 
+       solver RANS-LES coupling. Universit´ catholique de Louvain.
 
 :First Added:   2014-02-21
-:Last Modified: 2014-02-21                         
+:Last Modified: 2014-03-07                      
 :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
 :License:       GNU GPL version 3 or any later version
 """
@@ -65,6 +96,9 @@ from pHyFlow.lagrangian import lagrangianOptions
 class LagrangianSolver(object):
     r"""
     
+    The lagrangian solver is the main class for coupling the vortex blobs and
+    panels for simulation the lagrangian problem.
+    
     Usage
     -----
     .. code-block:: python
@@ -101,17 +135,16 @@ class LagrangianSolver(object):
                           
     Attribute
     ---------
+    deltaT
+    t
+    tStep
+    vInf
+    
     blobs : pHyFlow.blobs.Blobs
             the vortex-blobs class is assigned
-            
-    deltaT
     
     panels : pHyFlow.panels.Panels
              the panel class    
-             
-    t
-    tStep
-    vInf    
 
     __couplingParams : dict
                        Dictionary containing parameters for coupling the
@@ -121,13 +154,14 @@ class LagrangianSolver(object):
     -------
     evolve
     evaluateVelocity
-    __coupled_convection
     __advanceTime
-    __set
+    __coupled_convection
+    __set_variables
+    __solve_panelStrength
     __mute_blobs_evolve
     
     :First Added:   2014-02-21
-    :Last Modified: 2014-02-25                         
+    :Last Modified: 2014-03-07                       
     :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
     :License:       GNU GPL version 3 or any later version   
    
@@ -147,11 +181,11 @@ class LagrangianSolver(object):
         # Check/Set input parameters
             
         # Initialize the parameters
-        self.__set('blobs',blobs) # vortex-blobs class
-        self.__set('panels', panels) # panel class
+        self.__set_variables('blobs',blobs) # vortex-blobs class
+        self.__set_variables('panels', panels) # panel class
         
         # Initialize couplingParams
-        self.__set('couplingParams',couplingParams)
+        self.__set_variables('couplingParams',couplingParams)
             
         #---------------------------------------------------------------------            
         # Make references
@@ -162,7 +196,7 @@ class LagrangianSolver(object):
         
             # Solve for the initial panel strengths
             self.__solve_panelStrength()
-       
+
        
     def evaluateVelocity(self,xTarget,yTarget,Ndirect=35,tol=1.0e-6,cutoff=None):
         """
@@ -219,9 +253,6 @@ class LagrangianSolver(object):
         
         # Determine the induced velocity of blobs, panels and free-stream                
         else:
-            #            vx,vy = self.blobs.evaluateVelocity(xTarget,yTarget,Ndirect,tol,cutoff) \
-            #                            + self.panels.evaluateVelocity(xTarget,yTarget) \
-            #                            + self.blobs.vInf.reshape(2,-1)
             # Induced velocity from blobs
             vxBlob, vyBlob = self.blobs.evaluateVelocity(xTarget,yTarget,Ndirect,tol,cutoff)
             # Induced velocity from panels
@@ -322,7 +353,7 @@ class LagrangianSolver(object):
             # Diffusion Step : diffuse vortex blobs
             if self.blobs.stepDiffusion != 0: # corresponds to nu = 0.0, therefore no diffusion is to be computed
                 if (self.tStep % self.blobs.stepDiffusion) == 0: # if the time step is a multiple of the stepDiffusion perform diffusion
-                    self.blobs._Blobs__diffusion()
+                    self.blobs._diffusion()
     
             # update the time counter
             self.__advanceTime() # update both blobs+panels internal time.
@@ -342,9 +373,56 @@ class LagrangianSolver(object):
             if self.blobs.stepPopulationControl != 0: # meaning that population control should be done
                 if (self.tStep % self.blobs.stepPopulationControl) == 0: # if the time step is a multiple of the stepPopulationControl perform population control
                     self.blobs.populationControl()
-                
             
             
+    def __advanceTime(self):
+        """
+        Function to advance time. To advance time, we advance both the internal
+        time of Blob and Panels. Then we assert that both :math:`t`
+        are the same. 
+        
+        The LagrangianSolver uses internal time of Blobs.
+        
+        Usage
+        -----
+        .. code-block :: python
+        
+            __advanceTime()
+            
+        Parameters
+        ----------
+        None.
+        
+        Returns
+        -------
+        None returned.
+        
+        Attributes
+        ----------
+        t : float
+            the current time
+            
+        tStep : int
+                the current time step
+        
+        :First Added:   2014-02-24
+        :Last Modified: 2014-02-25
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version    
+        """
+        # Advance the internal time of blobs
+        self.blobs._advanceTime()
+    
+        # Advance the internal time of panels
+        self.panels._advanceTime(self.deltaT)
+        
+        # Check if both are sync
+        if _numpy.abs(self.blobs.t - self.panels.t) > _numpy.spacing(100):
+            raise ValueError('The internal time of Blobs and Panels'\
+                             ' are not synchronized. blobs = %g, panels = %g'\
+                             % (self.blobs.t, self.panels.t)  )
+
+      
     def __coupled_convection(self):
         """
         Internal function to convect the blobs with taking account of the 
@@ -398,7 +476,7 @@ class LagrangianSolver(object):
                  sPanel : numpy.ndarray(float64), shape (panels.nPanelTotal, )
                           the strength :math:`\gamma` of the panels.
                   
-                 * Note: position update not implemented yet.        
+                          * Note: position update not implemented yet.        
         
         :First Added:   2014-02-21
         :Last Modified: 2014-02-25
@@ -532,101 +610,9 @@ class LagrangianSolver(object):
             
         elif blobs_integrator == blobOptions.FE_INTEGRATOR:
             raise NotImplementedError('FE time integration not available !')
-        
-        #----------------------------------------------------------------------           
+                   
 
-    
-    def __solve_panelStrength(self):
-        r"""
-        Function to solve for the initial panel strength
-        """
-        
-        #----------------------------------------------------------------------
-        # Determine parameters
-
-        # convert the hardware flag into an int to use in _base_convection
-        if self.blobs.velocityComputationParams['hardware'] == 'gpu': 
-            blobs_hardware = blobOptions.GPU_HARDWARE
-        else: 
-            blobs_hardware = blobOptions.CPU_HARDWARE
-
-        # convert the method flag into an int to use in _base_convection
-        if self.blobs.velocityComputationParams['method'] == 'fmm': 
-            blobs_method = blobOptions.FMM_METHOD
-        else: 
-            blobs_method = blobOptions.DIRECT_METHOD
-            
-        #----------------------------------------------------------------------
-
-
-        #----------------------------------------------------------------------
-        # Solve panel strength
-
-        # Make references to vortex-blobs
-        xBlob, yBlob, gBlob = self.blobs.x, self.blobs.y, self.blobs.g 
-            
-        # Make references to panel collocation points (where no-slip b.c. is enforced.)
-        xCP, yCP = self.panels.xyCPGlobalCat
-        
-        # Determine the initial slip velocity
-        vxSlip, vySlip = _blobs_velocity(xBlob,yBlob,gBlob,self.blobs.sigma,
-                                         xEval=xCP,yEval=yCP,hardware=blobs_hardware,   
-                                         method=blobs_method) \
-                                 + self.vInf.reshape(2,-1)
-                
-        # Solve for no-slip panel strengths
-        self.panels.solve(vxSlip, vySlip)
-        
-                            
-    def __advanceTime(self):
-        """
-        Function to advance time. To advance time, we advance both the internal
-        time of Blob and Panels. Then we assert that both :math:`t`
-        are the same. 
-        
-        The LagrangianSolver uses internal time of Blobs.
-        
-        Usage
-        -----
-        .. code-block :: python
-        
-            __advanceTime()
-            
-        Parameters
-        ----------
-        None.
-        
-        Returns
-        -------
-        None returned.
-        
-        Attributes
-        ----------
-        t : float
-            the current time
-            
-        tStep : int
-                the current time step
-        
-        :First Added:   2014-02-24
-        :Last Modified: 2014-02-25
-        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version    
-        """
-        # Advance the internal time of blobs
-        self.blobs._advanceTime()
-    
-        # Advance the internal time of panels
-        self.panels._advanceTime(self.deltaT)
-        
-        # Check if both are sync
-        if _numpy.abs(self.blobs.t - self.panels.t) > _numpy.spacing(100):
-            raise ValueError('The internal time of Blobs and Panels'\
-                             ' are not synchronized. blobs = %g, panels = %g'\
-                             % (self.blobs.t, self.panels.t)  )
-                             
-            
-    def __set(self,varName,var):
+    def __set_variables(self,varName,var):
         """
         Function to set all the parameters.
         
@@ -634,7 +620,7 @@ class LagrangianSolver(object):
         -----
         .. code-block :: python
         
-            __set('varName', var)
+            __set_variable('varName', var)
             
         Parameters
         ----------
@@ -687,7 +673,77 @@ class LagrangianSolver(object):
                 raise ValueError("'couplingParams' should be of type dict. It is %s" % type(var))
             if var['panelStrengthUpdate'] not in lagrangianOptions.PANEL_STRENGTH_UPDATE['available']:
                 raise ValueError("'couplingParams['panelStrengthUpdate']' is unknown. It should be in [%s]. It is %s" % (str(lagrangianOptions.PANEL_STRENGTH_UPDATE['available']),var['panelStrengthUpdate']))
-            self.__couplingParams = var
+            self.__couplingParams = var  
+
+    
+    def __solve_panelStrength(self):
+        r"""
+        Function to solve for the initial panel strength
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            __solve_panelStrength()
+            
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        None returned
+        
+        Attributes
+        ----------
+        panels : pHyFlow.panels.Panels
+                 the strength of the panels are updated.
+                 
+                 sPanel : numpy.ndarray(float64), shape (panels.nPanelTotal, )
+                          the strength :math:`\gamma` of the panels.
+                  
+                          * Note: position update not implemented yet.
+
+        :First Added:   2014-03-04
+        :Last Modified: 2014-03-06
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version                             
+        """
+        
+        #----------------------------------------------------------------------
+        # Determine parameters
+
+        # convert the hardware flag into an int to use in _base_convection
+        if self.blobs.velocityComputationParams['hardware'] == 'gpu': 
+            blobs_hardware = blobOptions.GPU_HARDWARE
+        else: 
+            blobs_hardware = blobOptions.CPU_HARDWARE
+
+        # convert the method flag into an int to use in _base_convection
+        if self.blobs.velocityComputationParams['method'] == 'fmm': 
+            blobs_method = blobOptions.FMM_METHOD
+        else: 
+            blobs_method = blobOptions.DIRECT_METHOD
+            
+        #----------------------------------------------------------------------
+
+        #----------------------------------------------------------------------
+        # Solve panel strength
+
+        # Make references to vortex-blobs
+        xBlob, yBlob, gBlob = self.blobs.x, self.blobs.y, self.blobs.g 
+            
+        # Make references to panel collocation points (where no-slip b.c. is enforced.)
+        xCP, yCP = self.panels.xyCPGlobalCat
+        
+        # Determine the initial slip velocity
+        vxSlip, vySlip = _blobs_velocity(xBlob,yBlob,gBlob,self.blobs.sigma,
+                                         xEval=xCP,yEval=yCP,hardware=blobs_hardware,   
+                                         method=blobs_method) \
+                                 + self.vInf.reshape(2,-1)
+                
+        # Solve for no-slip panel strengths
+        self.panels.solve(vxSlip, vySlip)
             
             
     def __mute_blobs_evolve(self):
@@ -696,15 +752,16 @@ class LagrangianSolver(object):
 
     #--------------------------------------------------------------------------
     # All attributes
-            
+
+    # Time-step size
     @simpleGetProperty
-    def tStep(self):
+    def deltaT(self):
         r"""
-        tStep : int
-                the current time step of the simulation
+        deltaT : float
+                 the time step size of the simulation :math:`|Delta t`
         """
-        return self.blobs.tStep
-            
+        return self.blobs.deltaTc     
+
     # Current time t
     @simpleGetProperty
     def t(self):
@@ -713,16 +770,15 @@ class LagrangianSolver(object):
             the current time of the simulation
         """
         return self.blobs.t
-    
-    # Time-step size
+       
     @simpleGetProperty
-    def deltaT(self):
+    def tStep(self):
         r"""
-        deltaT : float
-                 the time step size of the simulation :math:`|Delta t`
+        tStep : int
+                the current time step of the simulation
         """
-        return self.blobs.deltaTc
-    
+        return self.blobs.tStep
+         
     # Free-stream velocity
     @simpleGetProperty
     def vInf(self):

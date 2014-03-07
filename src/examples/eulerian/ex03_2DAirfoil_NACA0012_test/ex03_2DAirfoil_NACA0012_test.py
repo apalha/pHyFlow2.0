@@ -13,7 +13,7 @@ import numpy as np
 import pylab as py
 py.ion()
 
-
+# number of timesteps
 nTimeSteps = 50
 
 
@@ -36,9 +36,6 @@ cfl = 0.95
 x0,y0,Lx,Ly,nx,ny = -1.0,-1.0,2.0,2.0,10,10    
 #-----------------------------------------------------------------------------
 
-
-
-
 #-----------------------------------------------------------------------------   
 # Mmesh and boundary mesh files
 
@@ -47,7 +44,6 @@ meshFileName = './geometry/fullGrid_NACA0012_nVertices-57k_pressureOutlet.xml.gz
 boundaryDomainsFileName = './geometry/fullGrid_NACA0012_nVertices-57k_pressureOutlet_facet_region.xml.gz'
 
 #-----------------------------------------------------------------------------   
-
 
 #------------------------------------------------------------------------------
 # Cylinder 2D test case
@@ -63,9 +59,11 @@ probeGrid = {'origin': np.array([x0,y0]),
 
 # Initialize Navier-Stokes problem
 eulerian = pHyFlow.eulerian.EulerianSolver(geometry,probeGrid,uMax,nu,cfl)
-                                     
+        
+eulerian.plotVelocity = True                                     
+eulerian.plotPressure = True                                     
+eulerian.plotVorticity = True                                 
 #------------------------------------------------------------------------------
-                                   
                                    
 #------------------------------------------------------------------------------                                     
                                      
@@ -97,9 +95,7 @@ cmGlobalNew, thetaGlobalNew = cmGlobal,thetaLocal
 cmDotGlobal, thetaGlobal = np.array([0.,0.]), 0.
 
 saveDir = './data/'
-vFile = dolfin.File(saveDir + "velocity.pvd", "compressed")
-pFile = dolfin.File(saveDir + "pressure.pvd", "compressed")
-wFile = dolfin.File(saveDir + "vorticity.pvd", "compressed")
+eulerianFiles = pHyFlow.IO.File(saveDir+'eulerian.pvd')
 
 solver = eulerian._EulerianSolver__solver
 
@@ -132,14 +128,12 @@ for timeStep in xrange(1,nTimeSteps+1):
 
     if timeStep % 5 == 0:                
         #dolfin.plot(dolfin.sqrt(dolfin.inner(NSDomain._solver.u1,NSDomain._solver.u1)),key='vNorm')         
-        vFile << (eulerian._EulerianSolver__solver.u1, T)
-        pFile << (eulerian._EulerianSolver__solver.p1, T)
-        wFile << (eulerian._EulerianSolver__solver.vorticity(), T)
+        eulerianFiles << eulerian
 
     # Print info
     print "Step\t\t\t: %g" % timeStep
     print "T\t\t\t: %g" % T
-    print "Step duration\t\t: %g" % (time.time() - startTime)
+    print "Time to evolve\t\t: %g" % (time.time() - startTime)
     print "Difference in vel. norm : %g" % diff_u    
     print "----------------------------------------\n"
    
@@ -148,7 +142,6 @@ for timeStep in xrange(1,nTimeSteps+1):
 # Latex Text
 py.rc('text', usetex=True)
 py.rc('font', family='serif')
-
 
 py.figure()
 py.plot(np.arange(0,nTimeSteps+1)*eulerian.deltaT,CL)

@@ -452,19 +452,19 @@ class Panels(object):
         # Check input parameters
 
         # Set the geometry(ies) datas.
-        self.__set('geometries',geometries)
+        self.__set_variables('geometries',geometries)
         
         # Set velocity computation parameters
-        self.__set('velCompParams', velCompParams)
+        self.__set_variables('velCompParams', velCompParams)
         
         # Set panel kernel type
-        self.__set('panelKernel', panelKernel)
+        self.__set_variables('panelKernel', panelKernel)
         
         # Set problem type
-        self.__set('problemType', problemType)
+        self.__set_variables('problemType', problemType)
         
         # Set solver computation parameters
-        self.__set('solverCompParams',solverCompParams)
+        self.__set_variables('solverCompParams',solverCompParams)
         #----------------------------------------------------------------------
         
         
@@ -481,8 +481,9 @@ class Panels(object):
         self.__updateRotMat()
         
         # Initialize the global panel parameters       
+        self.__L = _numpy.zeros(self.__nPanelsTotal) # panel length
         self.__norm = _numpy.zeros((2,self.__nPanelsTotal))
-        self.__tang = _numpy.zeros((2,self.__nPanelsTotal))               
+        self.__tang = _numpy.zeros((2,self.__nPanelsTotal))          
         self.__xyCP_global = _numpy.zeros((2,self.__nPanelsTotal))
         self.__cosSinAlpha = _numpy.zeros((2,self.__nPanelsTotal))
         self.__xyPanelStart_global = _numpy.zeros((2,self.__nPanelsTotal))
@@ -606,8 +607,8 @@ class Panels(object):
         
         """
         # Assign the new body location
-        self.__set('thetaLocal', thetaLocalNew)
-        self.__set('cmGlobal', cmGlobalNew)
+        self.__set_variables('thetaLocal', thetaLocalNew)
+        self.__set_variables('cmGlobal', cmGlobalNew)
 
         # Update the rotational matrix
         self.__updateRotMat()
@@ -972,10 +973,10 @@ class Panels(object):
             
             # Determine the length of the panels
             Lxy = self.__xyPanelEnd_global[:,iS:iE] - self.__xyPanelStart_global[:,iS:iE]
-            L   = _numpy.sqrt(_numpy.sum(Lxy*Lxy,axis=0))
+            self.__L[iS:iE] = _numpy.sqrt(_numpy.sum(Lxy*Lxy,axis=0))
             
             # Panel Angles
-            self.__cosSinAlpha[:,iS:iE] = Lxy / L # cosAlpha, sinAlpha
+            self.__cosSinAlpha[:,iS:iE] = Lxy / self.__L[iS:iE] # cosAlpha, sinAlpha
             #------------------------------------------------------------------
             
             # Unit Vectors (Tangent and Normal vector)
@@ -1030,7 +1031,7 @@ class Panels(object):
                          for geometryData in self.__geometries.itervalues()]                                         
 
 
-    def __set(self,varName,var):
+    def __set_variables(self,varName,var):
         """
         Function to check the shape, type of the input parameters and to
         set them to local attributes.
@@ -1478,7 +1479,17 @@ class Panels(object):
         """
         # Extract data
         return [geometryData['thetaLocal'] for geometryData in self.__geometries.itervalues()]
+
+#    @simpleGetProperty
+#    def gTotal(self):
+#        r"""
+#        gTotal : float
+#                 the total panel circulation.
+#                 :math:`\sum_i {\gamma_i \cdot ds_i}`
+#        """
+#        return [self.__sPanel[self.__index[i]:self.__index[i+1]]* for i in range(self.__nBodies)]
         
+     
     @simpleGetProperty
     def tStep(self):
         r"""

@@ -344,16 +344,3 @@ class ipcs(solverBase):
         # vorticity
         self.recalculateVorticityFlag = True
         
-        
-#-------------------------------------------------------------------------
-# Additional terms of the NS equations.
-        
-#    def epsilon(self, u):
-#        "Return symmetric gradient."
-#        return 0.5*(dolfin.grad(u) + dolfin.grad(u).T)        
-#
-#
-#    
-#    def sigma(self, u, p, nu):
-#        "Return stress tensor."
-#        return 2.0*nu*self.epsilon(u) - p*dolfin.Identity(u.cell().d)

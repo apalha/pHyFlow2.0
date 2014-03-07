@@ -19,8 +19,10 @@ This module handles all panel method related operations in python
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
 # First added:  2013-12-17                                                                                          
-# Last changed: 2013-12-17
+# Last changed: 2014-05-06
 
+# All the panel related functions
 import base
 
+# import panel class
 from __panelsClass import *

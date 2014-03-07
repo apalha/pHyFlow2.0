@@ -39,23 +39,28 @@ Define hybrid options
 #        with known separation location Vortex method with near-wall Eulerian 
 #        solver RANS-LES coupling. Universit´ catholique de Louvain.
 #
-
+# 'start' : correct/adjust at start of the evolution
+# 'end' : correct/adjust at end of the evolution
 ADJUST_LAGRANGIAN_AT = {'default': 'start',
                        'available': ('start', 'end')}
                        
 # We could also not couple the problem, but just evolve both solutions
+# True: correct the blobs
+# False: don't correct
 ADJUST_LAGRANGIAN = {'default': True,
                      'available': (True, False)}
                     
                    
 # Determine the eulerian initian conditions
+# 'lagrangian_field' : replace the solution of eulerian domain with lagrangian solution
+# 'eulerian_field' : keep the solutions                    
 EULERIAN_INITIAL_CONDITIONS = {'default': 'lagrangian_field',
                               'available': ('lagrangian_field','eulerian_field') }
 
 
 # Interpolation parameters
-INTERPOLATION_ALGORITHM = {'default': 'scipy_griddata',
-                           'available': ('scipy_griddata','structured_probes','scipy_probes')}
+INTERPOLATION_ALGORITHM = {'default': 'unstructured_scipy',
+                           'available': ('unstructured_scipy','structuredProbes_manual','structuredProbes_scipy')}
                       
 # Method of interpolation                      
 INTERPOLATION_METHOD = {'default': 'linear',

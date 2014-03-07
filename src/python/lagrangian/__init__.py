@@ -20,7 +20,10 @@
 # First added:  2013-02-21                                                                                                    
 # Last changed: 2014-03-05
 
+# Import lagrangian functions
 import base
+
+# import options
 import lagrangianOptions
 
 # import lagrangian solver (blobs + panels) class

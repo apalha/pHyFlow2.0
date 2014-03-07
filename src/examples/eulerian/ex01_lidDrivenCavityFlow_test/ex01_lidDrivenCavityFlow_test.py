@@ -104,6 +104,9 @@ eulerian = pHyFlow.eulerian.EulerianSolver(geometry,probeGrid,
                                            uMax=uMax,nu=nu,cfl=cfl,
                                            deltaT=1e-5)
                                      
+eulerian.plotVelocity = True                                     
+eulerian.plotPressure = True                                     
+eulerian.plotVorticity = True                                     
 #------------------------------------------------------------------------------
                                      
 #------------------------------------------------------------------------------                                     
@@ -152,9 +155,7 @@ cmGlobalNew, thetaGlobalNew = cmGlobal,thetaLocal
 cmDotGlobal, thetaGlobal = np.array([0.,0.]), 0.
 
 saveDir = './data/'
-vFile = dolfin.File(saveDir + "velocity.pvd", "compressed")
-pFile = dolfin.File(saveDir + "pressure.pvd", "compressed")
-wFile = dolfin.File(saveDir + "vorticity.pvd", "compressed")
+eulerianFiles = pHyFlow.IO.File(saveDir+'eulerian.pvd')
 
 solver = eulerian._EulerianSolver__solver
 
@@ -168,11 +169,9 @@ for timeStep in range(1,100):
     diff_u = dolfin.norm(solver.u1) - dolfin.norm(solver.u0)            
 
     if timeStep % 10 == 0:                
-        #dolfin.plot(dolfin.sqrt(dolfin.inner(NSDomain._solver.u1,NSDomain._solver.u1)),key='vNorm')         
-        vFile << (eulerian._EulerianSolver__solver.u1, T)
-        pFile << (eulerian._EulerianSolver__solver.p1, T)
-        wFile << (eulerian._EulerianSolver__solver.vorticity(), T)
-
+        #dolfin.plot(dolfin.sqrt(dolfin.inner(NSDomain._solver.u1,NSDomain._solver.u1)),key='vNorm')
+        eulerianFiles << eulerian
+        
     print "Step\t\t\t: %g" % timeStep
     print "T\t\t\t: %g" % T
     print "Difference in vel. norm : %g" % diff_u    

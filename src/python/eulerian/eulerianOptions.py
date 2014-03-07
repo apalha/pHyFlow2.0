@@ -46,7 +46,9 @@ KRYLOV_SOLVER = {'absolute_tolerance':  1e-25,
                  'relative_tolerance':  1e-12,
                  'monitor_convergence': False}
 
+# Function interpolation Flag
 ALLOW_EXTRAPOLATION = True
 
+# Dolfin print info Flag
 SET_LOG_ACTIVE = False 
 
