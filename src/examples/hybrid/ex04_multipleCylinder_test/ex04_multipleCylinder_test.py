@@ -24,14 +24,17 @@ import pylab as py
 import time
 py.ion()
 
+
 # pHyFlow
 import pHyFlow
+
+
 
 #-----------------------------------------------------------------------------    
 # Global parameters
 
 # Simulation parameters
-nTimeSteps = 5
+nTimeSteps = 2500
 
 # Fluid Parameters
 
@@ -47,7 +50,10 @@ nu = float(vInf[0]*D/Re)
 Rext = 1.5
 Rsurf = 1.0
 
-cmGlobal = np.array([1.,0.]) 
+# Define the cylinders
+cylinderPositionA = np.array([1.5,1.0])
+cylinderPositionB = np.array([-1.5,0.])
+
 #-----------------------------------------------------------------------------    
 
 #-----------------------------------------------------------------------------
@@ -98,15 +104,22 @@ dtheta  = theta[1]-theta[0] # Angle spacing
 r       = (Rsurf + dPanel) / np.cos(dtheta/2.0) # Radial location of the panel end points
 
 # Make the cylinder and append the parameters to a dictionary.
-cylinderData = {'xPanel' : r*np.cos(theta - dtheta/2),
+panelCylinderA = {'xPanel' : r*np.cos(theta - dtheta/2),
                 'yPanel' : r*np.sin(theta - dtheta/2),
-                'cmGlobal'   : cmGlobal,
+                'cmGlobal'   : cylinderPositionA,
                 'thetaLocal' : 0.,
                 'dPanel' : np.spacing(100)}
                 
-geometries = {'cylinder':cylinderData}                
+panelCylinderB = {'xPanel' : r*np.cos(theta - dtheta/2),
+                 'yPanel' : r*np.sin(theta - dtheta/2),
+                 'cmGlobal'   : cylinderPositionB,
+                 'thetaLocal' : 0.,
+                 'dPanel' : np.spacing(100)}                
+                
+panelBodies = {'cylinderA':panelCylinderA,
+               'cylinderB':panelCylinderB}                
 
-panels = pHyFlow.panels.Panels(geometries=geometries)
+panels = pHyFlow.panels.Panels(geometries=panelBodies)
 
 #------------------------------------------------------------------------------
 
@@ -128,20 +141,24 @@ lagrangian = pHyFlow.lagrangian.LagrangianSolver(blobs,panels=panels,
 meshFilePath = './geometry/cylinder2D_nVertices-13k_delQuad_noBL_finerBody.xml.gz'
 boundaryDomainsFilePath = './geometry/cylinder2D_nVertices-13k_delQuad_noBL_finerBody_facet_region.xml.gz'
 
-xMeshBounds = np.array([-Rext,Rext])
-yMeshBounds = np.array([-Rext,Rext])
 
 # Define the geometry parameters
-geometry = {'mesh' : meshFilePath,
-            'boundaryDomains': boundaryDomainsFilePath,
-            'cmGlobal': cmGlobal,
-            'thetaLocal': 0.} # radians
+meshDataCylinderA = {'mesh' : meshFilePath,
+                     'boundaryDomains': boundaryDomainsFilePath,
+                     'cmGlobal': cylinderPositionA,
+                     'thetaLocal': 0.} # radians
 
-# Probe Grid Parameters
+# Define the geometry parameters
+meshDataCylinderB = {'mesh' : meshFilePath,
+                     'boundaryDomains': boundaryDomainsFilePath,
+                     'cmGlobal': cylinderPositionB,
+                     'thetaLocal': 0.} # radians
+
+# Calculate Probe Grid Parameters
 probeL = np.array([3.0,3.0]) # guess
-probeN = np.int64(np.round(probeL / hBlob)) + 1 
+probeN = np.int64(np.round(probeL / hBlob)) + 1
 probeL = (probeN-1)*hBlob # to ensure the correct grid spacing
-origin = -np.round(probeN*0.5)*hBlob
+origin = -probeL*0.5
 
 # Collect all the probe parameters
 probeGridParams = {'origin' : origin,
@@ -153,10 +170,23 @@ cfl = 0.95 # CFL number
 uMax = 2.5*vInf[0] # maximum fluid velocity
 
 # Initialize the navierStokes problem
-eulerian = pHyFlow.eulerian.EulerianSolver(geometry,probeGridParams,
-                                           uMax=uMax,nu=nu,cfl=cfl,
-                                           deltaT=0.001)
-                                           
+eulerianCylinderA = pHyFlow.eulerian.EulerianSolver(meshDataCylinderA,probeGridParams,
+                                                uMax=uMax,nu=nu,cfl=cfl,
+                                                deltaT=0.001)
+
+# Initialize the navierStokes problem
+eulerianCylinderB = pHyFlow.eulerian.EulerianSolver(meshDataCylinderB,probeGridParams,
+                                                    uMax=uMax,nu=nu,cfl=cfl,
+                                                    deltaT=0.001)  
+
+# plot parameters  
+eulerianCylinderA.plotVelocity = True
+eulerianCylinderA.plotPressure = True
+eulerianCylinderA.plotVorticity = True
+eulerianCylinderB.plotVelocity = True
+eulerianCylinderB.plotPressure = True
+eulerianCylinderB.plotVorticity = True
+  
 # Concatenate all the navier-stokes domains
 # TODO: temporary, will implement a multi-ns class
 class MultiEulerianSolver(object):
@@ -190,21 +220,18 @@ class MultiEulerianSolver(object):
         xyCoordinates = []
         for subDomain in self.subDomains.itervalues():
             xyCoordinates.append(subDomain.getCoordinates())
-        
         return np.hstack(xyCoordinates)
         
     def getBoundaryCoordinates(self):
         xyBoundaryCoordinates = []
         for subDomain in self.subDomains.itervalues():
             xyBoundaryCoordinates.append(subDomain.getBoundaryCoordinates())
-        
         return np.hstack(xyBoundaryCoordinates)   
         
     def getBoundaryVelocity(self):
         vxyBoundary = []
         for subDomain in self.subDomains.itervalues():
             vxyBoundary.append(subDomain.getBoundaryVelocity())
-        
         return np.hstack(vxyBoundary)         
         
     def setVelocity(self,vx,vy):
@@ -215,13 +242,18 @@ class MultiEulerianSolver(object):
             iS = np.copy(iE)
 
     def evolve(self,vx,vy,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew):
+        iS = 0
         for subDomain in self.subDomains.itervalues():
-            subDomain.evolve(vx,vy,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew)
+            iE = iS + subDomain.getBoundaryCoordinates()[0].shape[0]
+            subDomain.evolve(vx[iS:iE],vy[iS:iE],cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew)
+            iS = np.copy(iE)
         
                                          
 # Define the multiple naviers-stokes class   
-multiEulerian = MultiEulerianSolver(subDomains={'eulerian': eulerian})
- 
+multiEulerian = MultiEulerianSolver(subDomains={'eulerianCylinderA': eulerianCylinderA,
+                                                'eulerianCylinderB': eulerianCylinderB})
+        
+                               
 #-----------------------------------------------------------------------------
 
 #-----------------------------------------------------------------------------
@@ -236,20 +268,24 @@ dSurf = (1.0 + 2.0) * hBlob
 # Generate polar points (N = 100)
 beta = np.linspace(-np.pi,np.pi,100)
 
-# Define the boundary (exterior) polygon
-xyBoundaryPolygon = np.vstack(( (Rext - dBdry)*np.cos(beta),
-                                (Rext - dBdry)*np.sin(beta))).T
-                                       
-# Define the surface polygon
-xySurfacePolygon =  np.vstack(( (Rsurf + dSurf)*np.cos(beta),
-                                (Rsurf + dSurf)*np.sin(beta))).T
-                                
-# Only one cylinder                               
-interpolationRegions = {multiEulerian.subDomainKeys[0] : {'surfacePolygon': xySurfacePolygon,
-                                                          'boundaryPolygon': xyBoundaryPolygon}}       
-                                                          
+interpolationRegions = {}
+
+for subDomainName in multiEulerian.subDomainKeys:
+
+    # Define the boundary (exterior) polygon
+    xyBoundaryPolygon = np.vstack(((Rext - dBdry)*np.cos(beta),
+                                   (Rext - dBdry)*np.sin(beta))).T
+                                           
+    # Define the surface polygon
+    xySurfacePolygon =  np.vstack(((Rsurf + dSurf)*np.cos(beta),
+                                   (Rsurf + dSurf)*np.sin(beta))).T
+                               
+    interpolationRegions[subDomainName] = {'surfacePolygon': xySurfacePolygon,
+                                           'boundaryPolygon': xyBoundaryPolygon}
+                       
+
 #-----------------------------------------------------------------------------
-#
+
 #-----------------------------------------------------------------------------
 # Setup the hybrid problem
 
@@ -269,20 +305,23 @@ hybrid = pHyFlow.hybrid.HybridSolver(lagrangian=lagrangian, # either vortex-blob
                                      interpolationParams=interpolationParams) # coupling parameters
 #-----------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
+##------------------------------------------------------------------------------
 # Export results
 
 # Export the navier-stokes and blobs
 
-# Define eulerian export files
-eulerianFile = pHyFlow.IO.File('./data/eulerian.pvd')
+# Define navier-stokes export files
+eulerianCylinderAFile = pHyFlow.IO.File('./data/eulerianCylinderA.pvd')
+eulerianCylinderBFile = pHyFlow.IO.File('./data/eulerianCylinderB.pvd')
 
-# Define the blob export file
-blobsFile = pHyFlow.IO.File('./data/blobs.pvd')
+# Define blob exports
+blobsFileName = './data/blobs.pvd'
+blobsFile = pHyFlow.IO.File(blobsFileName)
 
 # Export initial data
-eulerianFile << hybrid.multiEulerian['eulerian']
-#blobsFile << hybrid.lagrangian.blobs
+eulerianCylinderAFile << hybrid.multiEulerian['eulerianCylinderA']
+eulerianCylinderBFile << hybrid.multiEulerian['eulerianCylinderB']
+#blobsFile << blobs
 
 #------------------------------------------------------------------------------
 
@@ -302,14 +341,13 @@ numBlobsTime[0] =  hybrid.lagrangian.blobs.numBlobs
 totalCirculationTime[0] =  hybrid.lagrangian.blobs.g.sum()
 
 # Forces
-CL = np.zeros(nTimeSteps+1)
-CD = np.zeros(nTimeSteps+1)
-CDfric = np.zeros(nTimeSteps+1)
-CDpres = np.zeros(nTimeSteps+1)
+#CL = np.zeros(nTimeSteps+1)
+#CD = np.zeros(nTimeSteps+1)
+#CDfric = np.zeros(nTimeSteps+1)
+#CDpres = np.zeros(nTimeSteps+1)
 
 for timeStep in range(1,nTimeSteps+1):
     
-    # timer
     startTime = time.time()
     
     # Current time
@@ -318,30 +356,30 @@ for timeStep in range(1,nTimeSteps+1):
     # Evolve the coupled navier-stokes and vortex method
     hybrid.evolve(cmGlobalNew, thetaLocalNew, cmDotGlobalNew, thetaDotLocalNew)
 
-    print "\nThe current time\t\t: %g" % (timeStep*hybrid.lagrangian.deltaT)
-    print "Time-step\t\t\t: %g" % timeStep
-    print 'Time to evolve\t\t\t: %g'  % (time.time() - startTime)
+
     
     # Export initial data
     if timeStep < 100:
-        eulerianFile << hybrid.multiEulerian['eulerian']
+        eulerianCylinderAFile << hybrid.multiEulerian['eulerianCylinderA']
+        eulerianCylinderBFile << hybrid.multiEulerian['eulerianCylinderB']
         blobsFile << hybrid.lagrangian.blobs
     else:
         if timeStep % 50 == 0:
-            eulerianFile << hybrid.multiEulerian['eulerian']
+            eulerianCylinderAFile << hybrid.multiEulerian['eulerianCylinderA']
+            eulerianCylinderBFile << hybrid.multiEulerian['eulerianCylinderB']
             blobsFile << hybrid.lagrangian.blobs
-    
+
     # Calculate parameters    
     numBlobsTime[timeStep] =  hybrid.lagrangian.blobs.numBlobs
     totalCirculationTime[timeStep] =  hybrid.lagrangian.blobs.g.sum()
     
-    # Calculate the body forces
-    CD[timeStep], CL[timeStep] = eulerian.Forces() / (0.5*vInf[0]*vInf[0]*D)
-        
-    # Pressure drag
-    CDpres[timeStep] = eulerian.PressureForces()[0] / (0.5*vInf[0]*vInf[0]*D)
-    # Frictional Drag
-    CDfric[timeStep] = eulerian.FrictionalForces()[0] / (0.5*vInf[0]*vInf[0]*D)
+    #    # Calculate the body forces
+    #    CD[timeStep], CL[timeStep] = eulerian.Forces() / (0.5*vInf[0]*vInf[0]*D)
+    #        
+    #    # Pressure drag
+    #    CDpres[timeStep] = eulerian.PressureForces()[0] / (0.5*vInf[0]*vInf[0]*D)
+    #    # Frictional Drag
+    #    CDfric[timeStep] = eulerian.FrictionalForces()[0] / (0.5*vInf[0]*vInf[0]*D)
     
     print "Time-step\t\t\t: %g" % timeStep
     print "Current time\t\t\t: %g" % (timeStep*hybrid.lagrangian.deltaT)        
@@ -352,13 +390,13 @@ for timeStep in range(1,nTimeSteps+1):
 
 #------------------------------------------------------------------------------
 
-
+#
 #------------------------------------------------------------------------------
 # Plot results
-
 # Latex Text
 py.rc('text', usetex=True)
 py.rc('font', family='serif')
+
 
 py.figure()
 py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,numBlobsTime)
@@ -372,19 +410,19 @@ py.xlabel(r'$t$')
 py.ylabel(r'$\Delta \Gamma$')
 py.grid()
 
-py.figure()
-py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,CL)
-py.xlabel(r'$t$')
-py.ylabel(r'$C_L$')
-py.axis([0., (nTimeSteps+1)*hybrid.lagrangian.deltaT, -0.01,0.01])
-py.grid()
-
-py.figure()
-py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,CD,'b-',label='Total')
-py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,CDfric,'b-.',label='Friction')
-py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,CDpres,'b--',label='Pressure')
-py.xlabel(r'$t$')
-py.ylabel(r'$C_D$')
-py.axis([0., (nTimeSteps+1)*hybrid.lagrangian.deltaT, 0,2])
-py.legend()
-py.grid()
+#py.figure()
+#py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,CL)
+#py.xlabel(r'$t$')
+#py.ylabel(r'$C_L$')
+#py.axis([0., (nTimeSteps+1)*hybrid.lagrangian.deltaT, -0.01,0.01])
+#py.grid()
+#
+#py.figure()
+#py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,CD,'b-',label='Total')
+#py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,CDfric,'b-.',label='Friction')
+#py.plot(np.arange(0,nTimeSteps+1)*hybrid.lagrangian.deltaT,CDpres,'b--',label='Pressure')
+#py.xlabel(r'$t$')
+#py.ylabel(r'$C_D$')
+#py.axis([0., (nTimeSteps+1)*hybrid.lagrangian.deltaT, 0,2])
+#py.legend()
+#py.grid()

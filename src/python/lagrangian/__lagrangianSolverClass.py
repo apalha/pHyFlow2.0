@@ -154,10 +154,11 @@ class LagrangianSolver(object):
     -------
     evolve
     evaluateVelocity
+    _solve_panelStrength
     __advanceTime
     __coupled_convection
     __set_variables
-    __solve_panelStrength
+    
     __mute_blobs_evolve
     
     :First Added:   2014-02-21
@@ -195,7 +196,7 @@ class LagrangianSolver(object):
             self.blobs.evolve = self.__mute_blobs_evolve # remove blobs.evolve option
         
             # Solve for the initial panel strengths
-            self.__solve_panelStrength()
+            self._solve_panelStrength()
 
        
     def evaluateVelocity(self,xTarget,yTarget,Ndirect=35,tol=1.0e-6,cutoff=None):
@@ -374,7 +375,77 @@ class LagrangianSolver(object):
                 if (self.tStep % self.blobs.stepPopulationControl) == 0: # if the time step is a multiple of the stepPopulationControl perform population control
                     self.blobs.populationControl()
             
+
+    def _solve_panelStrength(self):
+        r"""
+        Function to solve for the initial panel strength
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            _solve_panelStrength()
             
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        None returned
+        
+        Attributes
+        ----------
+        panels : pHyFlow.panels.Panels
+                 the strength of the panels are updated.
+                 
+                 sPanel : numpy.ndarray(float64), shape (panels.nPanelTotal, )
+                          the strength :math:`\gamma` of the panels.
+                  
+                          * Note: position update not implemented yet.
+
+        :First Added:   2014-03-04
+        :Last Modified: 2014-03-06
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version                             
+        """
+        
+        #----------------------------------------------------------------------
+        # Determine parameters
+
+        # convert the hardware flag into an int to use in _base_convection
+        if self.blobs.velocityComputationParams['hardware'] == 'gpu': 
+            blobs_hardware = blobOptions.GPU_HARDWARE
+        else: 
+            blobs_hardware = blobOptions.CPU_HARDWARE
+
+        # convert the method flag into an int to use in _base_convection
+        if self.blobs.velocityComputationParams['method'] == 'fmm': 
+            blobs_method = blobOptions.FMM_METHOD
+        else: 
+            blobs_method = blobOptions.DIRECT_METHOD
+            
+        #----------------------------------------------------------------------
+
+        #----------------------------------------------------------------------
+        # Solve panel strength
+
+        # Make references to vortex-blobs
+        xBlob, yBlob, gBlob = self.blobs.x, self.blobs.y, self.blobs.g 
+            
+        # Make references to panel collocation points (where no-slip b.c. is enforced.)
+        xCP, yCP = self.panels.xyCPGlobalCat
+        
+        # Determine the initial slip velocity
+        vxSlip, vySlip = _blobs_velocity(xBlob,yBlob,gBlob,self.blobs.sigma,
+                                         xEval=xCP,yEval=yCP,hardware=blobs_hardware,   
+                                         method=blobs_method) \
+                                 + self.vInf.reshape(2,-1)
+                
+        # Solve for no-slip panel strengths
+        self.panels.solve(vxSlip, vySlip)
+ 
+           
     def __advanceTime(self):
         """
         Function to advance time. To advance time, we advance both the internal
@@ -674,76 +745,6 @@ class LagrangianSolver(object):
             if var['panelStrengthUpdate'] not in lagrangianOptions.PANEL_STRENGTH_UPDATE['available']:
                 raise ValueError("'couplingParams['panelStrengthUpdate']' is unknown. It should be in [%s]. It is %s" % (str(lagrangianOptions.PANEL_STRENGTH_UPDATE['available']),var['panelStrengthUpdate']))
             self.__couplingParams = var  
-
-    
-    def __solve_panelStrength(self):
-        r"""
-        Function to solve for the initial panel strength
-        
-        Usage
-        -----
-        .. code-block:: python
-        
-            __solve_panelStrength()
-            
-        Parameters
-        ----------
-        None
-        
-        Returns
-        -------
-        None returned
-        
-        Attributes
-        ----------
-        panels : pHyFlow.panels.Panels
-                 the strength of the panels are updated.
-                 
-                 sPanel : numpy.ndarray(float64), shape (panels.nPanelTotal, )
-                          the strength :math:`\gamma` of the panels.
-                  
-                          * Note: position update not implemented yet.
-
-        :First Added:   2014-03-04
-        :Last Modified: 2014-03-06
-        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
-        :Licence:       GNU GPL version 3 or any later version                             
-        """
-        
-        #----------------------------------------------------------------------
-        # Determine parameters
-
-        # convert the hardware flag into an int to use in _base_convection
-        if self.blobs.velocityComputationParams['hardware'] == 'gpu': 
-            blobs_hardware = blobOptions.GPU_HARDWARE
-        else: 
-            blobs_hardware = blobOptions.CPU_HARDWARE
-
-        # convert the method flag into an int to use in _base_convection
-        if self.blobs.velocityComputationParams['method'] == 'fmm': 
-            blobs_method = blobOptions.FMM_METHOD
-        else: 
-            blobs_method = blobOptions.DIRECT_METHOD
-            
-        #----------------------------------------------------------------------
-
-        #----------------------------------------------------------------------
-        # Solve panel strength
-
-        # Make references to vortex-blobs
-        xBlob, yBlob, gBlob = self.blobs.x, self.blobs.y, self.blobs.g 
-            
-        # Make references to panel collocation points (where no-slip b.c. is enforced.)
-        xCP, yCP = self.panels.xyCPGlobalCat
-        
-        # Determine the initial slip velocity
-        vxSlip, vySlip = _blobs_velocity(xBlob,yBlob,gBlob,self.blobs.sigma,
-                                         xEval=xCP,yEval=yCP,hardware=blobs_hardware,   
-                                         method=blobs_method) \
-                                 + self.vInf.reshape(2,-1)
-                
-        # Solve for no-slip panel strengths
-        self.panels.solve(vxSlip, vySlip)
             
             
     def __mute_blobs_evolve(self):
@@ -761,6 +762,18 @@ class LagrangianSolver(object):
                  the time step size of the simulation :math:`|Delta t`
         """
         return self.blobs.deltaTc     
+        
+    @simpleGetProperty
+    def gTotal(self):
+        r"""
+        gTotal : float
+                 the total circulation of the lagrangian domain,
+                 panels + blobs
+        """
+        if self.panels is None:
+            return self.blobs.g.sum()
+        else:
+            return _numpy.sum(self.panels.gTotal) + self.blobs.g.sum()
 
     # Current time t
     @simpleGetProperty

@@ -357,7 +357,7 @@ class EulerianSolver(object):
         #---------------------------------------------------------------------
                                     
                                     
-    def evolve(self,vxBoundary,vyBoundary,cmGlobal,thetaLocal,cmDotGlobal,
+    def evolve(self,vxBoundary,vyBoundary,cmGlobalNew,thetaLocalNew,cmDotGlobal,
                thetaDotLocal):
         r"""
         Function to evolve the Navier-Stokes by one step with the :math:`x,y`
@@ -390,13 +390,13 @@ class EulerianSolver(object):
                      the :math:`y` component of the dirichlet velocity boundary
                      condition at the navierstokes DOF boundaries.                                  
         
-        cmGlobal : numpy.ndarray(float64), shape (2,)
-                   the new :math:`x,y` mesh position of the navierStokes domain.
-                   * Note: Note implemented yet. Does not update the position.
+        cmGlobalNew : numpy.ndarray(float64), shape (2,)
+                      the new :math:`x,y` mesh position of the navierStokes domain.
+                      * Note: Note implemented yet. Does not update the position.
         
-        thetaLocal : float
-                     the new mesh rotational angle :math:`\theta`.
-                     * Note: Note implemented yet. Does not update the position.
+        thetaLocalNew : float
+                        the new mesh rotational angle :math:`\theta`.
+                        * Note: Note implemented yet. Does not update the position.
         
         cmDotGlobal : numpy.ndarray(float64), shape (2,)
                       the current :math:`x,y` mesh velocity.
@@ -436,7 +436,7 @@ class EulerianSolver(object):
         # update the mesh position [moving boundary problem not implemented !!]
         #self.__thetaLocal = thetaLocalNew
         #self.__cmGlobal = cmGlobalNew
-        #self.__solver.updateMeshPosition(cmGlobal, thetaLocal)
+        #self.__solver.updateMeshPosition(cmGlobalNew, thetaLocalNew)
         
         # Set boundary conditions
         self.__solver.boundaryConditions(vxBoundary,vyBoundary)

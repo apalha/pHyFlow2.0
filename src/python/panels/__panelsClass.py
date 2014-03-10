@@ -1480,14 +1480,15 @@ class Panels(object):
         # Extract data
         return [geometryData['thetaLocal'] for geometryData in self.__geometries.itervalues()]
 
-#    @simpleGetProperty
-#    def gTotal(self):
-#        r"""
-#        gTotal : float
-#                 the total panel circulation.
-#                 :math:`\sum_i {\gamma_i \cdot ds_i}`
-#        """
-#        return [self.__sPanel[self.__index[i]:self.__index[i+1]]* for i in range(self.__nBodies)]
+    @simpleGetProperty
+    def gTotal(self):
+        r"""
+        gTotal : float
+                 the total panel circulation.
+                 :math:`\sum_i {\gamma_i \cdot ds_i}`
+        """
+        return [_numpy.sum(self.__sPanel[self.__index[i]:self.__index[i+1]]*\
+                           self.__L[self.__index[i]:self.__index[i+1]]) for i in range(self.__nBodies)]
         
      
     @simpleGetProperty

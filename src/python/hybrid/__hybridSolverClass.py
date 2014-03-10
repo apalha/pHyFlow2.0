@@ -357,16 +357,16 @@ class HybridSolver(object):
             hGrid = probeGridParams['L']/(probeGridParams['N']-1) # (hx',hy') in local coordinate system
 
             # Ensure that grid spacing and blob spacing are same
-            if _numpy.abs(hGrid[1]-hGrid[0]) > _numpy.spacing(1):
+            if _numpy.abs(hGrid[1]-hGrid[0]) > _numpy.spacing(100):
                 print "NS sub-domain : %s, hxGrid : %g" % (subDomainID,hGrid[0])
                 print "NS sub-domain : %s, hyGrid : %g" % (subDomainID,hGrid[1])
                 raise ValueError('Ensure structured grid is uniform and a square !')
                     
-            if _numpy.abs(hGrid[0]-self.lagrangian.blobs.h) > _numpy.spacing(1):
+            if _numpy.abs(hGrid[0]-self.lagrangian.blobs.h) > _numpy.spacing(100):
                 print "NS sub-domain : %s, hGrid : %g, hBlob : %g" % (subDomainID,hGrid[0], self.lagrangian.blobs.h)
                 raise ValueError('Ensure grid spacing and blob spacing are the same !') 
                 
-            if (self.multiEulerian[subDomainID].nu - self.lagrangian.blobs.nu) > _numpy.spacing(1):
+            if (self.multiEulerian[subDomainID].nu - self.lagrangian.blobs.nu) > _numpy.spacing(100):
                 print "Eulerian nu\t: %g" % self.multiEulerian[subDomainID].nu              
                 print "Lagrangian nu\t: %g" % self.lagrangian.blobs.nu  
                 raise ValueError("The kinematic viscosity 'nu' for eulerian and lagrangian subdomains does not match !!")
@@ -374,13 +374,13 @@ class HybridSolver(object):
         #---------------------------------------------------------------------             
             
                 
-    def evolve(self,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew):
+    def evolve(self,cmGlobalNew,thetaLocalNew,cmDotGlobal,thetaDotLocal):
         r"""
         Function to evolve the coupled hybrid (blobs+panel and eulerian grid)
         problem. 
         
-        During the evolution of the vortex blobs, the no-through boundary condition is taken into 
-        account by solving the no-slip panel problem.
+        During the evolution of the vortex blobs, the no-through boundary
+        condition is taken into account by solving the no-slip panel problem.
         
         * Note: moving panels not implemented yet 
         
@@ -392,9 +392,7 @@ class HybridSolver(object):
           - see Daeninck _[1] and Stock _[2]
 
         1. Update the position of the interpolation region
-            - Rotate and move the coordinates        
-
-            * Note: Not implemented !!         
+            - Rotate and move the coordinates    
         
         2. 'Correct' the Lagrangian domain.
              'Correct' the strengths of the vortex-particles that are 
@@ -485,13 +483,21 @@ class HybridSolver(object):
 
         Parameters
         ----------
-        cmGlobalNew
+        cmGlobalNew : list of numpy.ndarray(float64), nBodies of shape (2,)
+                      a list of new positions of the geometries in the hybrid 
+                      problem
         
-        thetaLocalNew
+        thetaLocalNew : list of floats, nBodies of floats, unit (rad)
+                        a list of new rotational angle of the geometries in the 
+                        hybrid problem
         
-        cmDotGlobalNew
-        
-        thetaDotLocalNew
+        cmDotGlobal : list of numpy.ndarray(float64), nBodies of shape (2,)
+                      a list of current displacement velocity of the geometries
+                      in the hybrid problem
+
+        thetaDotLocal : list of floats, nBodies of floats, unit (rad/s)
+                        a list of current rotational velocity of the geometries in the
+                        hybrid problem.
         
         Returned
         --------
@@ -540,7 +546,9 @@ class HybridSolver(object):
         # If lagrangian field is to update at the start 
         if self.__couplingParams['adjustLagrangianAt'] == 'start':
             if self.__couplingParams['adjustLagrangian'] == True:
-                self.__correctBlobs()   
+                self.__correctBlobs() # Correct the blob field
+                if self.lagrangian.panels is not None:
+                    self.lagrangian._solve_panelStrength() # Recalculate the new panel strengths
         #----------------------------------------------------------------------                        
 
         #----------------------------------------------------------------------            
@@ -561,8 +569,8 @@ class HybridSolver(object):
         # at t_n and t_{n+1}
 
         # Evolve the navier-stokes        
-        self.__multiStep_eulerian(cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew)
-        #self.__singleStep_eulerian(cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew)
+        self.__multiStep_eulerian(cmGlobalNew,thetaLocalNew,cmDotGlobal,thetaDotLocal)
+        #self.__singleStep_eulerian(cmGlobalNew,thetaLocalNew,cmDotGlobal,thetaDotLocal)
         
 
         #----------------------------------------------------------------------        
@@ -571,7 +579,9 @@ class HybridSolver(object):
         # If lagrangian field is to update at the end    
         if self.__couplingParams['adjustLagrangianAt'] == 'end':
             if self.__couplingParams['adjustLagrangian'] == True:
-                self.__correctBlobs()
+                self.__correctBlobs() # Correct the blob field
+                if self.lagrangian.panels is not None:
+                    self.lagrangian._solve_panelStrength() # Recalculate the new panel strengths
 
         #----------------------------------------------------------------------            
 
@@ -579,7 +589,8 @@ class HybridSolver(object):
         # Step 5 : Additional
 
         # Check if the solver are synchronized to the correct time
-        if _numpy.abs(self.lagrangian.t - self.multiEulerian.t) > _numpy.spacing(10):
+        #if _numpy.abs(self.lagrangian.t - self.multiEulerian.t) > _numpy.spacing(10):
+        if _numpy.abs(self.lagrangian.t - self.multiEulerian.t) > self.deltaTEulerian:
             print 'Eulerian t\t: %g' % self.multiEulerian.t
             print 'Lagrangian t\t: %g' % self.lagrangian.t
             raise ValueError('the simulation is not to sync !')
@@ -588,11 +599,44 @@ class HybridSolver(object):
     
     def __correctBlobs(self):
         r"""
-
+        Function to correct the strengths of the blobs inside the interpolation
+        regions. The vorticity is interpolated from the eulerian subdomain
+        on to the particles. The new circulation of the particle is the
+        vorticity times nominal particle area.
         
+        Methodology
+        -----------
+
+        Assumption : blobs are remeshing onto the remeshing grid
+                     before the interpolation
+     
+        Step 1: Remove the current set of blobs that are inside the 
+                interpolation region
+        Step 2: Generate temporary set of blobs inside interpolation region,
+                which are in sync with the remeshing grid.
+        Step 3: Interpolate the vorticity from the navier-stokes interpolation
+                grid on to the blobs that are inside the interpolation region
+        Step 4: Added the new set of temporary blobs into the list of 
+                blobs.
+
+        Parameters
+        ----------
+        None.
+        
+        Returns
+        -------
+        None returned.
+        
+        Attributes
+        ----------
+        lagrangian
+            blobs
+                x
+                y
+                g
 
         :First Added:   2014-02-26
-        :Last Modified: 2014-02-27
+        :Last Modified: 2014-03-07
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version
 
@@ -721,16 +765,20 @@ class HybridSolver(object):
         
         Parameters
         ----------
+        None
         
         Returns
         -------
+        xBlobNewList, yBlobNewList : list of numpy.ndarray(64), nInterpRegions of shape (nBlobs,)
+                                     the newly generated set of blobs inside the
+                                     interpolation region.
         
         Attributes
         ----------
-        
+        None changed.      
         
         :First Added:   2014-02-28
-        :Last Modified: 2014-02-28
+        :Last Modified: 2014-03-07
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version        
         """
@@ -810,7 +858,7 @@ class HybridSolver(object):
         Function to interpolate the circulation (vorticity * area) from the
         navier-stokes domain.
         
-        Description
+        Methodology
         -----------
         Step 3 of correcting blob strengths
         
@@ -854,24 +902,25 @@ class HybridSolver(object):
                        h_3=\frac{x^\prime \cdot y^\prime}{\Delta x \Delta y}
                        h_4=-\frac{y^\prime\left( x^\prime-\Delta x \right)}{\Delta x \Delta y}      
 
-        
-        Methodology
-        -----------
-        1. Determine the parameters of the structured grid.
-        
-        2. 
+
         
         Parameters
         ----------
-        
+        xBlobNewList, yBlobNewList : list of numpy.ndarray(float64), nInterpRegions of shape (nBlobs,)
+                                     the newly generated set of blobs inside the
+                                     interpolation region.
+                                     
         Returns
         -------
-        
+        gBlobNewList : list of numpy.ndarray(float64), nInterpRegions of shape (nBlobs,)
+                       the newly interpolated circulation from the interpolation
+                       region onto xBlobNew, yBlobNew of the (x,y)BlobNewList
         Attributes
         ----------
+        __totalCirculationAdded
         
         :First Added:   2014-02-28
-        :Last Modified: 2014-02-28
+        :Last Modified: 2014-03-07
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version      
         """
@@ -944,6 +993,19 @@ class HybridSolver(object):
         r"""
         Use the scipy interpolate function to interpolate from probe grid
         
+        Parameters
+        ----------
+        xBlobNewList, yBlobNewList : list of numpy.ndarray(float64), nInterpRegions of shape (nBlobs,)
+                                     the newly generated set of blobs inside the
+                                     interpolation region.
+        Returns
+        -------
+        gBlobNewList : list of numpy.ndarray(float64), nInterpRegions of shape (nBlobs,)
+                       the newly interpolated circulation from the interpolation
+                       region onto xBlobNew, yBlobNew of the (x,y)BlobNewList
+        Attributes
+        ----------
+        __totalCirculationAdded
         
         :First Added:   2014-03-05
         :Last Modified: 2014-03-05
@@ -999,29 +1061,22 @@ class HybridSolver(object):
         Function to interpolate the circulation (vorticity * area) from the
         navier-stokes domain using SCIPY GRIDDATA function.
         
-        Description
-        -----------
-        Step 3 of correcting blob strengths
-        
-  
-        
-        Methodology
-        -----------
-        1. Determine the parameters of the structured grid.
-        
-        2. 
-        
         Parameters
         ----------
-        
+        xBlobNewList, yBlobNewList : list of numpy.ndarray(float64), nInterpRegions of shape (nBlobs,)
+                                     the newly generated set of blobs inside the
+                                     interpolation region.
         Returns
         -------
-        
+        gBlobNewList : list of numpy.ndarray(float64), nInterpRegions of shape (nBlobs,)
+                       the newly interpolated circulation from the interpolation
+                       region onto xBlobNew, yBlobNew of the (x,y)BlobNewList
         Attributes
         ----------
+        __totalCirculationAdded
         
         :First Added:   2014-03-03
-        :Last Modified: 2014-03-03
+        :Last Modified: 2014-03-07
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version      
         """
@@ -1059,7 +1114,7 @@ class HybridSolver(object):
         return gBlobNewList        
 
 
-    def __multiStep_eulerian(self,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew):
+    def __multiStep_eulerian(self,cmGlobalNew,thetaLocalNew,cmDotGlobal,thetaDotLocal):
         r"""
         Function to advance the navier-stokes eulerian domain.
         
@@ -1076,15 +1131,40 @@ class HybridSolver(object):
         
         Parameters
         ----------
+        cmGlobalNew : list of numpy.ndarray(float64), nBodies of shape (2,)
+                      a list of new positions of the geometries in the hybrid 
+                      problem
         
+        thetaLocalNew : list of floats, nBodies of floats, unit (rad)
+                        a list of new rotational angle of the geometries in the 
+                        hybrid problem
+        
+        cmDotGlobal : list of numpy.ndarray(float64), nBodies of shape (2,)
+                      a list of current displacement velocity of the geometries
+                      in the hybrid problem
+
+        thetaDotLocal : list of floats, nBodies of floats, unit (rad/s)
+                        a list of current rotational velocity of the geometries in the
+                        hybrid problem.
+                        
         Returns
         -------
+        None
         
         Attributes
         ----------
+        multiEulerian
+            __solver
+                u1
+                p1
+                vorticity
+                t
+                tStep
+                
+        __vxyEulerianBoundary
         
         :First Added:   2014-02-28
-        :Last Modified: 2014-02-28
+        :Last Modified: 2014-03-07
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version     
         """
@@ -1126,7 +1206,7 @@ class HybridSolver(object):
             #  Evolve the navier-stokes to the next sub-step
             # TODO: moving ns domain not implemented !
             self.multiEulerian.evolve(vxBoundary_substep, vyBoundary_substep,
-                                      cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew) 
+                                      cmGlobalNew,thetaLocalNew,cmDotGlobal,thetaDotLocal) 
             
         # Update the boundary parameters
         self.__vxyEulerianBoundary[0] = _numpy.copy(vxBoundaryNew)
@@ -1158,15 +1238,22 @@ class HybridSolver(object):
     
         Parameters
         ----------
+        None
         
         Returns
         -------
+        None
         
         Attributes
         ----------
-        
+        lagrangian
+            blobs
+                x
+                y
+                g
+                
         :First Added:   2014-02-28
-        :Last Modified: 2014-02-28
+        :Last Modified: 2014-03-07
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version
         """
@@ -1216,10 +1303,26 @@ class HybridSolver(object):
 
     def __set_deltaTEulerian(self):
         """
-        Function to modify the eulerian time-step size.
+        Function to modify the eulerian time-step size such that 
+        the lagrangian time step is an integer multiple of the eulerian time
+        step.
+        
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        None
+        
+        Attributes
+        ----------
+        nEulerianSubSteps
+        multiEulerian
+            deltaT
         
         :First Added:   2014-02-28
-        :Last Modified: 2014-02-28
+        :Last Modified: 2014-03-07
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version         
         """        
@@ -1262,12 +1365,17 @@ class HybridSolver(object):
             
         Parameters
         ----------
+        None
         
         Returns
         -------
+        None
         
-        Assigns
-        -------
+        Attributes
+        ----------
+        multiEulerian
+            __solver
+                u1
         
         :First Added:   2014-02-28
         :Last Modified: 2014-02-28
@@ -1310,18 +1418,15 @@ class HybridSolver(object):
         
         Attributes
         ----------
-        #        blobs : pHyFlow.vortex.VortexBlobs
-        #                the vortex-blobs class is assigned
-        #                
-        #        panels : pHyFlow.panels.Panels
-        #                 the panel blass
-        #                 
-        #        couplingParams : dict
-        #                         Dictionary containing parameters for coupling the
-        #                         panels and the blobs together.
+        lagrangian
+        multiEulerian        
+        __couplingParams
+        __interpolationParams
+        __interpolationRegions
+        
                          
         :First Added:   2014-02-24
-        :Last Modified: 2014-02-24
+        :Last Modified: 2014-03-07
         :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
         :Licence:       GNU GPL version 3 or any later version    
         """
@@ -1442,6 +1547,24 @@ class HybridSolver(object):
     def __updatePosition_interpolationRegions(self):
         r"""
         Function to update the position of the interpolation regions
+        accordining to the new cmGlobal and new thetaLocal
+        
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        None
+        
+        Attributes
+        ----------
+        interpolationRegions
+        
+        :First Added:   2014-03-07
+        :Last Modified: 2014-03-07
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version  
         """
 
         self.interpolationRegions = {}
