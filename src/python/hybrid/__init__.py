@@ -27,5 +27,5 @@ import base
 import hybridOptions
 
 # import hybrid class
-from __hybridClass import *
+from __hybridSolverClass import *
 

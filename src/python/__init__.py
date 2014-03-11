@@ -20,32 +20,31 @@ Several different kernel implementations are implemented in one unified function
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.                                                                    
 #                                                                                                                                   
 # First added:  2013-05-27                                                                                                          
-# Last changed: 2014-02-28
+# Last changed: 2014-03-05
 # -*- coding: utf-8 -*-
+
+# load module options
+#import options
 
 # load auxiliary modules aux
 import aux
+
+# load vortex blob related modules
+import blobs
+
+# load panel related modules
+import panels
+
+# load lagrangian (blobs + panels) related modules
+import lagrangian
+
+# load eulerian (grid solver) modules
+import eulerian
 
 # load hybrid related modules
 import hybrid
 
 # load input/output modules
 import IO
-
-# load NavierStokes modules
-import navierStokes
-
-# load module options
-import options
-
-# load panel related modules
-import panel
-
-# load vortex related modules
-import vortex
-
-# load vortex-panel related modules
-import vortexPanel
-
 
 
