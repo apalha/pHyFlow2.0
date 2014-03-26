@@ -30,11 +30,11 @@ Define panel options
 
 # Panel kernels
 PANEL_KERNEL = {'default'   : 'csv', # Constant Strength Vortex panel
-                'available' : ('csv', 'css')} # Constant Strength Vortex, Constant Strength Source Panels
+                'available' : ('csv')}#, 'css')} # Constant Strength Vortex, Constant Strength Source Panels not implemented
 
 # Problem types
-PROBLEM_TYPE = {'default'   : 'moving',
-                'available' : ('fixed', 'moving')}
+PROBLEM_TYPE = {'default'   : 'prescribed',
+                'available' : ('fixed', 'moving','prescribed')}
 
 # Velocity computation parameters
 VELOCITY_COMPUTATION_METHOD = {'default'    : 'direct',

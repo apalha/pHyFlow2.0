@@ -31,7 +31,7 @@ import pHyFlow
 # Global parameters
 
 # Simulation parameters
-nTimeSteps = 5
+nTimeSteps = 10
 
 # Fluid Parameters
 
@@ -55,7 +55,7 @@ cmGlobal = np.array([1.,0.])
 
 # Define blob parameters
 overlap = 1.0               # overlap ratio
-nBlobs = (100*(2*Rext))**2# number of blobs
+nBlobs = (200*(2*Rext))**2# number of blobs
 hBlob = (2*Rext)/np.sqrt(nBlobs)    # blob spacing
 
 # Estimate of delta T
@@ -91,7 +91,7 @@ blobs.plotVelocity = True
 #------------------------------------------------------------------------------
 # Setup the panels - Lagrangian domain
 # This problem does not have any panels
-nPanels = 100
+nPanels = 400
 dPanel = np.spacing(100)
 theta   = np.linspace(np.pi,-np.pi,nPanels+1) # Panel polar angles, to define them.
 dtheta  = theta[1]-theta[0] # Angle spacing
@@ -106,7 +106,8 @@ cylinderData = {'xPanel' : r*np.cos(theta - dtheta/2),
                 
 geometries = {'cylinder':cylinderData}                
 
-panels = pHyFlow.panels.Panels(geometries=geometries)
+problemType='prescribed'
+panels = pHyFlow.panels.Panels(geometries=geometries,problemType=problemType)
 
 #------------------------------------------------------------------------------
 
@@ -118,6 +119,29 @@ lagrangian = pHyFlow.lagrangian.LagrangianSolver(blobs,panels=panels,
                                                  couplingParams={'panelStrengthUpdate':'constant'})
 
 #------------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------
+# Define the interpolation region
+
+# Use stocks parameters
+# ..[1] Stock, M., Gharakhani, A., & Stone, C. (2010). Modeling Rotor Wakes 
+#       with a Hybrid OVERFLOW-Vortex Method on a GPU Cluster.
+dBdry = Rsurf*0.1#2*hBlob  + np.spacing(10e10)
+dSurf = (1.0 + 2.0) * hBlob
+
+# Generate polar points (N = 100)
+beta = np.linspace(-np.pi,np.pi,100)
+
+# Define the boundary (exterior) polygon
+xyBoundaryPolygon = np.vstack(( (Rext - dBdry)*np.cos(beta),
+                                (Rext - dBdry)*np.sin(beta))).T
+                                       
+# Define the surface polygon
+xySurfacePolygon =  np.vstack(( (Rsurf + dSurf)*np.cos(beta),
+                                (Rsurf + dSurf)*np.sin(beta))).T
+                                
+                                                          
+#-----------------------------------------------------------------------------
 
 
 #-----------------------------------------------------------------------------    
@@ -146,7 +170,8 @@ origin = -np.round(probeN*0.5)*hBlob
 # Collect all the probe parameters
 probeGridParams = {'origin' : origin,
                    'L' : probeL,
-                   'N' : probeN}          
+                   'N' : probeN,
+                   'circulationProbes':xyBoundaryPolygon.T.copy()}          
 
 # Solver parameters
 cfl = 0.95 # CFL number
@@ -218,45 +243,33 @@ class MultiEulerianSolver(object):
         for subDomain in self.subDomains.itervalues():
             subDomain.evolve(vx,vy,cmGlobalNew,thetaLocalNew,cmDotGlobalNew,thetaDotLocalNew)
         
+    def gTotalInside(self):
+        gTotalInsideList = []
+        for subDomain in self.subDomains.itervalues():
+            gTotalInsideList.append(subDomain.gTotalInside())
+            
+        return np.array(gTotalInsideList)        
+        
                                          
 # Define the multiple naviers-stokes class   
 multiEulerian = MultiEulerianSolver(subDomains={'eulerian': eulerian})
  
-#-----------------------------------------------------------------------------
-
-#-----------------------------------------------------------------------------
-# Define the interpolation region
-
-# Use stocks parameters
-# ..[1] Stock, M., Gharakhani, A., & Stone, C. (2010). Modeling Rotor Wakes 
-#       with a Hybrid OVERFLOW-Vortex Method on a GPU Cluster.
-dBdry = Rsurf*0.1#2*hBlob  + np.spacing(10e10)
-dSurf = (1.0 + 2.0) * hBlob
-
-# Generate polar points (N = 100)
-beta = np.linspace(-np.pi,np.pi,100)
-
-# Define the boundary (exterior) polygon
-xyBoundaryPolygon = np.vstack(( (Rext - dBdry)*np.cos(beta),
-                                (Rext - dBdry)*np.sin(beta))).T
-                                       
-# Define the surface polygon
-xySurfacePolygon =  np.vstack(( (Rsurf + dSurf)*np.cos(beta),
-                                (Rsurf + dSurf)*np.sin(beta))).T
-                                
 # Only one cylinder                               
 interpolationRegions = {multiEulerian.subDomainKeys[0] : {'surfacePolygon': xySurfacePolygon,
-                                                          'boundaryPolygon': xyBoundaryPolygon}}       
-                                                          
+                                                          'boundaryPolygon': xyBoundaryPolygon}}        
+ 
 #-----------------------------------------------------------------------------
+
+
 #
 #-----------------------------------------------------------------------------
 # Setup the hybrid problem
 
 # Define the coupling parameters
 couplingParams={'adjustLagrangian':True,
-                'adjustLagrangianAt':'start',
-                'eulerianInitialConditions': 'lagrangian_field'}
+                'adjustLagrangianAt':'end',
+                'eulerianInitialConditions': 'lagrangian_field',
+                'conserveCirculation':True}
 
 interpolationParams={'algorithm':'structuredProbes_manual',#'structured_probes',
                      'method':'linear'}
@@ -299,7 +312,7 @@ thetaDotLocalNew = 0. # zero-rotational velocity
 numBlobsTime = np.zeros(nTimeSteps+1)
 totalCirculationTime = np.zeros(nTimeSteps+1)
 numBlobsTime[0] =  hybrid.lagrangian.blobs.numBlobs
-totalCirculationTime[0] =  hybrid.lagrangian.blobs.g.sum()
+totalCirculationTime[0] =  hybrid.lagrangian.gTotal
 
 # Forces
 CL = np.zeros(nTimeSteps+1)
@@ -333,7 +346,7 @@ for timeStep in range(1,nTimeSteps+1):
     
     # Calculate parameters    
     numBlobsTime[timeStep] =  hybrid.lagrangian.blobs.numBlobs
-    totalCirculationTime[timeStep] =  hybrid.lagrangian.blobs.g.sum()
+    totalCirculationTime[timeStep] =  hybrid.lagrangian.gTotal
     
     # Calculate the body forces
     CD[timeStep], CL[timeStep] = eulerian.Forces() / (0.5*vInf[0]*vInf[0]*D)
@@ -346,8 +359,8 @@ for timeStep in range(1,nTimeSteps+1):
     print "Time-step\t\t\t: %g" % timeStep
     print "Current time\t\t\t: %g" % (timeStep*hybrid.lagrangian.deltaT)        
     print 'Time to evolve\t\t\t: %g'  % (time.time() - startTime)
-    print 'Number of blobs\t\t\t: %d'  % numBlobsTime[timeStep]
-    print 'Total circulation\t\t: %.8f'  % totalCirculationTime[timeStep]
+    print 'Number of blobs\t\t\t: %g'  % numBlobsTime[timeStep]
+    print 'Total circulation\t\t: %g'  % totalCirculationTime[timeStep]
     print '--------------------------------------------\n'
 
 #------------------------------------------------------------------------------

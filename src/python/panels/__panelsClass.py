@@ -499,6 +499,21 @@ class Panels(object):
         # Assemble influence Matrix
         self.__A = _numpy.zeros((self.__nPanelsTotal,self.__nPanelsTotal))
         self.__assembleInfluenceMatrix()
+        
+        # Prescribed circulation at panels
+        if self.__problemType == 'prescribed':
+            # Initialize the LHS of the Least-square solution for the N+nBody equations and N unknowns
+            self.__B = _numpy.zeros((self.nPanelsTotal+self.__nBodies,self.nPanelsTotal))
+
+            # Add the extra equations to the LHS matrix
+            # Extra equations: sum of panelStrengths * panelLength = - Circulation of panels.
+            for i in range(self.__nBodies):
+                iS = self.__index[i]  # starting index                      
+                iE = self.__index[i+1] # ending index
+                
+                # Assign the value. The panel lengths stays the same
+                self.__B[self.__nPanelsTotal+i,iS:iE] = self.__L[iS:iE].copy()
+        #----------------------------------------------------------------------            
 
         #----------------------------------------------------------------------
         # Define and initialize the time step counter and absolute time
@@ -677,17 +692,22 @@ class Panels(object):
         else:
             raise NotImplementedError('FMM computation not implemented !')
             
+        if self.__panelKernel == 'csv':
+            panelKernel = _panelOptions._PANEL_KERNEL_CSV
+        else:
+            panelKernel = _panelOptions._PANEL_KERNEL_CSS
+            
         # Calculate the induced velocity (internal cython solver)
         vx,vy = _panelSolver.inducedVelocity(self.__sPanel,self.__xyPanelStart_global[0],
                                              self.__xyPanelStart_global[1],self.__xyPanelEnd_global[0],
                                              self.__xyPanelEnd_global[1],self.__cosSinAlpha[0],self.__cosSinAlpha[1],
-                                             xTarget,yTarget,hardware,method)
+                                             xTarget,yTarget,hardware,method,panelKernel)
 
         # return induced velocity
         return vx,vy
         
         
-    def solve(self,vxExternel,vyExternel):
+    def solve(self,vxExternel,vyExternel,gTotal=None):
         """
         Solve the panel strengths satisfying the no-slip boundary condition
         for the vortex panel at the collocation point. With the parameters:
@@ -742,15 +762,23 @@ class Panels(object):
         """
         
         # Determine the RHS
-        RHS = (-vxExternel)*self.__tang[0] + (-vyExternel)*self.__tang[1] # vortex panel
+        if self.__panelKernel == 'csv':
+            RHS = (-vxExternel)*self.__tang[0] + (-vyExternel)*self.__tang[1] # vortex panel
+            #            RHS = (-vxExternel)*self.__norm[0] + (-vyExternel)*self.__norm[1] # source panel
+            
+        else:
+            RHS = (-vxExternel)*self.__norm[0] + (-vyExternel)*self.__norm[1] # source panel
 
         # Solve for panel strength
         if self.__problemType == 'fixed':
+            print "WARNING: This approach does not conserve circulation !!"
+            
             # For the fixed problem, utilize LU factor algorithm
             self.__sPanel = _splin.lu_solve(self.__LU_FACTOR, RHS)
         
         # For moving problem
         elif self.__problemType == 'moving':
+            print "WARNING: This approach does not conserve circulation !!"
             
             # Use the iterative GMRES solver
             if self.__solverCompParams['method'] == 'gmres':   
@@ -763,7 +791,31 @@ class Panels(object):
             # Use the direct matrix solver.
             elif self.__solverCompParams['method'] == 'direct':
                 self.__sPanel = _numpy.linalg.solve(self.__A,RHS)
-     
+    
+        elif self.__problemType == 'prescribed':
+
+            # Make a new self-induction matrix
+            #            B[:-1,:] =_numpy.copy(self.__A)
+            #            B[-1] = _numpy.copy(self.__L)
+            #            B_RHS = _numpy.zeros(self.nPanelsTotal+1)
+            #            B_RHS[:-1] = _numpy.copy(RHS)
+            #            B_RHS[-1] = _numpy.copy(-gTotal)
+
+            # Determine gTotal
+            if gTotal is None:
+                gTotal = _numpy.zeros(self.__nBodies)
+                
+            # Modify the LHS
+            self.__B[:self.__nPanelsTotal,:] = self.__A
+                
+            # Determine the RHS for the least-square problem
+            # Additional equation RHS are the negative of prescribed total 
+            # circulation of each panel
+            B_RHS = _numpy.hstack((RHS,-gTotal))
+            
+            # Solve using least-square method
+            self.__sPanel = _numpy.linalg.lstsq(self.__B,B_RHS)[0]
+            
 
     def _advanceTime(self,deltaTNew):
         r"""
@@ -876,6 +928,11 @@ class Panels(object):
         else:
             raise NotImplementedError('FMM computation not implemented !')
             
+        if self.__panelKernel == 'csv':
+            panelKernel = _panelOptions._PANEL_KERNEL_CSV
+        else:
+            panelKernel = _panelOptions._PANEL_KERNEL_CSS            
+            
         # Compute the complete A matrix
         if self.__solverCompParams['assemble'] == 'all':
             
@@ -888,7 +945,7 @@ class Panels(object):
                                                    self.__xyPanelEnd_global[1],
                                                    self.__cosSinAlpha[0],
                                                    self.__cosSinAlpha[1],
-                                                   hardware, method)
+                                                   hardware, method, panelKernel)
         
         else:
             raise NotImplementedError("Smart Assemble not implemented")
@@ -987,11 +1044,13 @@ class Panels(object):
                                                   self.__cosSinAlpha[1,iS:iE]))
             
             # Determine the collocation points (at the new position)
+            #            self.__xyCP_global[:,iS:iE] = 0.5 * (self.__xyPanelEnd_global[:,iS:iE] + \
+            #                                                 self.__xyPanelStart_global[:,iS:iE])\
+            #                                           - self.__norm[:,iS:iE]*geometryData['dPanel'] # shift collocation point by dPanel, in the noraml dir.
+            #        
             self.__xyCP_global[:,iS:iE] = 0.5 * (self.__xyPanelEnd_global[:,iS:iE] + \
                                                  self.__xyPanelStart_global[:,iS:iE])\
-                                           - self.__norm[:,iS:iE]*geometryData['dPanel'] # shift collocation point by dPanel, in the noraml dir.
-        
-            
+                                           - self.__norm[:,iS:iE]*self.__L[iS:iE]*0.1 # shift collocation point by dPanel, in the noraml dir.            
 
     def __updateRotMat(self):
         """
@@ -1222,10 +1281,11 @@ class Panels(object):
         #----------------------------------------------------------------------            
         # Set the panel kernel
         elif varName == 'panelKernel':
-            if var == 'csv':
+            if var == 'csv' or var == 'css':
                 self.__panelKernel = var
             else:
-                raise NotImplementedError('Use Constant Strength Vortex kernel: csv')
+                raise NotImplementedError('Use Constant Strength Vortex kernel: csv or\
+                                           Constant Strength Source kernel: css')
 
         #----------------------------------------------------------------------                
         # Set the problem type
@@ -1487,8 +1547,11 @@ class Panels(object):
                  the total panel circulation.
                  :math:`\sum_i {\gamma_i \cdot ds_i}`
         """
-        return [_numpy.sum(self.__sPanel[self.__index[i]:self.__index[i+1]]*\
-                           self.__L[self.__index[i]:self.__index[i+1]]) for i in range(self.__nBodies)]
+        if self.__panelKernel == 'csv':
+            return [_numpy.sum(-self.__sPanel[self.__index[i]:self.__index[i+1]]*\
+                               self.__L[self.__index[i]:self.__index[i+1]]) for i in range(self.__nBodies)]
+        else:
+            return _numpy.zeros(self.__nBodies)
         
      
     @simpleGetProperty

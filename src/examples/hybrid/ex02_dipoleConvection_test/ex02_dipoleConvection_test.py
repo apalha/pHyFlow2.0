@@ -111,40 +111,6 @@ lagrangian = pHyFlow.lagrangian.LagrangianSolver(blobs,panels=None)
 #-----------------------------------------------------------------------------    
 # Setup the navier-stokes problem - Eulerian domain
 
-# Setup navier-stokes mesh and boundary Domains
-#---------------------------
-
-## Mesh parameters
-#N = 100# Number of mesh nodes (in x and y dir)
-#
-#mesh = dolfin.UnitSquareMesh(N,N)
-#xy = mesh.coordinates()
-#xy = (xy - 0.5)*0.5
-#mesh.coordinates()[:] = xy
-#
-## Sub domain for dirichlet boundary
-#class dirichletBoundary(dolfin.SubDomain):
-#    def inside(self,x,on_boundary):
-#        return on_boundary
-#
-## Define boundary domains    
-#boundaryDomains = dolfin.MeshFunction('size_t', mesh, mesh.topology().dim()-1)
-#
-## Mark the fluid
-#boundaryDomains.set_all(1)
-#
-## Mark no-slip
-#noslip = dirichletBoundary()
-#noslip.mark(boundaryDomains, pHyFlow.navierStokes.nsOptions.ID_EXTERNAL_BOUNDARY)
-
-# Export mesh and boundary mesh files
-
-# Export to files
-#meshFilePath = './data/unitSquareMesh_%gx%g_mesh.xml.gz' % (N,N)
-#boundaryDomainsFilePath = './data/unitSquareMesh_%gx%g_boundaryDomains.xml.gz' % (N,N)
-#dolfin.File(meshFilePath) << mesh
-#dolfin.File(boundaryDomainsFilePath) << boundaryDomains
-
 meshFilePath = './geometry/dipoleConvection_Re-625_vertices-2k_MPI.xml.gz'
 boundaryDomainsFilePath = './geometry/dipoleConvection_Re-625_vertices-2k_MPI_facet_region.xml.gz'
 
@@ -165,11 +131,26 @@ probeN = np.int64(np.round(probeL / h)) + 1 # number space + 1 = number of point
 probeL = (probeN-1)*h # determine the new length
 origin = -np.round(probeN*0.5)*h # cmLocal = (0.,0.)
 
+# Circulation probes
+dBdry = 2*h  + np.spacing(10e10) # line should not coincide with remeshing grid
+
+x = np.hstack((np.linspace(xMeshBounds[0]+dBdry,xMeshBounds[1]-dBdry,50),
+               np.ones(23)*xMeshBounds[1]-dBdry,
+               np.linspace(xMeshBounds[1]-dBdry,xMeshBounds[0]+dBdry,50),
+               np.ones(23)*xMeshBounds[0]+dBdry))
+x = np.hstack((x[1:],x[0]))
+y = np.hstack((np.ones(23)*yMeshBounds[0]+dBdry,
+               np.linspace(yMeshBounds[0]+dBdry,yMeshBounds[1]-dBdry,50),
+               np.ones(23)*yMeshBounds[1]-dBdry,
+               np.linspace(yMeshBounds[1]-dBdry,yMeshBounds[0]+dBdry,50))) 
+               
+xyCirculationProbes = np.vstack((x,y))    
+
 # Append data to dict
 probeGridParams = {'origin' : origin,
                    'L' : probeL,
-                   'N' : probeN}          
-
+                   'N' : probeN,
+                   'circulationProbes': xyCirculationProbes}
 # Solver parameters
 cfl = 0.95 # CFL number
 uMax = 12.0
@@ -284,8 +265,9 @@ for subDomain in multiEulerian.subDomainKeys:
 
 # Define the coupling parameters
 couplingParams={'adjustLagrangian':True,
-                'adjustLagrangianAt':'start',
-                'eulerianInitialConditions': 'lagrangian_field'}
+                'adjustLagrangianAt':'end',
+                'eulerianInitialConditions': 'lagrangian_field',
+                'conserveCirculation':False}
 
 interpolationParams={'algorithm':'structuredProbes_manual',
                      'method':'linear'}

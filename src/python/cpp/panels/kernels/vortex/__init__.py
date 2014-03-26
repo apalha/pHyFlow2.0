@@ -22,3 +22,4 @@ This module handles all panel method related operations in python
 # Last changed: 2013-12-17
 
 import _vortexPanel_Cython_cpu
+import _vortexPanel_Cython_cpu_normal

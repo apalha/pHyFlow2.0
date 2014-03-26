@@ -39,7 +39,7 @@ Implemented NS Algorithms
 #   but WITHOUT ANY WARRANTY; without even the implied warranty of                                                                    
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the                                                                      
 #   GNU Lesser General Public License for more details.                                                                               
-#      
+#
 #   You should have received a copy of the GNU Lesser General Public License                                                          
 #   along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.    
 
@@ -47,6 +47,7 @@ __all__ = ['HybridSolver']
 
 # External packages
 import numpy as _numpy
+#import scipy.sparse as spspare
 #import time as _time
 
 # Import point in polygon search function
@@ -59,6 +60,8 @@ from pHyFlow.aux.customDecorators import simpleGetProperty
 from pHyFlow.blobs import blobOptions
 from pHyFlow.lagrangian import LagrangianSolver as _LagrangianSolverClass
 from pHyFlow.eulerian import EulerianSolver as _EulerianSolverClass
+from pHyFlow.blobs.base.induced import velocity as _blobs_velocity
+from pHyFlow.blobs.base.induced import vorticity as _blobs_vorticity
 
 # Hybrid packages
 from pHyFlow.hybrid import hybridOptions as hybridOptions
@@ -305,7 +308,8 @@ class HybridSolver(object):
     def __init__(self,lagrangian, multiEulerian, interpolationRegions,
                  couplingParams={'adjustLagrangian':hybridOptions.ADJUST_LAGRANGIAN['default'],
                                  'adjustLagrangianAt':hybridOptions.ADJUST_LAGRANGIAN_AT['default'],
-                                 'eulerianInitialConditions':hybridOptions.EULERIAN_INITIAL_CONDITIONS['default']},
+                                 'eulerianInitialConditions':hybridOptions.EULERIAN_INITIAL_CONDITIONS['default'],
+                                 'conserveCirculation':hybridOptions.CONSERVE_CIRCULATION['default']},
                  interpolationParams={'algorithm':hybridOptions.INTERPOLATION_ALGORITHM['default'],
                                       'method':hybridOptions.INTERPOLATION_METHOD['default']}):
         
@@ -366,12 +370,15 @@ class HybridSolver(object):
                 print "NS sub-domain : %s, hGrid : %g, hBlob : %g" % (subDomainID,hGrid[0], self.lagrangian.blobs.h)
                 raise ValueError('Ensure grid spacing and blob spacing are the same !') 
                 
-            if (self.multiEulerian[subDomainID].nu - self.lagrangian.blobs.nu) > _numpy.spacing(100):
-                print "Eulerian nu\t: %g" % self.multiEulerian[subDomainID].nu              
-                print "Lagrangian nu\t: %g" % self.lagrangian.blobs.nu  
-                raise ValueError("The kinematic viscosity 'nu' for eulerian and lagrangian subdomains does not match !!")
+            #            if (self.multiEulerian[subDomainID].nu - self.lagrangian.blobs.nu) > _numpy.spacing(100):
+            #                print "Eulerian nu\t: %g" % self.multiEulerian[subDomainID].nu              
+            #                print "Lagrangian nu\t: %g" % self.lagrangian.blobs.nu  
+            #                raise ValueError("The kinematic viscosity 'nu' for eulerian and lagrangian subdomains does not match !!")
                 
-        #---------------------------------------------------------------------             
+        #---------------------------------------------------------------------    
+        # Adjust the lagrangian, match the eulerian solutions                
+        if self.__couplingParams['adjustLagrangian'] == True:
+            self.__correctBlobs() # Correct the blob field
             
                 
     def evolve(self,cmGlobalNew,thetaLocalNew,cmDotGlobal,thetaDotLocal):
@@ -545,10 +552,10 @@ class HybridSolver(object):
         
         # If lagrangian field is to update at the start 
         if self.__couplingParams['adjustLagrangianAt'] == 'start':
-            if self.__couplingParams['adjustLagrangian'] == True:
-                self.__correctBlobs() # Correct the blob field
-                if self.lagrangian.panels is not None:
-                    self.lagrangian._solve_panelStrength() # Recalculate the new panel strengths
+            raise NotImplementedError('lagrangian adjustment should be done at the end!')
+            #if self.__couplingParams['adjustLagrangian'] == True:
+            #    self.__correctBlobs() # Correct the blob field
+
         #----------------------------------------------------------------------                        
 
         #----------------------------------------------------------------------            
@@ -570,8 +577,6 @@ class HybridSolver(object):
 
         # Evolve the navier-stokes        
         self.__multiStep_eulerian(cmGlobalNew,thetaLocalNew,cmDotGlobal,thetaDotLocal)
-        #self.__singleStep_eulerian(cmGlobalNew,thetaLocalNew,cmDotGlobal,thetaDotLocal)
-        
 
         #----------------------------------------------------------------------        
         # Step 1 or 4 : 'Correct' the Lagrangian domain.
@@ -580,8 +585,6 @@ class HybridSolver(object):
         if self.__couplingParams['adjustLagrangianAt'] == 'end':
             if self.__couplingParams['adjustLagrangian'] == True:
                 self.__correctBlobs() # Correct the blob field
-                if self.lagrangian.panels is not None:
-                    self.lagrangian._solve_panelStrength() # Recalculate the new panel strengths
 
         #----------------------------------------------------------------------            
 
@@ -589,13 +592,17 @@ class HybridSolver(object):
         # Step 5 : Additional
 
         # Check if the solver are synchronized to the correct time
+        # No need !!
         #if _numpy.abs(self.lagrangian.t - self.multiEulerian.t) > _numpy.spacing(10):
-        if _numpy.abs(self.lagrangian.t - self.multiEulerian.t) > self.deltaTEulerian:
-            print 'Eulerian t\t: %g' % self.multiEulerian.t
-            print 'Lagrangian t\t: %g' % self.lagrangian.t
-            raise ValueError('the simulation is not to sync !')
+        #        if _numpy.abs(self.lagrangian.t - self.multiEulerian.t) > self.deltaTEulerian:
+        #            print 'Eulerian t\t: %g' % self.multiEulerian.t
+        #            print 'Lagrangian t\t: %g' % self.lagrangian.t
+        #            raise ValueError('the simulation is not to sync !')
         #----------------------------------------------------------------------
 
+
+
+        
     
     def __correctBlobs(self):
         r"""
@@ -673,7 +680,7 @@ class HybridSolver(object):
         # Step 1: Removed the current blobs inside the interpolation regions
 
         # Check the circulation before we remove
-        self.__totalCirculationBeforeRemove = self.lagrangian.blobs.g.sum()
+        self.__totalCirculationBeforeRemove = self.lagrangian.gTotal
 
         # Remove blobs
         self.__removeBlobs() #TODO: conservation of circulation
@@ -702,32 +709,197 @@ class HybridSolver(object):
         
         elif self.__interpolationParams['algorithm'] == 'unstructured_scipy':
             gBlobNewList = self.__interpolateVorticity_unstructured_scipy(xBlobNewList, yBlobNewList)
+        else:
+            raise NotImplementedError('interpolation algorithm not available!!')
         #----------------------------------------------------------------------        
-
+     
         #----------------------------------------------------------------------        
         # Determine the change in circulation
         
-        # Determine the change in circulation
-        self.__epsilon = self.__totalCirculationRemoved / self.__totalCirculationAdded
+        # Conserve total circulation
+        if self.__couplingParams['conserveCirculation'] == True:    
+        
+            # Raise error if panels is none
+            if self.lagrangian.panels is None:
+                raise NotImplementedError('Conservation of circulation without the panels not implemented!')
+                
+            # Determine panel strengths such that panel circulation + blob circulation inside  == eulerian circulation
+            xBlobNew, yBlobNew, gBlobNew = self.__conserve_circulation(xBlobNewList,yBlobNewList,gBlobNewList)
+                          
+            # Add the new blobs to lagrangian field        
+            self.lagrangian.blobs.addBlobs(xBlobNew, yBlobNew, gBlobNew)                       
+        
+        elif self.__couplingParams['conserveCirculation'] == False:
+            
+            # Add the new blobs to lagrangian field        
+            self.lagrangian.blobs.addBlobs(_numpy.concatenate(xBlobNewList),
+                                           _numpy.concatenate(yBlobNewList),
+                                           _numpy.concatenate(gBlobNewList))                          
+            
+            # Recalculate the new panel strengths
+            if self.lagrangian.panels is not None:
+                self.lagrangian._solve_panelStrength()
 
-        # Conserve circulation
-        #gBlobNewList = _numpy.array(gBlobNewList*self.__epsilon)
-        #----------------------------------------------------------------------        
+        #----------------------------------------------------------------------    
+                
+
+    def __conserve_circulation(self,xBlobInsideList,yBlobInsideList,gBlobInsideList):
+        r"""
+        Function to conserve the circulation in the lagrangian domain.
+        
+        Methodolgy
+        ----------
+        1) First, it determine circulation that should be assigned to the
+           vortex panels. The circulation of the panels is equal to the d
+           disregarded circulation from the eulerian domain during the
+           interpolation. Therefore:
+           .. math::
+               \Gamma_{panels} = |Gamma_{eulerian} -\Gamma_{blobs,uncorrected}
+               
+        2) The second step is to conserve the total circulation of the
+           lagrangian domain. This is done by determine the total circulation
+           that needs to be added to the uncorrected blobs to esure total
+           circulation is zero.
+               \Gamma_{blob,corrected} = \Gamma_{blobs,uncorrected} - \Gamma_{error}
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            __conserve_circulation()
+            
+        Parameters
+        ----------
+        xBlobNewList, yBlobNewList, gBlobNewList : list of numpy.ndarray(64), nInterpRegions of shape (nBlobs_inside,)
+                                                   the newly generated set of blobs inside the
+                                                   interpolation region.
+        
+        Returns
+        -------
+        xBlobNew, yBlobNew : numpy.ndarray(float64),
+                             concatenated list of new blobs.
+                             
+        gBlobInsideCorrected : numpy.ndarray(float64), shape(nBlobs_insideAllInterpRegions,)
+                               the corrected strengths of each particles
+                               inside the interpolation region.
+        
+        Attributes
+        ----------
+        panels : pHyFlow.panels.Panels
+                 the strength of the panels are updated.
+                 
+                 sPanel : numpy.ndarray(float64), shape (panels.nPanelTotal, )
+                          the strength :math:`\gamma` of the panels.
+                  
+                          * Note: position update not implemented yet.
+
+        :First Added:   2014-03-04
+        :Last Modified: 2014-03-06
+        :Copyright:     Copyright (C) 2014 Lento Manickathan, **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version                             
+        """
+        
+        #----------------------------------------------------------------------
+        # Determine parameters
+
+        # convert the hardware flag into an int to use in _base_convection
+        if self.lagrangian.blobs.velocityComputationParams['hardware'] == 'gpu': 
+            blobs_hardware = blobOptions.GPU_HARDWARE
+        else: 
+            blobs_hardware = blobOptions.CPU_HARDWARE
+
+        # convert the method flag into an int to use in _base_convection
+        if self.lagrangian.blobs.velocityComputationParams['method'] == 'fmm': 
+            blobs_method = blobOptions.FMM_METHOD
+        else: 
+            blobs_method = blobOptions.DIRECT_METHOD
+            
+        #----------------------------------------------------------------------
 
         #----------------------------------------------------------------------
-        # Step 4 : Added the new set of temporary blobs into the list of 
-        #          blobs.
+        # Make references to all the blobs
 
-        # Add the new blobs to lagrangian field        
-        self.lagrangian.blobs.addBlobs(_numpy.concatenate(xBlobNewList),
-                                       _numpy.concatenate(yBlobNewList),
-                                       _numpy.concatenate(gBlobNewList))
+        # Make references to vortex-blobs
+        xBlobOutside, yBlobOutside, gBlobOutside = self.lagrangian.blobs.x, self.lagrangian.blobs.y, self.lagrangian.blobs.g 
         
-        # Check the circulation after we add
-        self.__totalCirculationAfterAdd = self.lagrangian.blobs.g.sum()
+        # Concatenate all the blobs inside
+        xBlobInside = _numpy.concatenate(xBlobInsideList)
+        yBlobInside = _numpy.concatenate(yBlobInsideList)
+        gBlobInside = _numpy.concatenate(gBlobInsideList)
         
-        self.__lossInCirculation = self.__totalCirculationAfterAdd - self.__totalCirculationBeforeRemove
- 
+        # Full set of blobs
+        xBlobAll = _numpy.concatenate((xBlobOutside,xBlobInside)).copy()
+        yBlobAll = _numpy.concatenate((yBlobOutside,yBlobInside)).copy()
+        gBlobAll = _numpy.concatenate((gBlobOutside,gBlobInside)).copy()
+        
+        # Determine the total circulations
+        gBlobAllTotal = gBlobAll.sum()
+        
+        # Determine the total circulation of globs inside each eulerian domain
+        gBlobInsideTotalList = _numpy.array([listItem.sum() for listItem in gBlobInsideList])
+
+        # Make references to panel collocation points (where no-slip b.c. is enforced.)
+        xCP, yCP = self.lagrangian.panels.xyCPGlobalCat
+        
+        # Determine total eulerian circulation
+        gTotalEulerianList = self.multiEulerian.gTotalInside() # of N eulerian bodies
+        
+        # Determine the total disregarded circulation from the eulerian domain
+        gTotalDisregardedList = gTotalEulerianList - gBlobInsideTotalList
+        
+        # Testing: print info
+        #        print 'gTotalEulerianList : %s' % str(gTotalEulerianList)
+        #        print 'gBlobInsideTotalList : %s' % str(gBlobInsideTotalList)
+        #        print 'gBlobOutside : %g' % gBlobOutside.sum()
+        #        print 'gTotalDisregardedList : %s' % str(gTotalDisregardedList)
+        #----------------------------------------------------------------------
+        
+        #----------------------------------------------------------------------
+        # Solve for panel strenths
+        
+        # Determine the slip velocity on panel collocation points
+        vxSlip, vySlip = _blobs_velocity(xBlobAll,yBlobAll,gBlobAll,self.lagrangian.blobs.sigma,
+                                         xEval=xCP,yEval=yCP,hardware=blobs_hardware,   
+                                         method=blobs_method) \
+                                 + self.lagrangian.vInf.reshape(2,-1)
+               
+        # Solve for no-slip panel strengths, gPanelTotal should be negative of gTotalIgnored
+        self.lagrangian.panels.solve(vxSlip, vySlip, gTotal=gTotalDisregardedList)
+        
+        #----------------------------------------------------------------------
+
+        #----------------------------------------------------------------------
+        # Conserve circulation
+
+        # Determine total panel circulation (of all bodies)
+        gPanelTotal = _numpy.sum(self.lagrangian.panels.gTotal)
+        
+        # Determine the total lagrangian circulation
+        gLagrangianTotal = gBlobAllTotal + gPanelTotal
+        
+        if _numpy.abs(gLagrangianTotal) > self.lagrangian.blobs.gThresholdGlobal:
+            # Standard-uniform correction
+            # Circulation to be given to particles inside.
+            gExtraPerBlob = gLagrangianTotal / xBlobInside.shape[0]
+            
+            # Add circulation to each blobs
+            gBlobInsideCorrected = gBlobInside - gExtraPerBlob      
+    
+            # Testing: print info
+            #            print 'gExtraPerBlob: %g' % gExtraPerBlob
+        else:
+            # If the error is less that gThresholdGlobal, no need for correction.
+            gBlobInsideCorrected = gBlobInside
+        
+        # Testing: print info
+        #        print 'gPanelTotal: %g' % gPanelTotal
+        #        print 'gLagrangianTotal: %g' % gLagrangianTotal
+        #        print 'final total lagrangian circulation : %g' % (gBlobInsideCorrected.sum()+gBlobOutside.sum()+gPanelTotal)
+        #----------------------------------------------------------------------        
+
+        # return the new blob circulation        
+        return xBlobInside, yBlobInside, gBlobInsideCorrected
+
 
     def __generateBlobCoordinates(self):
         r"""
@@ -1112,6 +1284,75 @@ class HybridSolver(object):
         self.__totalCirculationAdded = _numpy.array([listItem.sum() for listItem in gBlobNewList])
             
         return gBlobNewList        
+
+
+    def __wBlob(self,xBlob,yBlob,gBlob,xTarget,yTarget,sigma,k=2):
+        """
+        return induced vorticity
+        """
+        wInduced = gBlob*(_numpy.exp(-(((xTarget-xBlob)**2) + ((yTarget-yBlob)**2))/(k*sigma*sigma)))/(k*_numpy.pi*sigma*sigma)
+        
+        return wInduced
+        
+
+    def __modified_beales_correction(self,xBlobInside,yBlobInside,gBlobInside):
+        """
+        perform modified beales correction
+        """
+
+        # compute number of blobs inside        
+        nBlobsInside = xBlobInside.shape[0]
+        # Determine the cell size
+        blobCellArea = self.lagrangian.blobs.h**2
+        # determine core size
+        sigma = self.lagrangian.blobs.sigma
+        
+        xBlobOutside = self.lagrangian.blobs.x.copy()
+        yBlobOutside = self.lagrangian.blobs.y.copy()
+        gBlobOutside = self.lagrangian.blobs.g.copy()
+
+        
+        #        # Setup up the self-induction matrix Aij        
+        #        A = _numpy.zeros((nBlobsInside,nBlobsInside))
+        #        # Setup up RHS_b
+        #        gInducedFromOutside = _numpy.zeros(nBlobsInside)#  (induced vorticity*area from blobs that are outside)
+                
+        #        for i in range(nBlobsInside):
+        #            # Assemble the self-induction matrix Aij
+        #            A[:,i] = blobCellArea*self.__wBlob(xBlobInside,yBlobInside,_numpy.ones(nBlobsInside),
+        #                                                    xBlobInside[i],yBlobInside[i],sigma,k=2)                                                           
+        #            # Assemble the RHS, total induced vorticity from outside on x,y Blobinside
+        #            gInducedFromOutside[i] = blobCellArea*_blobs_vorticity(xBlobOutside,yBlobOutside,gBlobOutside,
+        #                                                                   sigma,k=2,kernel=blobOptions.GAUSS_KERNEL,
+        #                                                                   xEval=_numpy.array([xBlobInside[i]]).copy(),
+        #                                                                   yEval=_numpy.array([yBlobInside[i]]).copy())
+                
+        # Assemble the self-induction matrix Aij                
+        A = blobCellArea*self.__wBlob(xBlobInside,yBlobInside,_numpy.ones(nBlobsInside),
+                                      xBlobInside.reshape(-1,1),xBlobInside.reshape(-1,1),sigma,k=2)       
+                                                    
+        # Assemble the RHS, total induced vorticity from outside on x,y Blobinside
+        gInducedFromOutside = blobCellArea*_blobs_vorticity(xBlobOutside,yBlobOutside,gBlobOutside,
+                                                            sigma,k=2,kernel=blobOptions.GAUSS_KERNEL,
+                                                            xEval=xBlobInside.copy(),
+                                                            yEval=yBlobInside.copy())
+            
+        
+        # induced vorticity*area from only blobs inside
+        gInducedFromInside = gBlobInside - gInducedFromOutside
+        
+        #self.gBlobInsideBefore = gBlobInside.copy()
+        #gBlobInsideConserved = _numpy.linalg.solve(A,gInducedFromInside)
+        gBlobInsideConserved = gBlobInside.copy()
+        
+        for iters in range(1):     
+            print 'iter : %g' % iters
+        # Convert the A to sparse matrix
+            gBlobInsideConserved = gInducedFromInside + gBlobInsideConserved - _numpy.dot(A,gBlobInsideConserved)
+        
+        return gBlobInsideConserved
+        
+           
 
 
     def __multiStep_eulerian(self,cmGlobalNew,thetaLocalNew,cmDotGlobal,thetaDotLocal):
@@ -1620,7 +1861,7 @@ class HybridSolver(object):
                            the time step size of the lagrangian subdomain
                            :math:`|Delta t_L`
         """
-        return self.lagrangian.deltaTc       
+        return self.lagrangian.deltaT      
         
     # Free-stream velocity
     @simpleGetProperty
@@ -1785,3 +2026,46 @@ class HybridSolver(object):
 #        # Store the induced velocity
 #        self.__vxyEulerianBoundary[0] = _numpy.copy(vx)
 #        self.__vxyEulerianBoundary[1] = _numpy.copy(vy)      
+
+#    def __bealesCorrection(self,iterations=10):
+#        """
+#        perform beales correction.
+#        """
+#    
+#        # Determine the cell size
+#        blobCellArea = self.lagrangian.blobs.h**2        
+#        # nblobs
+#        nBlobs = self.lagrangian.blobs.numBlobs
+#        # determine core size
+#        sigma = self.lagrangian.blobs.sigma
+#        
+#        #         
+#        A = _numpy.zeros((nBlobs,nBlobs))
+#        
+#        xBlob = self.lagrangian.blobs.x.copy()
+#        yBlob = self.lagrangian.blobs.y.copy()
+#        gBlob = self.lagrangian.blobs.g.copy()
+#            
+#        #        for i in range(nBlobs):
+#        #            print i
+#        #            # Assemble the self-induction matrix Aij
+#        #            A[:,i] = blobCellArea*self.__wBlob(xBlob,yBlob,_numpy.ones(nBlobs),
+#        #                                               xBlob[i],yBlob[i],sigma,k=2)   
+#        A = blobCellArea*self.__wBlob(xBlob,yBlob,_numpy.ones(nBlobs),
+#                                      xBlob.reshape(-1,1),yBlob.reshape(-1,1),sigma,k=2)
+#    
+#        print A                                                        
+#        # Assemble the RHS, total induced vorticity from outside on x,y Blobinside
+#        Gamma = blobCellArea*_blobs_vorticity(xBlob,yBlob,gBlob,
+#                                              sigma,k=2,kernel=blobOptions.GAUSS_KERNEL,
+#                                              xEval=None, yEval=None)
+#              
+#        
+#        for iters in range(iterations):     
+#            print 'iters : %g' % iters
+#            # Convert the A to sparse matrix
+#            gBlob = Gamma + gBlob - _numpy.dot(A,gBlob)
+#            
+#            
+#        #self.gBlobInsideBefore = gBlobInside.copy()
+#        self.lagrangian.blobs.__g = gBlob.copy()

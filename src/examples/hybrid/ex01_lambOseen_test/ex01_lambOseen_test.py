@@ -145,8 +145,27 @@ dolfin.File(boundaryDomainsFilePath) << boundaryDomains
 # Define the geometry parameters
 geometry = {'mesh' : meshFilePath,
             'boundaryDomains': boundaryDomainsFilePath,
-            'cmGlobal': np.array([1.,0.]),
-            'thetaLocal': np.pi*0.25} # radians
+            'cmGlobal': np.array([0.,0.]),
+            'thetaLocal': np.pi*0.} # radians
+
+
+xMeshBounds = np.array([-1.,1.])
+yMeshBounds = np.array([-1.,1.])
+# Circulation probes
+dBdry = 2*h  + np.spacing(10e10) # line should not coincide with remeshing grid
+
+x = np.hstack((np.linspace(xMeshBounds[0]+dBdry,xMeshBounds[1]-dBdry,50),
+               np.ones(48)*xMeshBounds[1]-dBdry,
+               np.linspace(xMeshBounds[1]-dBdry,xMeshBounds[0]+dBdry,50),
+               np.ones(48)*xMeshBounds[0]+dBdry))
+x = np.hstack((x[1:],x[0]))
+y = np.hstack((np.ones(48)*yMeshBounds[0]+dBdry,
+               np.linspace(yMeshBounds[0]+dBdry,yMeshBounds[1]-dBdry,50),
+               np.ones(48)*yMeshBounds[1]-dBdry,
+               np.linspace(yMeshBounds[1]-dBdry,yMeshBounds[0]+dBdry,50))) 
+               
+xyCirculationProbes = np.vstack((x,y))     
+
 
 # Probe Grid Parameters
 probeL = np.array([3.0,3.0]) # guess
@@ -155,10 +174,13 @@ probeN = np.int64(np.round(probeL / h)) + 1
 probeL = (probeN-1)*h # to ensure the correct grid spacing
 origin = -np.round(probeN*0.5)*h
 
+
+
+
 probeGridParams = {'origin' : origin,
                    'L' : probeL,
-                   'N' : probeN}          
-
+                   'N' : probeN,
+                   'circulationProbes':xyCirculationProbes}
 # Solver parameters
 cfl = 0.95 # CFL number
 uMax = 1.5
@@ -275,8 +297,9 @@ for subDomain in multiEulerian.subDomainKeys:
 
 # Define the coupling parameters
 couplingParams={'adjustLagrangian':True,
-                'adjustLagrangianAt':'start',
-                'eulerianInitialConditions': 'lagrangian_field'}
+                'adjustLagrangianAt':'end',
+                'eulerianInitialConditions': 'lagrangian_field',
+                'conserveCirculation':False}
 
 interpolationParams={'algorithm':'structuredProbes_manual',#'structuredProbes_scipy',#'unstructured_scipy',#'structuredProbes_scipy',
                      'method':'linear'}

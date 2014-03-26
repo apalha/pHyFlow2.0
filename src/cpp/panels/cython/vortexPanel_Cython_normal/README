@@ -1,0 +1,22 @@
+vortexPanel_Cython_cpu
+
+	DESCRIPTION:
+            
+            Vortex panel functions
+
+	FILES:
+
+            _vortexPanel_Cython_cpu.pyx --> Cython file with the routines
+            Makefile --> the make file that compiles the program to be used as an extension to Python
+
+
+Copyright (C) 2013 Lento Manickathan
+                   pHyFlow
+
+
+First added: 2013-09-27
+
+Reviews: 
+
+
+

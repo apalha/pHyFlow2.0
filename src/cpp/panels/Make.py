@@ -42,6 +42,12 @@ panelKernels = [{'name'         :'Vortex Panel Kernel',
                  'bin_files'    : ['_vortexPanel_Cython_cpu.so'],
                  'bin_path'     : os.path.join(kernelsPath,'vortex')},
 
+                {'name'         :'Vortex Panel Kernel - Normal', 
+                 'source_type'  :'Cython',
+                 'source_path'  : os.path.join(srcPath,'cython','vortexPanel_Cython_normal'),
+                 'bin_files'    : ['_vortexPanel_Cython_cpu_normal.so'],
+                 'bin_path'     : os.path.join(kernelsPath,'vortex')},
+
                 {'name'         : 'Source Panel Kernel',
                  'source_type'  : 'Cython',
                  'source_path'  : os.path.join(srcPath,'cython','sourcePanel_Cython'),

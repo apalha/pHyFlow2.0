@@ -29,7 +29,7 @@ __all__ = ['influenceMatrix','inducedVelocity']
 
 
 def influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
-                    cosAlpha,sinAlpha,hardware=0,method=1):     
+                    cosAlpha,sinAlpha,hardware=0,method=1,panelKernel=1):     
     r"""
     
     Assemble the self-induction influence matrix for constant strength
@@ -122,12 +122,17 @@ def influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
     # this means that if method = 2, hardware = 0 we get as
     # full option:
     #    100*2 + 10*0 = 200 this reduces the options
-    fullOption = 100*method + 10*hardware
+    fullOption = 100*method + 10*hardware + panelKernel
 
     # Choose the computation type
 
-    if fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.CPU_HARDWARE:
+    if fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.CPU_HARDWARE + panelOptions._PANEL_KERNEL_CSV:
         A = kernels.vortex._vortexPanel_Cython_cpu.assemble_influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,cosAlpha,sinAlpha)
+#        A = kernels.vortex._vortexPanel_Cython_cpu_normal.assemble_influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,cosAlpha,sinAlpha)
+
+    elif fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.CPU_HARDWARE + panelOptions._PANEL_KERNEL_CSS:
+        A = kernels.source._sourcePanel_Cython_cpu.assemble_influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,cosAlpha,sinAlpha)
+
 
     elif fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.GPU_HARDWARE:
        print "DIRECT + GPU + Constant strength VORTEX :: Not Implemented!"                      
@@ -141,7 +146,7 @@ def influenceMatrix(xCP,yCP,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
 
 
 def inducedVelocity(strength,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
-                    cosAlpha,sinAlpha,xEval,yEval,hardware=0,method=1):
+                    cosAlpha,sinAlpha,xEval,yEval,hardware=0,method=1,panelKernel=1):
                     
     r"""
     Compute the induced velocities of the panels on the collocation points.
@@ -236,12 +241,16 @@ def inducedVelocity(strength,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,
     # this means that if method = 2, hardware = 0  we get as
     # full option:
     #    100*2 + 10*0 = 200 this reduces the options
-    fullOption = 100*method + 10*hardware
+    fullOption = 100*method + 10*hardware + panelKernel
 
     # Choose the computation type
     
-    if fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.CPU_HARDWARE:
+    if fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.CPU_HARDWARE + panelOptions._PANEL_KERNEL_CSV:
         vx,vy = kernels.vortex._vortexPanel_Cython_cpu.inducedVelocity(strength,xEval,yEval,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,cosAlpha,sinAlpha)
+#        vx,vy = kernels.vortex._vortexPanel_Cython_cpu_normal.inducedVelocity(strength,xEval,yEval,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,cosAlpha,sinAlpha)
+
+    elif fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.CPU_HARDWARE + panelOptions._PANEL_KERNEL_CSS:
+        vx,vy = kernels.source._sourcePanel_Cython_cpu.inducedVelocity(strength,xEval,yEval,xPanelStart,yPanelStart,xPanelEnd,yPanelEnd,cosAlpha,sinAlpha)
 
     elif fullOption == 100*panelOptions.DIRECT_METHOD + 10*panelOptions.GPU_HARDWARE:
        print "DIRECT + GPU + Constant strength VORTEX :: Not Implemented!"                      
