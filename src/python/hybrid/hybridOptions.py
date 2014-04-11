@@ -41,7 +41,7 @@ Define hybrid options
 #
 # 'start' : correct/adjust at start of the evolution
 # 'end' : correct/adjust at end of the evolution
-ADJUST_LAGRANGIAN_AT = {'default': 'start',
+ADJUST_LAGRANGIAN_AT = {'default': 'end',
                        'available': ('start', 'end')}
                        
 # We could also not couple the problem, but just evolve both solutions
@@ -49,6 +49,9 @@ ADJUST_LAGRANGIAN_AT = {'default': 'start',
 # False: don't correct
 ADJUST_LAGRANGIAN = {'default': True,
                      'available': (True, False)}
+
+CONSERVE_CIRCULATION = {'default':False,
+                        'availabel':(True,False)}
                     
                    
 # Determine the eulerian initian conditions

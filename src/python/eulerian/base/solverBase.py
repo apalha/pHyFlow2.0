@@ -561,6 +561,12 @@ class solverBase(object):
         return numpy.array([Fx, Fy])
                      
                      
+    def totalCirculation(self):
+        """
+        Function to calculate the total circulation
+        """                     
+        return dolfin.assemble(self.vorticity()*dolfin.dx)
+                     
     def vectorDOF_boundaryCoordinates(self):
         r"""
         vectorDOF_boundaryCoordinates : numpy.ndarray(float64), shape (2,nVectorBoundaryDOFs)

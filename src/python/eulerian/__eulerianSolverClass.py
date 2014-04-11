@@ -89,7 +89,8 @@ class EulerianSolver(object):
                                               'thetaLocal': thetaLocal},
                                   probeGrid = {'origin': origin,
                                                'L': L
-                                               'N': N},
+                                               'N': N,
+                                               'circulationProbes': xyCirculationProbeCoordinates},
                                   uMax=uMax,nu=nu,cfl=cfl,deltaT,
                                   solverParams={'solver':'ipcs')
         
@@ -143,6 +144,20 @@ class EulerianSolver(object):
                 'N' : numpy.ndarray(float64), shape (2,)
                       the number of probes :math:`N_x,N_y` in the :math:`x,y` 
                       direction.
+                      
+                'circulationProbes': numpy.ndarray(float64), shape(2,nProbes), orientation (anti-clockwise)
+                                     the :math:`x,y` local coordinates of the
+                                     polygon defining the area where the 
+                                     circulation is to be calculated. The
+                                     circulation of the area defined by the 
+                                     polygon is calculated using stokes theorem
+                                     of circulation. Therefore, should be 
+                                     in **ANTI-CLOCKWISE**.
+                                     
+                                     * Note: for hybrid coupling, the circulation
+                                     probes should be located at the same location
+                                     as the outter boundary of the interpolation
+                                     domain.
     
     uMax : float
            the maximum fluid velocity :math:`U_{max}`.
@@ -323,7 +338,24 @@ class EulerianSolver(object):
         self.__probes = _fenicstools.Probes(_numpy.append(self.__xyProbes[0].reshape(-1,1),
                                                           self.__xyProbes[1].reshape(-1,1),axis=1).flatten(),
                                             self.__solver.X)
+                                            
+        # Initialize the circulation probes
+        # Determine the center points.
+        circulationProbeEdgeCoordinates = self.__probeGrid['circulationProbes']                                            
+        circulationProbesMidCoordinates = 0.5*(circulationProbeEdgeCoordinates[:,1:]+circulationProbeEdgeCoordinates[:,:-1])
+                                            
+  
+        # Determine the circulation probes parameters
+        self.__circulationProbes_dl = circulationProbeEdgeCoordinates[:,1:] \
+                                        - circulationProbeEdgeCoordinates[:,:-1]
+                         
+        # Initialize the circulation probes                             
+        self.__circulationProbes = _fenicstools.Probes(circulationProbesMidCoordinates.T.flatten(),
+                                                       self.__solver.V)
+                                                              
         #---------------------------------------------------------------------
+                                            
+        #---------------------------------------------------------------------                                            
                                             
         #---------------------------------------------------------------------
         # Update mesh position (new rotational angle and global position)
@@ -710,6 +742,61 @@ class EulerianSolver(object):
         return self.__probes.array().reshape(self.__probeGrid['N'][1],self.__probeGrid['N'][0])
 
 
+    def gTotalInside(self):
+        r"""
+        Function to calculate the total circulation inside the circulation
+        probes coordinates.
+        
+        Usage
+        -----
+        .. code-block:: python
+        
+            gTotalInside = gTotalInside()
+            
+        Parameters
+        ----------
+        None        
+        
+        Returns
+        -------
+        gTotalInside : float
+                       the total circulation inside the probe boundary
+                 
+        Attributes
+        ----------
+        __circulationProbes : 
+                   clear the old probed data and re-probe the vorticity
+                   function space.
+        
+        :First Added:   2014-03-24
+        :Last Modified: 2014-03-24
+        :Copyright:     Copyright (C) 2014 Lento Manickathan **pHyFlow**
+        :Licence:       GNU GPL version 3 or any later version   
+        """
+
+              
+        # Remove old vorticity data 
+        if self.__circulationProbes.number_of_evaluations() > 0:
+            self.__circulationProbes.clear()
+            
+        # Probe the data
+        self.__circulationProbes(self.__solver.u1)
+
+        # Get the data
+        vxProbes,vyProbes = self.__circulationProbes.array().T.copy()
+
+        # Make references
+        dx = self.__circulationProbes_dl[0]
+        dy = self.__circulationProbes_dl[1]
+        
+        # Integrate the velocity: stokes theorem
+        #gTotalInside = _numpy.sum(0.5*(vxProbes[1:]+vxProbes[:-1])*dx + 0.5*(vyProbes[1:]-vyProbes[:-1])*dy)
+        gTotalInside = _numpy.sum(vxProbes*dx + vyProbes*dy)
+            
+        # Return the total circulation inside
+        return gTotalInside
+        
+
     def PressureForces(self):
         r"""
         Function to calculate the Pressure gradient forces.
@@ -874,7 +961,12 @@ class EulerianSolver(object):
                 raise TypeError("probeGrid['N'] must be a numpy ndarray. It is %s." % str(type(var['N'])))
             if var['N'].shape != (2,):
                 raise ValueError("probeGrid['N'] must have shape (2,). It has shape %s." % str(var['N'].shape))
-            
+
+            if type(var['circulationProbes']) != _numpy.ndarray:
+                raise TypeError("probeGrid['circulationProbes'] must be a numpy ndarray. It is %s." % str(type(var['circulationProbes'])))
+            if var['circulationProbes'].shape[0] != 2:
+                raise ValueError("probeGrid['circulationProbes'] must have shape (2,N). It has shape %s." % str(var['circulationProbes'].shape))
+          
             self.__probeGrid = var
             #------------------------------------------------------------------
 
@@ -961,6 +1053,14 @@ class EulerianSolver(object):
                    (0.,0.) in the global coordinates. 
         """
         return self.__cmGlobal
+        
+    @simpleGetProperty
+    def gTotal(self):
+        r"""
+        gTotal : float
+                 the total circulation :math:`Gamma_t` of the eulerian domain
+        """
+        return self.__solver.totalCirculation()
                            
     # minimum cell size                           
     @simpleGetProperty
