@@ -41,6 +41,9 @@ Reviews:
        field. 
     3. (2014-03-06), Lento Manickathan
        Options moved and renamed to blobOptions
+
+    4. (2014-04-14), Artur Palha and Lento Manickatan
+       Added regrid_tutty to diffusion parameters
        
 """
 
@@ -97,7 +100,7 @@ hardware_options = ('cpu','gpu')
 biot_savart_options = ('direct','fmm')
 
 # diffusion method options
-diffusion_method_options = ('regrid_wee')
+diffusion_method_options = ('regrid_wee','regrid_tutty')
 
 # package wide runtime options
 vortex = {}

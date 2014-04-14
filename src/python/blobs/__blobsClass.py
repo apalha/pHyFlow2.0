@@ -93,6 +93,8 @@ from pHyFlow.blobs.base.regrid import Regrid as _base_redistribute
 from pHyFlow.blobs.base.regrid import PopulationControl as _base_populationControl
 from pHyFlow.blobs.base.evolution import convection as _base_convection
 from pHyFlow.blobs.base.evolution import diffusion_wee as _base_diffusion_wee
+from pHyFlow.blobs.base.evolution import diffusion_wee as _base_diffusion_wee
+from pHyFlow.blobs.base.evolution import diffusion_tutty as _base_diffusion_tutty
 
 
 # default parameters
@@ -751,57 +753,63 @@ class Blobs(object):
         xBlobTemp,yBlobTemp,gBlobTemp = _base_convection(self.__deltaTc,self.__x,self.__y,self.__g,self.__sigma,
                                                          hardware=hardware,method=method,integrator=integrator,vInf=self.__vInf)
 
-        # diffusion step
-        if self.__stepDiffusion != 0: # corresponds to nu = 0.0, therefore no diffusion is to be computed
-            if (self.__tStep % self.__stepDiffusion) == 0: # if the time step is a multiple of the stepDiffusion perform diffusion
+        # update the blobs
+        self.__x = xBlobTemp
+        self.__y = yBlobTemp
+        self.__g = gBlobTemp
 
-                # select the diffusion method to use
-                if self.__diffusionParams['method'] == 'regrid_wee':
-                    # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
-                    # on regrid of the blobs into a grid that
-                    # does not need to have a node at the point [0.0, 0.0], for that it
-                    # uses the original grid placement of particles to redistribute them.
-                    # in here it is assumed that the redistribution grid always contains the
-                    # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
-                    # yBounds variables are computes in order to redistribute particles
-                    # into a grid that contains the point [0.0, 0.0]. Essentially, the
-                    # redistribution is done into the following initial grid:
-                    #
-                    #       -------------------------
-                    #       |       |       |       |
-                    #       |   X   |   X   |   X   |
-                    #       |  (3)  |  (7)  |  (11) |
-                    #       -------------------------
-                    #       |       |       |      O|
-                    #       |   X   |   X   |   X   |
-                    #       |  (2)  |  (6)  |  (10) |
-                    #       -------------------------
-                    #       |       |       |       |
-                    #       |   X   |   X   |   X   |
-                    #       |  (1)  |  (5)  |  (9)  |
-                    #       -------------------------
-                    #
-                    # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
-                    # terms appear.
-                    xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
-                    yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+        # # diffusion step
+        # if self.__stepDiffusion != 0: # corresponds to nu = 0.0, therefore no diffusion is to be computed
+        #     if (self.__tStep % self.__stepDiffusion) == 0: # if the time step is a multiple of the stepDiffusion perform diffusion
+        #
+        #         # select the diffusion method to use
+        #         if self.__diffusionParams['method'] == 'regrid_wee':
+        #             # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
+        #             # on regrid of the blobs into a grid that
+        #             # does not need to have a node at the point [0.0, 0.0], for that it
+        #             # uses the original grid placement of particles to redistribute them.
+        #             # in here it is assumed that the redistribution grid always contains the
+        #             # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
+        #             # yBounds variables are computes in order to redistribute particles
+        #             # into a grid that contains the point [0.0, 0.0]. Essentially, the
+        #             # redistribution is done into the following initial grid:
+        #             #
+        #             #       -------------------------
+        #             #       |       |       |       |
+        #             #       |   X   |   X   |   X   |
+        #             #       |  (3)  |  (7)  |  (11) |
+        #             #       -------------------------
+        #             #       |       |       |      O|
+        #             #       |   X   |   X   |   X   |
+        #             #       |  (2)  |  (6)  |  (10) |
+        #             #       -------------------------
+        #             #       |       |       |       |
+        #             #       |   X   |   X   |   X   |
+        #             #       |  (1)  |  (5)  |  (9)  |
+        #             #       -------------------------
+        #             #
+        #             # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
+        #             # terms appear.
+        #             xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+        #             yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+        #
+        #             # perform diffusion and store the results directly in the object
+        #             self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
+        #                                                              xBlobTemp,yBlobTemp,gBlobTemp,
+        #                                                              self.__sigma,xBounds,yBounds,
+        #                                                              overlap=self.__overlap)
+        #
+        #    else: # if the time step is not a multiple of stepDiffusion then don't perform diffusion and just update blobs
+        #        self.__x = xBlobTemp
+        #        self.__y = yBlobTemp
+        #        self.__g = gBlobTemp
+        #
+        #else: # if the stepDiffusion is 0 then just update the blobs
+        #    self.__x = xBlobTemp
+        #    self.__y = yBlobTemp
+        #    self.__g = gBlobTemp
 
-                    # perform diffusion and store the results directly in the object
-                    self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
-                                                                     xBlobTemp,yBlobTemp,gBlobTemp,
-                                                                     self.__sigma,xBounds,yBounds,
-                                                                     overlap=self.__overlap)
-
-            else: # if the time step is not a multiple of stepDiffusion then don't perform diffusion and just update blobs
-                self.__x = xBlobTemp
-                self.__y = yBlobTemp
-                self.__g = gBlobTemp
-
-        else: # if the stepDiffusion is 0 then just update the blobs
-            self.__x = xBlobTemp
-            self.__y = yBlobTemp
-            self.__g = gBlobTemp
-
+        self._diffusion()
 
         # update the time counter
         self._advanceTime()
@@ -1098,6 +1106,42 @@ class Blobs(object):
 
             # perform diffusion and store the results directly in the object
             self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
+                                                             self.__x,self.__y,self.__g,
+                                                             self.__sigma,xBounds,yBounds,
+                                                             overlap=self.__overlap)
+
+        if self.__diffusionParams['method'] == 'regrid_tutty':
+            # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
+            # on regrid of the blobs into a grid that
+            # does not need to have a node at the point [0.0, 0.0], for that it
+            # uses the original grid placement of particles to redistribute them.
+            # in here it is assumed that the redistribution grid always contains the
+            # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
+            # yBounds variables are computes in order to redistribute particles
+            # into a grid that contains the point [0.0, 0.0]. Essentially, the
+            # redistribution is done into the following initial grid:
+            #
+            #       -------------------------
+            #       |       |       |       |
+            #       |   X   |   X   |   X   |
+            #       |  (3)  |  (7)  |  (11) |
+            #       -------------------------
+            #       |       |       |      O|
+            #       |   X   |   X   |   X   |
+            #       |  (2)  |  (6)  |  (10) |
+            #       -------------------------
+            #       |       |       |       |
+            #       |   X   |   X   |   X   |
+            #       |  (1)  |  (5)  |  (9)  |
+            #       -------------------------
+            #
+            # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
+            # terms appear.
+            xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+            yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+
+            # perform diffusion and store the results directly in the object
+            self.__x,self.__y,self.__g = _base_diffusion_tutty(self.__deltaTd,self.__nu,self.__h,
                                                              self.__x,self.__y,self.__g,
                                                              self.__sigma,xBounds,yBounds,
                                                              overlap=self.__overlap)
@@ -2130,32 +2174,37 @@ class Blobs(object):
         Parameters
         ----------
         diffusionParams : dict
-                          Contains the time integration paramaters:
+                          Contains the time integration parameters:
                           'method': string
                                     the type of diffusion scheme to use, can be
                                     one of:
                                     defining the diffusion method to use and
-                                    'regrid_wee' (based in [1]_).
+                                    'regrid_wee' (based in [1]_)
+                                    'regrid_tutty' (based in [2]_).
                           Parameters for each different method:
                               'regrid_wee':
                                   `c2` : (float64 or 'optimized')
                                          free parameter that specifies the stability
                                          of the diffusion scheme. Best values: [1/6,1/2]
                                          if 'optimized' is given, 1/3 is selected.
+
+                              'regrid_tutty'
         
         .. [1] Wee, D., Ahmed, F., Ghoniem, F., Modified interpolation
               kernels for treating diffusion and remeshing in vortex
-              methods, Journal of Computational Physics, 213, 239--263, 2006.                                 
+              methods, Journal of Computational Physics, 213, 239--263, 2006.
+        .. [2] Tutty, O.R., A simple redistribution vortex method (with accurate body forces),
+                   arXiv:1009.0166v1, 2010
                                          
         :First Added:   2014-01-27
-        :Last Modified: 2014-01-27
+        :Last Modified: 2014-04-14
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
         
         """
     
         """    
-        Reviews:  
+        Reviews:  1- Added regrid_tutty diffusion scheme.
     
         """
         
@@ -2177,6 +2226,9 @@ class Blobs(object):
                     raise ValueError('c2 parameter must be a float or \'optimized\'. You introduced %s.' % str(diffusionParams['c2']))
             elif (diffusionParams['c2'] < 1.0/6.0) or (diffusionParams['c2'] > 1.0/2.0):
                     raise ValueError('c2 parameter must be between 1/6 and 1/2. You introduced %f.' % diffusionParams['c2'])
+
+        if diffusionParams['method'] == 'regrid_tutty':
+            pass
 
 
     def __read_diffusionParams(self,diffusionParams):
@@ -2223,7 +2275,7 @@ class Blobs(object):
         # check the diffusion method used and then read its specific parameters
 
         # regrid_wee
-        if diffusionParams['method'] == 'regrid_wee':
+        if diffusionParams['method'] in blobOptions.diffusion_method_options:
             self.__diffusionParams = diffusionParams
         else:
             raise ValueError('No other diffusion method have been implemented yet! Use only \'regrid_wee\'.')
@@ -2268,16 +2320,39 @@ class Blobs(object):
                 else:
                     deltaTd = (self.__diffusionParams['c2']*self.__h*self.__h)/self.__nu
 
-        # readjust deltaTd to be a multiple of self.__deltaTc and compute the multiplicity constant between convection
-        # and diffusion: stepDiffusion
-        if deltaTd > self.deltaTc:
-            stepDiffusion = round(deltaTd/self.deltaTc)
-            deltaTd = stepDiffusion*self.deltaTc
-        elif deltaTd == 0.0:
-            stepDiffusion = 0
-            deltaTd = 0.0
-        else:
-            raise ValueError('deltaTc is too large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
+            # readjust deltaTd to be a multiple of self.__deltaTc and compute the multiplicity constant between convection
+            # and diffusion: stepDiffusion
+            if deltaTd >= self.deltaTc:
+                stepDiffusion = round(deltaTd/self.deltaTc)
+                deltaTd = stepDiffusion*self.deltaTc
+            elif deltaTd == 0.0:
+                stepDiffusion = 0
+                deltaTd = 0.0
+            else:
+                raise ValueError('deltaTc is too large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
+
+
+        if self.__diffusionParams['method'] == 'regrid_tutty': #regrid_tutty diffusion scheme of [2]
+            if self.__nu == 0.0:
+                deltaTd = 0.0
+            else:
+                deltaTd = self.deltaTc
+
+            # characteristic diffusion scale
+            hNu = _numpy.sqrt(deltaTd*self.__nu)
+
+            # check if deltaTd satisfies the stability condition
+            if deltaTd == 0.0:
+                stepDiffusion = 0
+                deltaTd = 0.0
+
+            elif ((hNu/self.__h) >= (1.0/_numpy.sqrt(2.0))):
+
+                deltaTd = (((1.0/_numpy.sqrt(2.0))*self.__h)**2)/self.__nu
+
+                raise ValueError('deltaTc is too large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
+
+
 
         return deltaTd, stepDiffusion
 

@@ -40,7 +40,7 @@ plotnumBlobs_flag = True
 plotcirculation_flag = True
 
 # define the number of blobs
-nBlobs = 128*128#10000
+nBlobs = 64*64#10000
 nPlotPoints = 128*128
 
 # generate the input fields
@@ -50,14 +50,16 @@ h = 2.0/numpy.sqrt(nBlobs)                  # the cell size to which each blob i
                                             # we set h = sqrt(A/nBlobs), where A is the area inside
                                             # which blobs are randomly generated
 deltaTc = 0.01                              # the size of the time step, irrelevant for this example as no time stepping is done
-nu = 0.0                                    # the dinamic viscous constant, irrelevant for this example as no time stepping is done
+nu = 0.01                                    # the dinamic viscous constant, irrelevant for this example as no time stepping is done
 
-nTimeSteps = 20                             # evolve the blobs for nTimeSteps
+nTimeSteps = 200                             # evolve the blobs for nTimeSteps
 
 
 # the parameters
 blobControlParams = {'stepRedistribution':1,'stepPopulationControl':1,\
                        'gThresholdLocal':1e-8,'gThresholdGlobal':1e-8}
+
+blobDiffusionParams = {'method':'regrid_tutty'}
 
 # default parameters are used
 
@@ -77,11 +79,11 @@ print 'Generating blobs object...'
 
 # generate the blobs
 blobs = pHyFlow.blobs.Blobs(wField,vInf,nu,deltaTc,h,overlap,
-                                   blobControlParams=blobControlParams)
+                                   blobControlParams=blobControlParams,diffusionParams=blobDiffusionParams)
 
 
 # change the free stream velocity
-blobs.vInf = numpy.array([10.0,0.0])
+blobs.vInf = numpy.array([0.0,0.0])
 
 # plot the original blobs
 if plot_flag:
@@ -145,7 +147,7 @@ for timeStep in range(0,nTimeSteps):
         endTime_populationControl = time.time()
         
     # plot the evolved blobs
-    if plotanimation_flag:
+    if plotanimation_flag and (timeStep % 10)==0:
         pylab.clf()    
         pylab.scatter(blobs.x,blobs.y,c=blobs.g,edgecolor='none')
         pylab.axis('equal')        
