@@ -50,8 +50,8 @@ overlap = 1.0                               # the overlap ration between the blo
 h = 2.0/numpy.sqrt(nBlobs)                  # the cell size to which each blob is associated to
                                             # we set h = sqrt(A/nBlobs), where A is the area inside
                                             # which blobs are randomly generated
-deltaTc = 0.1                               # the size of the time step, irrelevant for this example as no time stepping is done
-nu = 0.01                                    # the dinamic viscous constant, irrelevant for this example as no time stepping is done
+deltaTc = 0.03                               # the size of the time step, irrelevant for this example as no time stepping is done
+nu = 0.01                                   # the dinamic viscous constant, irrelevant for this example as no time stepping is done
 
 nTimeSteps = 150                             # evolve the blobs for nTimeSteps
 

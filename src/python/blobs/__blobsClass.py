@@ -406,6 +406,7 @@ class Blobs(object):
               (apalha, 2014-01-21) Added method self.evaluateVelocity
               (apalha, 2014-02-10) Added method self.evolve, introduced possibility to change hardware
                                    used for computation, added method self.addBlobs,added method self.removeBlobs
+              (apalha, 2014-04-14) Added Tutty diffusion scheme.
 
         
     """ 
@@ -734,7 +735,8 @@ class Blobs(object):
         """
 
         """
-            Reviews:
+            Reviews: (apalha, 2014-04-14) Added diffusion as a callable function.
+                     (apalha, 2014-04-15) Put redistribution before diffusion.
         """
 
         # convert the hardware flag into an int to use in _base_convection
@@ -809,15 +811,22 @@ class Blobs(object):
         #    self.__y = yBlobTemp
         #    self.__g = gBlobTemp
 
+        # redistribution step
+        if self.__stepRedistribution != 0: # meaning that redistribution should be done
+            if (self.diffusionParams['method'] == 'regrid_tutty'): # if the time step is a multiple of the stepRedistribution perform redistribution
+                self.redistribute()
+
         self._diffusion()
+
+        # redistribution step
+        if self.__stepRedistribution != 0: # meaning that redistribution should be done
+            if ((self.__tStep % self.__stepRedistribution) == 0) and (self.diffusionParams['method'] != 'regrid_tutty'): # if the time step is a multiple of the stepRedistribution perform redistribution
+                self.redistribute()
 
         # update the time counter
         self._advanceTime()
 
-        # redistribution step
-        if self.__stepRedistribution != 0: # meaning that redistribution should be done
-            if (self.__tStep % self.__stepRedistribution) == 0: # if the time step is a multiple of the stepRedistribution perform redistribution
-                self.redistribute()
+
 
         # population control step
         if self.__stepPopulationControl != 0: # meaning that population control should be done
@@ -2335,22 +2344,20 @@ class Blobs(object):
         if self.__diffusionParams['method'] == 'regrid_tutty': #regrid_tutty diffusion scheme of [2]
             if self.__nu == 0.0:
                 deltaTd = 0.0
+                stepDiffusion = 0
             else:
                 deltaTd = self.deltaTc
+                stepDiffusion = 1
 
-            # characteristic diffusion scale
-            hNu = _numpy.sqrt(deltaTd*self.__nu)
+                # characteristic diffusion scale
+                hNu = _numpy.sqrt(deltaTd*self.__nu)
 
-            # check if deltaTd satisfies the stability condition
-            if deltaTd == 0.0:
-                stepDiffusion = 0
-                deltaTd = 0.0
+                # check if deltaTd satisfies the stability condition
+                if ((hNu/self.__h) >= (1.0/_numpy.sqrt(2.0))):
 
-            elif ((hNu/self.__h) >= (1.0/_numpy.sqrt(2.0))):
+                    deltaTd = (((1.0/_numpy.sqrt(2.0))*self.__h)**2)/self.__nu
 
-                deltaTd = (((1.0/_numpy.sqrt(2.0))*self.__h)**2)/self.__nu
-
-                raise ValueError('deltaTc is too large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
+                    raise ValueError('deltaTc is toooo large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
 
 
 
