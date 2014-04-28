@@ -1,12 +1,25 @@
-=====
+===========
 Description
-=====
+===========
 
-Python Hybrid Flow solver (pHyFlow) is a hybrid flow solver that couples a Navier-Stokes grid solver with a vortex blob solver aimed at solving flows around wind turbines
+Python Hybrid Flow solver (pHyFlow) is a hybrid flow solver that couples a Navier-Stokes grid solver with a vortex blob solver aimed at solving flows around complex geometries.
 
 
+============
+Installation
+============
 
-1- sudo apt-get install build-essential
+pHyFlow is based upon several libraries. In order to have a functional version of
+pHyFlow follow the following instructions. We assume the user
+starts with a fresh installation of ubuntu 12.04LTS. This sequence of instructions
+is known to result in a working installation. If you have an already installed ubuntu 12.04LTS
+or a more recent one, try following these instructions. If you have any issue please contact us.
+
+
+1. Install essential packages for compiling programs in ubuntu
+	.. code:: python
+
+	sudo apt-get install build-essential
 
 2- Install CUDA
 	Go here:
