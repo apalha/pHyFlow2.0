@@ -1,13 +1,9 @@
-===========
-Description
-===========
+# Description
 
 Python Hybrid Flow solver (pHyFlow) is a hybrid flow solver that couples a Navier-Stokes grid solver with a vortex blob solver aimed at solving flows around complex geometries.
 
 
-============
-Installation
-============
+## Installation
 
 pHyFlow is based upon several libraries. In order to have a functional version of
 pHyFlow follow the following instructions. We assume the user
@@ -16,131 +12,159 @@ is known to result in a working installation. If you have an already installed u
 or a more recent one, try following these instructions. If you have any issue please contact us.
 
 
-1. Install essential packages for compiling programs in ubuntu
-	.. code:: python
+### 1. Install essential packages for compiling programs in ubuntu
+In the terminal line type:
 
 	sudo apt-get install build-essential
 
-2- Install CUDA
-	Go here:
-	https://developer.nvidia.com/cuda-downloads?sid=336852
-
-	download Ubuntu 12.04 64bit DEB file
-
-	follow instructions from RPM/DEB installation instructions, basically:
+### 2. Install CUDA
+Go to this link: [https://developer.nvidia.com/cuda-downloads?sid=336852](https://developer.nvidia.com/cuda-downloads?sid=336852) and
+download the Ubuntu 12.04 64bit DEB file or the one corresponding to your Ubuntu version.
+Follow the DEB installation instructions, basically:
 
 	sudo dpkg -i cuda-repo-<distro>_<version>_<architecture>.deb
 	sudo apt-get update
 	sudo apt-get install cuda
 	
-	add the environment variables to cuda in your .bashrc
+Add the environment variables to cuda in your `.bashrc`:
 	
-        note that CUDAVERSION is the version of the cuda installed. 5.0, 5.5 or 6.0
-        or any other:
-
 	export PATH=/usr/local/cuda-CUDAVERSION/bin:$PATH
 	export LD_LIBRARY_PATH=/usr/local/cuda-CUDAVERSION/lib64:$LD_LIBRARY_PATH
 
-	Therefore, for CUDA 6.0:
+Note that CUDAVERSION is the version of the cuda installed. 5.0, 5.5 or 6.0 or any other.
+Therefore, for CUDA 6.0:
 
 	export PATH=/usr/local/cuda-6.0/bin:$PATH
 	export LD_LIBRARY_PATH=/usr/local/cuda-6.0/lib64:$LD_LIBRARY_PATH
 
-	NOTE: most likely there will be only one CUDA installation in your computer, 
-              nevertheless check if in /usr/local there is a folder named cuda with
-              the CUDA version you wish to use. If not you will probably have several
-              folders, one for each version: cuda-5.0, cuda-5.5, cuda-6.0. In that case,
-              you need to make a symbolic link to the version you wish to use. For
-              example if you wish to use cuda-6.0 do the following:
+NOTE: most likely there will be only one CUDA installation in your computer, 
+nevertheless check if in /usr/local there is a folder named cuda with
+the CUDA version you wish to use. If not you will probably have several
+folders, one for each version: `cuda-5.0`, `cuda-5.5`, `cuda-6.0`. In that case,
+you need to make a symbolic link to the version you wish to use. For
+example if you wish to use `cuda-6.0` do the following:
 	
-	      sudo ln -s /usr/local/cuda-6.0 /usr/local/cuda
+      sudo ln -s /usr/local/cuda-6.0 /usr/local/cuda
 
-3- install git, sudo apt-get install git
+### 3. Install git
+In the terminal line type:
+	
+	sudo apt-get install git
 
-4- install FEniCS with dorsal
-	instructions here: 
-		http://fenicsproject.org/download/installation_using_dorsal.html
+### 4. Install FEniCS using dorsal
+You have two options: you can follow dorsal's instructions in [http://fenicsproject.org/download/installation_using_dorsal.html](http://fenicsproject.org/download/installation_using_dorsal.html)
+or just download [https://bitbucket.org/fenics-project/dorsal/get/master.tar.gz](https://bitbucket.org/fenics-project/dorsal/get/master.tar.gz)
+unpack it, change the install directory in `dorsal.cfg` to the one you wish, for example `install_dir_FEniCS`,
+and use the option
 
-	or just download:
-		https://bitbucket.org/fenics-project/dorsal/get/master.tar.gz
+	STABLE_BUILD=false
 
-	unpack it, change install directory in dorsal.cfg 
-	and use STABLE_BUILD=false and then run:
-		./dorsal.sh
+then run:
+
+	./dorsal.sh
 		
-	follow the instructions, check the software to be installed before
-	add 
+*IMPORTANT*: follow the instructions, check the software to be installed before continuing with dorsal's installation.
+	
+Add the environment variables to FEniCS in your `.bashrc`:
 	
 	# FEniCS environment variables
-	source /home/bjarnthor/lib/FEniCS/share/fenics/fenics.conf
-	
-	to .bashrc
-5- install boost_python (latest version)
+	source install_dir_FEniCS/FEniCS/share/fenics/fenics.conf
+
+### 5. Install boost python (latest version)
+In the terminal line type:
+
 	sudo apt-get install libboost-python-dev
 
-6- install pysparse
+### 6. Install pysparse
+In the terminal line type:
+
 	sudo apt-get install python-sparse
 
-7- install setuptools
+### 7. Install setuptools
+In the terminal line type:	
+	
 	sudo apt-get install python-setuptools
 
-8- install pyublas
-	Follow the instruction in:
-		http://mathema.tician.de/software/pyublas
+### 8. Install pyublas
+You can follow the instructions in [http://mathema.tician.de/software/pyublas](http://mathema.tician.de/software/pyublas)
+or simply download it:
 
-	or simply download it:
-		git clone http://git.tiker.net/trees/pyublas.git
+	git clone http://git.tiker.net/trees/pyublas.git
 
-	change directory to the pyublas directory and configure:
-		python configure.py
+then change directory to the pyublas directory and configure:
 
-	build pyublas:
-		python setup.py build
+	python configure.py
 
-	install pyublas:
-		sudo python setup.py install
+build pyublas:
+
+	python setup.py build
+
+install pyublas:
+
+	sudo python setup.py install
 	
-	copy pyublas include files to /usr/include
-		sudo cp -r pyublas/include/pyublas /usr/include
+copy pyublas include files to `/usr/include`
 
-9- install ipython
+	sudo cp -r pyublas/include/pyublas /usr/include
+
+### 9. Install ipython
+In the terminal line type:
+	
 	sudo apt-get install ipython
 
-10- install scipy
+### 10. Install scipy
+In the terminal line type:
+	
 	sudo apt-get install python-scipy
 
-11- install matplotlib
+### 11. Install matplotlib
+In the terminal line type:
+
 	sudo apt-get install python-matplotlib
 
-12- install spyder
-	download the file:
-	https://code.google.com/p/spyderlib/downloads/detail?name=spyder-2.2.3.zip
+### 12. Install spyder (optional)
+Download the latest version from [https://bitbucket.org/spyder-ide/spyderlib/downloads](https://bitbucket.org/spyder-ide/spyderlib/downloads) unzip it and run:
 
-	unzip and run:
-		sudo python setup.py install
+	sudo python setup.py install
 
-13- install pHyFlow
-	download from bitbucket:
-		https://bitbucket.org/gorkiana/phyflow/get/2b2eae42e92a.zip
+As an alternative you can follow the instructions here: [https://pythonhosted.org/spyder/installation.html](https://pythonhosted.org/spyder/installation.html).
 
-	extract and change the install.py file to point to the directory desired.
+### 13. Install pHyFlow
+Create a directory for your pHyFlow download folder. Move into that folder and download the latest version of pHyFlow using git:
+
+	git clone https://gorkiana@bitbucket.org/gorkiana/phyflow2.0.git
+
+Change in the `install.py` file the line
+
+	libParent = '/media/DATAPART1/programs/lib/python' # root install directory
+
+into whatever directory you wish to use to install pHyFlow, for example `/home/your_username/intall_pHyFlow_parent_dir/`. Then type on the terminal line:
 
 	run python install.py
 
-14- install fenicstools
-
-	download:
-		https://github.com/mikaem/fenicstools/archive/master.zip
-
-	extract to a folder named fenictools inside ~/lib and rename it to fenicstools
+Add to your `.bashrc` the pHyFlow install directory in order to be able to import pHyFlow into python:
 	
-	add folder to PYTHONPATH
+	# add pHyFlow to the python path                                                                                      
+	export PYTHONPATH=$PYTHONPATH:/home/your_username/intall_pHyFlow_parent_dir
+	
 
-15- install pyvtk
+### 14. Install fenicstools
+Download the lastest release of fenicstools from [https://github.com/mikaem/fenicstools/releases](https://github.com/mikaem/fenicstools/releases)
+Extract it into `/home/your_username/intall_pHyFlow_parent_dir/`, as used in (13) and rename the extract folder to fenicstools. Now you do not need
+to add this folder to `PYTHONPATH` again since it was already done in (13).
+
+### 15. Install pyvtk
+In the terminal line type:
+
 	sudo apt-get install python-pyvtk
 
-16- install h5py
+### 16. Install h5py
+In the terminal line type:
+	
 	sudo apt-get install python-h5py
 
-17- install mpi4py
+### 17. Install mpi4py
+In the terminal line type:
+
 	sudo apt-get install python-mpi4py
+
