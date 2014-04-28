@@ -446,7 +446,7 @@ def diffusion_tutty(dt,nu,h,xBlob,yBlob,wBlob,sigma,xBounds,yBounds,overlap=0.5,
                                           (xKernelIndices.flatten() - xKernelIndicesMin + 4/2,\
                                            yKernelIndices.flatten() - yKernelIndicesMin + 4/2))).tocoo()
 
-        # clear memory of unecessary data
+        # clear memory of unnecessary data
         del kernelValues
         del xKernelIndices
         del yKernelIndices

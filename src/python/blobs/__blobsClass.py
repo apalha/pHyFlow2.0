@@ -2338,7 +2338,7 @@ class Blobs(object):
                 stepDiffusion = 0
                 deltaTd = 0.0
             else:
-                raise ValueError('deltaTc is too large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
+                raise ValueError('Regrid Wee: deltaTc is too large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
 
 
         if self.__diffusionParams['method'] == 'regrid_tutty': #regrid_tutty diffusion scheme of [2]
@@ -2353,11 +2353,10 @@ class Blobs(object):
                 hNu = _numpy.sqrt(deltaTd*self.__nu)
 
                 # check if deltaTd satisfies the stability condition
-                if ((hNu/self.__h) >= (1.0/_numpy.sqrt(2.0))):
-
+                if ((hNu/self.__h) - (1.0/_numpy.sqrt(2.0))) > _numpy.spacing(1000):
                     deltaTd = (((1.0/_numpy.sqrt(2.0))*self.__h)**2)/self.__nu
 
-                    raise ValueError('deltaTc is toooo large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
+                    raise ValueError('Regrid Tutty: deltaTc is to large. Reduce deltaTc to a value smaller than %f.' % deltaTd)
 
 
 
