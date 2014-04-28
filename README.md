@@ -140,19 +140,19 @@ Change in the `install.py` file the line
 
 	libParent = '/media/DATAPART1/programs/lib/python' # root install directory
 
-into whatever directory you wish to use to install pHyFlow, for example `/home/your_username/intall_pHyFlow_parent_dir/`. Then type on the terminal line:
+into whatever directory you wish to use to install pHyFlow, for example `/home/your_username/install_pHyFlow_parent_dir/`. Then type on the terminal line:
 
 	run python install.py
 
 Add to your `.bashrc` the pHyFlow install directory in order to be able to import pHyFlow into python:
 	
 	# add pHyFlow to the python path                                                                                      
-	export PYTHONPATH=$PYTHONPATH:/home/your_username/intall_pHyFlow_parent_dir
+	export PYTHONPATH=$PYTHONPATH:/home/your_username/install_pHyFlow_parent_dir
 	
 
 ### 14. Install fenicstools
 Download the lastest release of fenicstools from [https://github.com/mikaem/fenicstools/releases](https://github.com/mikaem/fenicstools/releases)
-Extract it into `/home/your_username/intall_pHyFlow_parent_dir/`, as used in (13) and rename the extract folder to fenicstools. Now you do not need
+Extract it into `/home/your_username/install_pHyFlow_parent_dir/`, as used in (13) and rename the extract folder to fenicstools. Now you do not need
 to add this folder to `PYTHONPATH` again since it was already done in (13).
 
 ### 15. Install pyvtk
