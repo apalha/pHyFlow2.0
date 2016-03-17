@@ -8,19 +8,19 @@ Description
 A set of randomly distributed vortex particles are generated with a circulation
 equal to sin(2*pi*x)*sin(2*pi*y). These particle are then redistributed into a
 regular grid using the redistribute method of vortexBlobs class.
-    
 
-:First added:   2014-01-16  
-:Last updated:  2014-01-16     
+
+:First added:   2014-01-16
+:Last updated:  2014-01-16
 :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
 :Licence:       GNU GPL version 3 or any later version
-      
+
 """
 
 """
 Reviews:
 -------
-          
+
 
 """
 

@@ -1,32 +1,32 @@
 __doc__ = """
 
-Vortex particle (blobs) solver master class. 
+Vortex particle (blobs) solver master class.
 
 * Note: No Turbulence schemes and vorticity generation at the solid boundaries implemented! *
 
 Description
 -----------
 Vortex particle solver [1]_ for the solution of 2D incompressible laminar fluid. As no
-turbulence scheme is implemented, the problems should be **LAMINAR**. Solves 
+turbulence scheme is implemented, the problems should be **LAMINAR**. Solves
 the problem for a given initial vorticity distribution. The time stepping algorithm
 is a viscous splitting one:
 
     1- advection step with no viscosity
     2- viscosity step
-    
+
 Vortex particles are redistributed into a regular grid at given time steps. This
 redistribution can include viscosity modelling, [2]_.
 
 Induced velocities are computed using a Fast Multipole Biot-Savart solver on a GPU [3]_.
-    
-    
+
+
 Implemented Algorithms
 ----------------------
 
 Time stepping:
     - Euler time stepping ['euler']
     - Runge-Kutta 4th order time stepping ['rk4']
-    
+
 Diffusion (viscosity):
     - Modified interpolation kernel, [2]_
 
@@ -37,20 +37,20 @@ References
 ----------
 .. [1] Cottet, G-H., Koumoutsakos, P.D., Vortex Methods: Theory and practice,
         Cambridge University Press, 2000.
-        
+
 .. [2] Wee, D., Ghoniem, A., Modified interpolation kernels, for treating diffusion
         and remeshing in vortex methods, Journal of Computational Physics, 213(1),
         p. 239-263, 2006.
-        
+
     [3] Engblom S., On well-separated sets and fast multipole methods,
         Applied Numerical Mathematics 61(10):1096--1102, 2011.
 
 
-:First added:   2013-12-18  
+:First added:   2013-12-18
 :Last updated:  2014-03-05
 :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
 :License:       GNU GPL version 3 or any later version
-      
+
 """
 
 """
@@ -66,7 +66,7 @@ Reviews:
            access to simulation parameters. Comments of the
            input parameters have been greatly revised and
            corrected.                                      (apalha, 2014-02-04)
-           
+
         5- Class renamed/restructured (VortexBlobs to Blobs) (lmanickathan, 2014-03-05)
 
 """
@@ -96,6 +96,7 @@ from pHyFlow.blobs.base.evolution import diffusion_wee as _base_diffusion_wee
 from pHyFlow.blobs.base.evolution import diffusion_wee as _base_diffusion_wee
 from pHyFlow.blobs.base.evolution import diffusion_tutty as _base_diffusion_tutty
 
+import code
 
 # default parameters
 
@@ -110,18 +111,18 @@ class Blobs(object):
     r"""
     Vortex blob solver for the Navier-Stokes equation. No solid boundaries
     are implemented.
-        
+
     Usage
     -----
     .. code-block:: python
-    
+
         Blobs(wField,vInf,nu,deltaTc,h,overlap,
               timeIntegrationParams={'method':'rk4'},
               blobControlParams={'stepRedistribution':1,'stepPopulationControl':1,
               'gThresholdLocal':1e-8,'gThresholdGlobal':1e-8},
               velocityComputationParams={'method':'fmm','hardware':'gpu'},
               diffusionParams={'method':'regrid_wee','c2':'optimized'})
-        
+
     Parameters
     ----------
     wField : tuple of three numpy.array(float64) (1) or tuple of a function
@@ -139,7 +140,7 @@ class Blobs(object):
                  assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
                  Vortex blobs are then generated inside this region with the
                  overlap `overlap` and spacing `h`.
-    
+
     vInf : numpy.array(float)
            The free-stream velocity,  vx = `vInf` [0] and vy = `vInf` [1].
 
@@ -223,7 +224,7 @@ class Blobs(object):
 
                                 default:
                                     {'method':'fmm','hardware':'gpu'}
-              
+
     diffusionParams : dict, optional
                       A dictionary containing all the parameters related to the computation of the diffusion step.
                       Specifies the diffusion scheme and other specific parameters.
@@ -260,7 +261,7 @@ class Blobs(object):
     gThresholdGlobal
     gThresholdLocal
     h
-    integrationMethod        
+    integrationMethod
     nu
     numBlobs
     overlap
@@ -273,7 +274,7 @@ class Blobs(object):
     t
     tStep
     velocityComputationParams
-    vInf        
+    vInf
     x
     y
     __blobControlParams : dict, optional
@@ -381,26 +382,26 @@ class Blobs(object):
                                              'cpu' : use the cpu.
                                              'gpu' : use the gpu (CUDA enabled).
     __vInf : float64
-             The free stream velocity.          
+             The free stream velocity.
     __x : numpy.array(float64) (1,num_blobs)
           The x coordinates of the vortex blobs.
     __y : numpy.array(float64) (1,num_blobs)
           The y coordinates of the vortex blobs.
-    
-    
+
+
     .. [1] Wee, D., Ahmed, F., Ghoniem, F., Modified interpolation
           kernels for treating diffusion and remeshing in vortex
           methods, Journal of Computational Physics, 213, 239--263, 2006.
-          
-          
+
+
     :First Added:   2013-12-18
     :Last Modified: 2014-01-15
     :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
     :License:       GNU GPL version 3 or any later version
-    
+
     """
-        
-    """    
+
+    """
     Reviews:  (apalha, 2014-01-15) Added method self.regrid
               (apalha, 2014-01-20) Added method self.populationControl
               (apalha, 2014-01-21) Added method self.evaluateVelocity
@@ -408,18 +409,18 @@ class Blobs(object):
                                    used for computation, added method self.addBlobs,added method self.removeBlobs
               (apalha, 2014-04-14) Added Tutty diffusion scheme.
 
-        
-    """ 
-        
+
+    """
+
     def __init__(self,wField,vInf,nu,deltaTc,h,overlap,\
                       timeIntegrationParams=default_time_integration_params,\
                       blobControlParams=default_blob_control_params,\
                       velocityComputationParams=default_velocity_computation_params,\
                       diffusionParams=default_diffusion_params):
-        """    
-        Reviews:  
-        
-        """ 
+        """
+        Reviews:
+
+        """
 
         #--------------------------
         # Check if input parameters all satisfy the required ranges and types
@@ -487,10 +488,10 @@ class Blobs(object):
 
         #if _numpy.abs(self.__g).sum() > _numpy.spacing(1):# TODO:Check
         if self.stepPopulationControl > 0: # only if population control is to be performed during time stepping
-            self.populationControl()         
+            self.populationControl()
 
         if self.stepRedistribution > 0: # only if redistribution is to be performed during time stepping
-            self.redistribute()      
+            self.redistribute()
 
         #--------------------------
 
@@ -547,13 +548,13 @@ class Blobs(object):
         Computes the induced velocities generated by the vortex blobs. It can use
         a FMM approximation (faster, but less accurate) or direct calculation
         (slower, but machine precision accurate).
-        
+
         Usage
         -----
         .. code-block :: python
 
             self.evaluateVelocity(xEval,yEval,Ndirect=35,tol=1.0e-6,cutoff=None)
-    
+
         Parameters
         ----------
         xEval : numpy.array(float64)
@@ -583,30 +584,30 @@ class Blobs(object):
         Returns
         -------
         vx :: numpy.ndarray(float64)
-              the x component of the induced velocities in each of the 
+              the x component of the induced velocities in each of the
               (xEval,yEval) points
               shape: (nEval,)
-              
+
         vy :: numpy.ndarray(float64)
-              the y component of the induced velocities in each of the 
+              the y component of the induced velocities in each of the
               (xEval,yEval) points
               shape: (nEval,)
-        
-            
+
+
         Attributes
         ----------
-        None changed            
-                  
+        None changed
+
         :First Added:   2014-01-21
         :Last Modified: 2014-01-21
         :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
 
         """
-    
-        """    
-        Reviews:  
-        
+
+        """
+        Reviews:
+
         """
 
         # convert the hardware flag into an int to use in _base_velocity
@@ -622,22 +623,23 @@ class Blobs(object):
         vx,vy = _base_velocity(self.__x,self.__y,self.__g,self.__sigma,\
                                xEval=xEval,yEval=yEval,hardware=hardware,method=method,\
                                Ndirect=Ndirect,tol=tol,cutoff=cutoff)
-
+#        print('BLOBS')
+#        code.interact(local=locals())
         return vx,vy
-        
-        
+
+
     def evaluateVorticity(self,xEval,yEval):
         r"""
         Computes the induced velocities generated by the vortex blobs. It can use
         a FMM approximation (faster, but less accurate) or direct calculation
         (slower, but machine precision accurate).
-        
+
         Usage
         -----
         .. code-block :: python
 
             self.evaluateVorticity(xEval,yEval,Ndirect=35,tol=1.0e-6,cutoff=None)
-    
+
         Parameters
         ----------
         xEval : numpy.array(float64)
@@ -650,56 +652,56 @@ class Blobs(object):
                 induced velocities
                 (if value is None, yEval = self.y)
                 shape: (nEval,)
-                
+
         Ndirect :: int (optional)
                    the number of neighbor blobs where to perform direct calculation
                    (default value is 35)
                    shape: single value
-        
+
         tol :: float64
                the tolerance (error) with which the induced velocities are computed
                (default value is 1.0e-6, if tol=0.0 then direct calculation
                is performed instead of FMM)
                shape: single value
-        
+
         cutoff :: float64
                   the radius over which the velocity field is approximately 1/r^2
                   (default value is None, which corresponds to 5.0*xopt)
                   shape: single value
-                
-        
+
+
         Returns
         -------
         vx :: numpy.ndarray(float64)
-              the x component of the induced velocities in each of the 
+              the x component of the induced velocities in each of the
               (xEval,yEval) points
               shape: (nEval,)
-              
+
         vy :: numpy.ndarray(float64)
-              the y component of the induced velocities in each of the 
+              the y component of the induced velocities in each of the
               (xEval,yEval) points
               shape: (nEval,)
-        
-            
+
+
         Attributes
         ----------
-        None changed            
-                  
+        None changed
+
         :First Added:   2014-01-21
         :Last Modified: 2014-01-21
         :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
 
         """
-    
-        """    
-        Reviews:  
-        
+
         """
-        
+        Reviews:
+
+        """
+
         pass
-    
-    
+
+
     def evolve(self):
         r"""
         Compute the new blobs as given by the vorticity formulation of
@@ -719,7 +721,7 @@ class Blobs(object):
         Parameters
         ----------
         None
-        
+
         Attributes
         ----------
         x
@@ -842,80 +844,80 @@ class Blobs(object):
         in total circulation due to population control) then self.gThreshold[1] in
         this population control step is multiplied by 10 and the test is
         performed again.
-        
+
         In the end it is insured that the total circulation did not change more
         than self.gThreshold[1].
-        
+
         Usage
         -----
         .. code-block :: python
 
             self.populationControl()
-    
+
         Parameters
         ----------
         None
-        
+
         Attributes
         ----------
         x
         y
         g
-                  
+
         :First Added:   2014-01-20
         :Last Modified: 2014-01-20
         :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
 
         """
-    
-        """    
-        Reviews:  
-        
+
         """
-        
+        Reviews:
+
+        """
+
         # perform the population control and update the blobs witht the new blobs
         self.__x,self.__y,self.__g = _base_populationControl(self.x,self.y,self.g,self.gThresholdLocal,self.gThresholdGlobal)
-        
-        
+
+
     def redistribute(self,interpKernel=0):
         r"""
         Redistribute vortex blobs over evenly spaced grid points with separation
         h = sigma * overlap.
         The interpolation kernel can be one of the following:
            - M4' (0)
-        
+
         Usage
         -----
         .. code-block :: python
 
             self.redistribute(interpKernel=0)
-            
+
         Parameters
         ----------
         interpKernel :: int64, optional
                         the interpolating kernel using for remeshing
                         0 : M4' (default)
-             
+
         Attributes
         ----------
         x
         y
         g
-                  
-                  
+
+
         :First Added:   2014-01-15
         :Last Modified: 2014-01-15
         :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
 
         """
-    
-        """    
-        Reviews:  
-        
-        """    
-    
+
+        """
+        Reviews:
+
+        """
+
         # base_redistribute is a general function the regrid blobs into a grid that
         # does not need to have a node at the point [0.0, 0.0], for that it
         # uses the original grid placement of particles to redistribute them.
@@ -943,7 +945,7 @@ class Blobs(object):
         # terms appear.
         xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
         yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
-        
+
         # Note that here c=0.0, because we only want to redistribute the blobs
         # no diffusion is to be performed.
         self.__x, self.__y, self.__g = _base_redistribute(self.__x,self.__y,self.__g,self.__sigma,self.__overlap,\
@@ -1051,37 +1053,37 @@ class Blobs(object):
         self.__t = self.__deltaTc * self.__tStep
 
 
-    
+
     def _diffusion(self):
         """
         Function to perform the diffusion of the vortex blobs
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self._diffusion()
-            
+
         Parameters
         ----------
         None
-        
+
         Returns
         -------
         None returned.
-        
+
         Attributes
         ----------
         x
         y
         g
-        
+
         :First Added:   2014-02-10
         :Last Modified: 2014-03-06
         :Copyright:     Copyright (C) 2014 Artur Palha, Lento Manickathan **pHyFlow**
         :License:       GNU GPL version 3 or any later version
 
-        """        
+        """
         # select the diffusion method to use
         if self.__diffusionParams['method'] == 'regrid_wee':
             # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
@@ -1159,13 +1161,13 @@ class Blobs(object):
     def __check_wField(self,wField):
         """
         A function that reads the input wField given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_wField(wField)
-            
+
         Parameters
         ----------
         wField : tuple of three numpy.array(float64) (1) or tuple of a function
@@ -1183,41 +1185,41 @@ class Blobs(object):
                      assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
                      Vortex blobs are then generated inside this region with the
                      overlap `overlap` and spacing `h`.
-        
-        
+
+
         :First Added:   2013-12-19
         :Last Modified: 2013-12-19
         :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-            
+
         """
-        
-        """    
-        Reviews:  
-        
+
         """
-        
+        Reviews:
+
+        """
+
         # check if wField contains the blobs or the vorticity function
         if type(wField[0]) == _numpy.ndarray: # wField has the blobs
             self.__check_input_wField_blobs(wField)
-            
+
         elif type(wField[0]) == __types.FunctionType:   # wField has the vorticity function
             self.__check_input_wField_function(wField)
-        
+
         else:   # wField is not a numpy.ndarray and not a function, then raise error
             raise TypeError('wField is not a tuple with x,y coordinates and g circulation of the blobs or a function with vorticity.')
-        
-    
+
+
     def __read_wField(self,wField):
         """
         A function that reads the input wField given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__read_input_wField(wField)
-            
+
         Parameters
         ----------
         wField : tuple of three numpy.array(float64) (1) or tuple of a function
@@ -1235,81 +1237,81 @@ class Blobs(object):
                      assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
                      Vortex blobs are then generated inside this region with the
                      overlap `overlap` and spacing `h`.
-        
-        
+
+
         :First Added:   2013-12-19
         :Last Modified: 2013-12-19
         :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-            
+
         """
-        
-        """    
-        Reviews:  
-        
+
         """
-        
+        Reviews:
+
+        """
+
         # check if wField contains the blobs or the vorticity function
         if type(wField[0]) == _numpy.ndarray: # wField has the blobs
             self.__x,self.__y,self.__g = self.__read_input_wField_blobs(wField)
-            
+
         elif type(wField[0]) == __types.FunctionType:   # wField has the vorticity function
             self.__x,self.__y,self.__g = self.__read_input_wField_function(wField)
-        
-        
+
+
     def __check_input_wField_blobs(self,wField):
         """
         A function that checks the input wField when given as three
         numpy.array with x and y coordinates of the blobs and circulation
         of the blobs.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_input_wField_blobs(wField)
-            
+
         Parameters
         ----------
-        wField : tuple of three numpy.array(float64) 
+        wField : tuple of three numpy.array(float64)
                  (`xBlobs`, `yBlobs`, `gBlob`) defines the initial distribution of
                  vortex blobs. `xBlobs` contains the x coordinates, `yBlobs`
                  contains the y coordinates and `gBlobs` contains the circulations.
                  Blobs are recursively redistributed into a regular mesh. This
                  mesh is assumed to have a particle located at (0,0). All
                  arrays must have shape (1,nBlobs).
-                 
-        
+
+
         :First Added:   2013-12-19
         :Last Modified: 2013-12-19
         :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-            
+
         """
-        
-        """    
-        Reviews:  
-        
+
         """
-        
+        Reviews:
+
+        """
+
         # check if there are three elements (xBlobs,yBlobs,gBlobs)
         if len(wField) != 3: # if there are not exaclty three arraysm something is wrong so raise error
             raise ValueError('wField must have exactly 3 numpy.array\'s. It has %d.' % len(wField))
-        
+
         # check if all elements of wField are numpy.array and that sizes
         # are all the same
         for k,temp_array in enumerate(wField):
             # first check if it is a numpy.array
             if type(temp_array) != _numpy.ndarray: # raise error if it is not
                 raise ValueError('wField[%d] must be numpy.array.' % k)
-                
+
             # check the size and compare with previous sizes
             if k==0: # for the first array get the size
                 array_size = temp_array.shape
-            
+
             if array_size != temp_array.shape:
                 raise ValueError('wField[%d] has a different size. All arrays must have the same size' % k)
-        
+
 
     def __read_input_wField_blobs(self,wField):
         """
@@ -1355,13 +1357,13 @@ class Blobs(object):
         """
         A function that checks the input wField when given as a function
         and the bounds.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_input_wField_function(wField)
-            
+
         Parameters
         ----------
         wField : tuple of a function and two numpy.array(float64) (2)
@@ -1372,56 +1374,56 @@ class Blobs(object):
                  assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
                  Vortex blobs are then generated inside this region with the
                  overlap `overlap` and spacing `h`.
-                 
-        
+
+
         :First Added:   2013-12-19
         :Last Modified: 2013-12-19
         :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-            
+
         """
-        
-        """    
-        Reviews:  
-        
+
         """
-        
+        Reviews:
+
+        """
+
         # check if there are three elements (wFunction,xBounds,yBounds)
         if len(wField) != 3: # if there are not exaclty three values something is wrong so raise error
             raise ValueError('wField must have exactly 3 entries. It has %d.' % len(wField))
-        
+
         # check if the first element is a function
         if type(wField[0]) != __types.FunctionType: # if is not a function raise error
             raise TypeError('wField[0] must be a function. It is %s.' % type(wField[0]))
-        
+
         # check if first element is a function with two arguments
         if len(__inspect.getargspec(wField[0]).args) != 2: # if it is not 2 (x,y) raise error
             raise ValueError('wField[0] must be a function that takes two inputs (x,y). It takes %s.' % str(len(__inspect.getargspec(wField[0]).args)))
-            
-        # check if the second and third elements of wField are numpy.array and that 
+
+        # check if the second and third elements of wField are numpy.array and that
         # it has size (2,)
         for k,temp_array in enumerate(wField):
             if k != 0:
                 # first check if it is a numpy.array
                 if type(temp_array) != _numpy.ndarray: # raise error if it is not
                     raise ValueError('wField[%d] must be numpy.array.' % k)
-                    
+
                 # check the size
                 if temp_array.shape != (2,):
                     raise ValueError('wField[%d] must have size (2,). It has size %s.' % (k,str(wField[k].shape)))
-        
-        
+
+
     def __read_input_wField_function(self,wField):
         """
         A function that reads the input wField when given as a function
         and the bounds. Returns x,y,g if correctly given in wField.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__read_input_wField_function(wField)
-            
+
         Parameters
         ----------
         wField : tuple of a function and two numpy.array(float64) (2)
@@ -1432,68 +1434,68 @@ class Blobs(object):
                  assumed that `xBounds` [1] > `xBounds` [0] and `yBounds` [1] > `yBounds` [0].
                  Vortex blobs are then generated inside this region with the
                  overlap `overlap` and spacing `h`.
-                 
-        
+
+
         :First Added:   2013-12-19
         :Last Modified: 2013-12-19
         :Copyright:     Copyright (C) 2013 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-            
+
         """
-        
-        """    
-        Reviews:  
-        
+
         """
-        
+        Reviews:
+
+        """
+
         # compute the number of blobs in x and y directions inside the box defined by wField[1] (xBounds)
         # wField[2] (yBounds)
         nBlobs_x = _numpy.floor((wField[1][1]-wField[1][0])/self.__h).astype(long)
         nBlobs_y = _numpy.floor((wField[2][1]-wField[2][0])/self.__h).astype(long)
-        
+
         # generate the coordinates of the vortex blobs
         x = wField[1][0]+0.5*self.__h + _numpy.arange(0,nBlobs_x)*self.__h      # nBlobs_x evenly spaced in x \in [xBoundsDomain[0], xBoundsDomain[1]]
         y = wField[2][0]+0.5*self.__h + _numpy.arange(0,nBlobs_y)*self.__h      # nBlobs_y evenly spaced in y \in [yBoundsDomain[0], yBoundsDomain[1]]
         x,y = _numpy.meshgrid(x,y)                                           # generate the 2d grid of blobs in [xBoundsDomain[0], xBoundsDomain[1]] x [yBoundsDomain[0], yBoundsDomain[1]]
-        
+
         # flatten the grids into vectors
-        x = x.flatten()                           
+        x = x.flatten()
         y = y.flatten()
-        
+
         # compute the circulations of the blobs
         g = wField[0](x,y)*self.__h*self.__h
-        
+
         return x,y,g
-        
-        
+
+
     def __check_vInf(self,vInf):
         """
         A function that checks the input free stream velocity given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_vInf(vInf)
-            
+
         Parameters
         ----------
         vInf : numpy.array(float)
                The free-stream velocity: vx = `vInf` [0] and vy = `vInf` [1].
-                        
-        
+
+
         :First Added:   2014-01-27
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
+
         """
-        Reviews:  
-    
-        """ 
-        
+        Reviews:
+
+        """
+
         # check if vInf (free stream velocity) is a numpy.array with two float values
         if type(vInf) != _numpy.ndarray:
             raise TypeError('vInf must be a numpy.ndarray. It is %s.' % str(type(vInf)))
@@ -1503,38 +1505,38 @@ class Blobs(object):
         # check if it has only 2 values
         elif vInf.shape != (2,):
             raise ValueError('vInf must have shape (2,0). It has shape %s.' % str(vInf.shape))
-            
-    
+
+
     def __read_vInf(self,vInf):
         """
         A function that reads the input free stream velocity given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__read_vInf(vInf)
-            
+
         Parameters
         ----------
         vInf : numpy.array(float)
                The free-stream velocity: vx = `vInf` [0] and vy = `vInf` [1].
-                        
-        
+
+
         :First Added:   2014-01-27
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
-        """    
-        Reviews:  
-    
-        """ 
-        
+
+        """
+        Reviews:
+
+        """
+
         self.__vInf = vInf
-        
+
 
     def __check_nu(self,nu):
         """
@@ -1815,13 +1817,13 @@ class Blobs(object):
     def __check_blobParams(self,blobParams):
         """
         A function that checks the input blob parameters given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_blobParams(blobParams)
-            
+
         Parameters
         ----------
         blobParams : dict
@@ -1829,29 +1831,29 @@ class Blobs(object):
                      'overlap': float64
                                 The overlap ratio between neighboring blobs. It is related to
                                 the core size of the blob, `sigma`, and to the spacing 'h' by
-                                the expression :math:`\mathtt{overlap} = \frac{\mathtt{h}}{\mathtt{sigma}}`. 
+                                the expression :math:`\mathtt{overlap} = \frac{\mathtt{h}}{\mathtt{sigma}}`.
                      'h': float64
                           The size of the cell associated to the vortex blobs. Corresponds to
                           the minimum spacing between the core of two neighboring cells. It is related to
                           the core size of the blob, `sigma`, and to the spacing 'h' by
                           the expression :math:`\mathtt{overlap} = \frac{\mathtt{h}}{\mathtt{sigma}}`
-        
+
         :First Added:   2014-01-27
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
-        """    
-        Reviews:  
-    
-        """ 
-        
+
+        """
+        Reviews:
+
+        """
+
         # check if overlap is positive
         if blobParams['overlap'] <= 0.0:
             raise ValueError('overlap must be > 0.0. It is %f.' % blobParams['overlap'])
-        
+
         # check if cell size is positive
         if blobParams['h'] <= 0.0:
             raise ValueError('h must be > 0.0. It is %f.' % blobParams['h'])
@@ -1860,13 +1862,13 @@ class Blobs(object):
     def __read_blobParams(self,blobParams):
         """
         A function that reads the input blob parameters given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__read_blobParams(blobParams)
-            
+
         Parameters
         ----------
         blobParams : dict
@@ -1874,45 +1876,45 @@ class Blobs(object):
                      'overlap': float64
                                 The overlap ratio between neighboring blobs. It is related to
                                 the core size of the blob, `sigma`, and to the spacing 'h' by
-                                the expression :math:`\mathtt{overlap} = \frac{\mathtt{h}}{\mathtt{sigma}}`. 
+                                the expression :math:`\mathtt{overlap} = \frac{\mathtt{h}}{\mathtt{sigma}}`.
                      'h': float64
                           The size of the cell associated to the vortex blobs. Corresponds to
                           the minimum spacing between the core of two neighboring cells. It is related to
                           the core size of the blob, `sigma`, and to the spacing 'h' by
                           the expression :math:`\mathtt{overlap} = \frac{\mathtt{h}}{\mathtt{sigma}}`
-        
+
         :First Added:   2014-01-27
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
-        """    
-        Reviews:  
-    
-        """ 
-        
+
+        """
+        Reviews:
+
+        """
+
         # read overlap
         self.__overlap = blobParams['overlap']
-        
+
         # read blob cell size
         self.__h = blobParams['h']
-        
+
         # compute the core spreading, sigma
         self.__sigma = self.__h/self.__overlap
-    
+
 
     def __check_timeIntegrationParams(self,timeIntegrationParams):
         """
         A function that checks the input time integrations parameters given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_timeIntegrationParams(timeIntegrationParams)
-            
+
         Parameters
         ----------
         timeIntegrationParams : dict
@@ -1925,14 +1927,14 @@ class Blobs(object):
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
-        """    
-        Reviews:  
-    
+
         """
-        
+        Reviews:
+
+        """
+
         # integrationMethod
         if timeIntegrationParams['method'] not in blobOptions.time_integrator_options:
             raise ValueError(('timeIntegrationParams[\'method\'] must be one of ' +\
@@ -1943,13 +1945,13 @@ class Blobs(object):
     def __read_timeIntegrationParams(self,timeIntegrationParams):
         """
         A function that reads the input time integrations parameters given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__read_timeIntegrationParams(timeIntegrationParams)
-            
+
         Parameters
         ----------
         timeIntegrationParams : dict
@@ -1958,33 +1960,33 @@ class Blobs(object):
                                           ('fe', 'rk4') the type of time integrator
                                           used: 'fe' forward Euler, 'rk4' Runge-Kutta 4th order.
 
-                                
+
         :First Added:   2014-01-27
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
-        """    
-        Reviews:  
-    
+
         """
-        
+        Reviews:
+
+        """
+
         # save the timeIntegrationParams
         self.__timeIntegrationParams = timeIntegrationParams
 
-    
+
     def __check_blobControlParams(self,blobControlParams):
         """
         A function that checks the input blob control parameters given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_blobControlParams(blobControlParams)
-            
+
         Parameters
         ----------
         blobControlParams : dict
@@ -1997,18 +1999,18 @@ class Blobs(object):
                                                minimum value of circulation to consider for each vortex blob.
                             'gThresholdGlobal': float64
                                                 maximum value of total circulation change allowed by discarding blobs.
-                                           
-                                
+
+
         :First Added:   2014-01-27
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
-        """    
-        Reviews:  
-    
+
+        """
+        Reviews:
+
         """
 
         # stepRedistribution
@@ -2022,28 +2024,28 @@ class Blobs(object):
             raise ValueError('blobControlParams[\'stepPopulationControl\'] must be an int. It is %s.' % str(type(blobControlParams['stepPopulationControl'])))
         elif blobControlParams['stepPopulationControl']<0: # stepPopulationControl must be positive
             raise ValueError('blobControlParams[\'stepPopulationControl\'] must be positive. It is %d.' % blobControlParams['stepPopulationControl'])
-        
+
         # gThresholdLocal
         # check first for the minimum value of circulation to consider
         if blobControlParams['gThresholdLocal'] < 0: # gThresholdLocal must be positive or 0
             raise ValueError('blobControlParams[\'gThresholdLocal\'] must be positive. It is %f.' % blobControlParams['gThresholdLocal'])
-        
+
         # gThresholdGlobal
         # check for the maximum value of total circulation allowed to change in population control
         if blobControlParams['gThresholdGlobal'] < 0: # gThresholdGlobal must be positive or 0
             raise ValueError('blobControlParams[\'gThresholdGlobal\'] must be positive. It is %f.' % blobControlParams['gThresholdGlobal'])
 
-    
+
     def __read_blobControlParams(self,blobControlParams):
         """
         A function that reads the input blob control parameters given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__read_blobControlParams(blobControlParams)
-            
+
         Parameters
         ----------
         blobControlParams : dict
@@ -2056,46 +2058,46 @@ class Blobs(object):
                                               minimum value of circulation to consider for each vortex blob.
                            'gThresholdGlobal': float64
                                                maximum value of total circulation change allowed by discarding blobs.
-                                           
-                                
+
+
         :First Added:   2014-01-27
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
-        """    
-        Reviews:  
-    
+
         """
-        
+        Reviews:
+
+        """
+
         # read popControlParams
         self.__blobControlParams = blobControlParams
 
         # read step redistribution
         self.__stepRedistribution = blobControlParams['stepRedistribution']
-        
+
         # read step population control
         self.__stepPopulationControl = blobControlParams['stepPopulationControl']
-        
+
         # read local circulation control parameter
         self.__gThresholdLocal = blobControlParams['gThresholdLocal']
-        
+
         # read global circulation control parameter
         self.__gThresholdGlobal = blobControlParams['gThresholdGlobal']
-        
-    
+
+
     def __check_velocityComputationParams(self,velocityComputationParams):
         """
         A function that checks the input velocity computation parameters given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_velocityComputationParams(popControlParams)
-            
+
         Parameters
         ----------
         velocityComputationParams : dict
@@ -2106,20 +2108,20 @@ class Blobs(object):
                                     'hardware': string
                                                 the type of hardware to use
                                                 'cpu' or 'gpu'
-                                                
-                                                              
+
+
         :First Added:   2014-01-27
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
 
-        """    
-        Reviews:  
-    
         """
-        
+        Reviews:
+
+        """
+
         # check first the biot-savart computation option
         if velocityComputationParams['method'] not in blobOptions.biot_savart_options:
             raise ValueError(('velocityComputationParams[\'mehtod\'] must be one of ' +\
@@ -2131,17 +2133,17 @@ class Blobs(object):
                              '\'%s\','*(len(blobOptions.hardware_options)-1) +\
                              '\'%s\'.' + ' It is %s.') % (blobOptions.hardware_options + (str(velocityComputationParams['hardware']),)))
 
-    
+
     def __read_velocityComputationParams(self,velocityComputationParams):
         """
         A function that checks the input velocity computation parameters given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_velocityComputationParams(popControlParams)
-            
+
         Parameters
         ----------
         velocityComputationParams : dict
@@ -2152,34 +2154,34 @@ class Blobs(object):
                                     'hardware': string
                                                 the type of hardware to use
                                                 'cpu' or 'gpu'
-                                                
-                                                              
+
+
         :First Added:   2014-01-27
         :Last Modified: 2014-01-27
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
-        """    
-        Reviews:  
-    
+
         """
-        
+        Reviews:
+
+        """
+
         # save velocityComputationParams
         self.__velocityComputationParams = velocityComputationParams
-    
-    
+
+
     def __check_diffusionParams(self,diffusionParams):
         """
         A function that checks the input diffusion parameters given to self.__init__.
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.__check_diffusionParams(diffusionParams)
-            
+
         Parameters
         ----------
         diffusionParams : dict
@@ -2198,25 +2200,25 @@ class Blobs(object):
                                          if 'optimized' is given, 1/3 is selected.
 
                               'regrid_tutty'
-        
+
         .. [1] Wee, D., Ahmed, F., Ghoniem, F., Modified interpolation
               kernels for treating diffusion and remeshing in vortex
               methods, Journal of Computational Physics, 213, 239--263, 2006.
         .. [2] Tutty, O.R., A simple redistribution vortex method (with accurate body forces),
                    arXiv:1009.0166v1, 2010
-                                         
+
         :First Added:   2014-01-27
         :Last Modified: 2014-04-14
         :Copyright:     Copyright (C) 2014 Artur Palha, **pHyFlow**
         :License:       GNU GPL version 3 or any later version
-        
+
         """
-    
-        """    
+
+        """
         Reviews:  1- Added regrid_tutty diffusion scheme.
-    
+
         """
-        
+
         # check first the diffusion method used
         if diffusionParams['method'] not in blobOptions.diffusion_method_options:
             raise ValueError(('diffusionParams[\'method\'] must be one of ' +\
@@ -2369,11 +2371,11 @@ class Blobs(object):
     def stepRedistribution(self):
         """
         `stepRedistribution` (int) the redistribution step frequency.
-            
+
         Usage
         -----
         .. code-block:: python
-        
+
         self.stepRedistribution
         """
         return self.__stepRedistribution
@@ -2381,29 +2383,29 @@ class Blobs(object):
     @stepRedistribution.setter
     def stepRedistribution(self,stepRedistributionnew):
         raise AttributeError('stepRedistribution cannot be manually set by the user, user can only get the value of stepRedistribution.')
-            
+
     @stepRedistribution.deleter
     def stepRedistribution(self):
         raise AttributeError('stepRedistribution cannot be manually deleted by the user, user can only get the value of stepRedistribution.')
-    
+
     @property
     def integrationMethod(self):
         """
         `integrationMethod` ('fe','rk4') the type of time integrator
         used: 'fe' forward Euler, 'rk4' Runge-Kutta 4th order.
-            
+
         Usage
         -----
         .. code-block:: python
-    
+
             self.integrationMethod
         """
         return self.__timeIntegrationParams['method']
-    
+
     @integrationMethod.setter
     def integrationMethod(self,integrationMethodnew):
         raise AttributeError('integrationMethod cannot be manually set by the user, user can only get the value of integrationMethod.')
-            
+
     @integrationMethod.deleter
     def integrationMethod(self):
         raise AttributeError('integrationMethod cannot be manually deleted by the user, user can only get the value of integrationMethod.')
@@ -2414,19 +2416,19 @@ class Blobs(object):
         'computationMethod' (tuple) with the type of Biot-Savart
         solver ('direct', 'fmm') and the type of hardware to use
         ('cpu','gpu').
-        
+
         Usage
         -----
         .. code-block:: python
-        
+
             self.computationMethod
         """
         return self.__velocityComputationParams['method']
-    
+
     @computationMethod.setter
     def computationMethod(self,computationMethodnew):
         raise AttributeError('computationMethod cannot be manually set by the user, user can only get the value of computationMethod.')
-            
+
     @computationMethod.deleter
     def computationMethod(self):
         raise AttributeError('computationMethod cannot be manually deleted by the user, user can only get the value of computationMethod.')
@@ -2437,19 +2439,19 @@ class Blobs(object):
             'computationMethod' (tuple) with the type of Biot-Savart
             solver ('direct', 'fmm') and the type of hardware to use
             ('cpu','gpu').
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.stepPopulationControl
         """
         return self.__stepPopulationControl
-    
+
     @stepPopulationControl.setter
     def stepPopulationControl(self,stepPopulationControlnew):
         raise AttributeError('stepPopulationControl cannot be manually set by the user, user can only get the value of stepPopulationControl.')
-            
+
     @stepPopulationControl.deleter
     def stepPopulationControl(self):
         raise AttributeError('stepPopulationControl cannot be manually deleted by the user, user can only get the value of stepPopulationControl.')
@@ -2458,19 +2460,19 @@ class Blobs(object):
     def gThresholdGlobal(self):
         """
             'gThresholdGlobal' with maximum value of total circulation change allowed when performing population control.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.gThresholdGlobal
         """
         return self.__gThresholdGlobal
-    
+
     @gThresholdGlobal.setter
     def gThresholdGlobal(self,gThresholdGlobal):
         raise AttributeError('gThresholdGlobal cannot be manually set by the user, user can only get the value of gThresholdGlobal.')
-            
+
     @gThresholdGlobal.deleter
     def gThresholdGlobal(self):
         raise AttributeError('gThresholdGlobal cannot be manually deleted by the user, user can only get the value of gThresholdGlobal.')
@@ -2507,48 +2509,48 @@ class Blobs(object):
             the minimum spacing between the core of two neighboring cells. It is related to
             the core size of the blob, `sigma`, and to the overlap 'overlap' by
             the expression :math:`\mathtt{overlap} = \frac{\mathtt{h}}{\mathtt{sigma}}`.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.h
 
         """
         return self.__h
-        
+
     @h.setter
     def h(self,hnew):
         raise AttributeError('h cannot be manually set by the user, user can only get the value of h.')
-            
+
     @h.deleter
     def h(self):
         raise AttributeError('h cannot be manually deleted by the user, user can only get the value of h.')
-        
+
     # set the property deltaTc in order to access self.__sigma in a safe way
     @property
     def sigma(self):
         """
             The core size of the vortex blobs.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.sigma
 
         """
         return self.__sigma
-        
+
     @sigma.setter
     def sigma(self,sigmanew):
         raise AttributeError('sigma cannot be manually set by the user, user can only get the value of sigma.')
-            
+
     @sigma.deleter
     def sigma(self):
         raise AttributeError('sigma cannot be manually deleted by the user, user can only get the value of sigma.')
-        
-        
+
+
     # set the property deltaTc in order to access self.__overlap in a safe way
     @property
     def overlap(self):
@@ -2556,20 +2558,20 @@ class Blobs(object):
             The overlap ratio between neighboring blobs. It is related to
             the core size of the blob, `sigma`, and to the spacing 'h' by
             the expression :math:`\mathtt{overlap} = \frac{\mathtt{h}}{\mathtt{sigma}}`.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.overlap
 
         """
         return self.__overlap
-        
+
     @overlap.setter
     def overlap(self,overlapnew):
         raise AttributeError('overlap cannot be manually set by the user, user can only get the value of overlap.')
-            
+
     @overlap.deleter
     def overlap(self):
         raise AttributeError('overlap cannot be manually deleted by the user, user can only get the value of overlap.')
@@ -2580,63 +2582,63 @@ class Blobs(object):
     def deltaTc(self):
         """
             The size of the convective time step :math:`\Delta t_{c}`.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.deltaTc
 
         """
         return self.__deltaTc
-        
+
     @deltaTc.setter
     def deltaTc(self,deltaTcnew):
         raise AttributeError('deltaTc cannot be manually set by the user, user can only get the value of deltaTc.')
-            
+
     @deltaTc.deleter
     def deltaTc(self):
         raise AttributeError('deltaTc cannot be manually deleted by the user, user can only get the value of deltaTc.')
-        
+
     # set the property deltaTd in order to access self.__deltaTd in a safe way
     @property
     def deltaTd(self):
         """
             The size of the diffusive time step :math:`\Delta t_{d}`.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.deltaTd
 
         """
         return self.__deltaTd
-        
+
     @deltaTd.setter
     def deltaTd(self,deltaTdnew):
         raise AttributeError('deltaTd cannot be manually set by the user, user can only get the value of deltaTd.')
-            
+
     @deltaTd.deleter
     def deltaTd(self):
         raise AttributeError('deltaTd cannot be manually deleted by the user, user can only get the value of deltaTd.')
 
-    
+
     # set the property vInf in order to access self.__vInf in a safe way
     @property
     def vInf(self):
         """
             The free stream velocity.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.vInf
 
         """
         return self.__vInf
-        
+
     @vInf.setter
     def vInf(self,vInfnew):
         """
@@ -2662,151 +2664,151 @@ class Blobs(object):
         # update the free stream velocity
         self.__read_vInf(vInfnew)
 
-            
+
     @vInf.deleter
     def vInf(self):
         raise AttributeError('vInf cannot be manually deleted by the user, user can only get the value of vInf.')
-        
-        
+
+
     # set the property vInf in order to access self.__vInf in a safe way
     @property
     def nu(self):
         """
             The fluid kinematic viscosity, used to calculate the diffusion coefficient
              :math:`c^{2}` and diffusion time step `deltaTd`, :math:`\Delta t_{d}`.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.nu
 
         """
         return self.__nu
-        
+
     @nu.setter
     def nu(self,nunew):
         raise AttributeError('nu cannot be manually set by the user, user can only get the value of nu.')
-            
+
     @nu.deleter
     def nu(self):
         raise AttributeError('nu cannot be manually deleted by the user, user can only get the value of nu.')
-        
+
     # set the property x in order to access self.__x in a safe way
     @property
     def x(self):
         """
             The x coordinates of the vortex blobs.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.x
 
         """
         return self.__x
-        
+
     @x.setter
     def x(self,xnew):
         raise AttributeError('x cannot be manually set by the user, user can only get the value of x.')
-            
+
     @x.deleter
     def x(self):
         raise AttributeError('x cannot be manually deleted by the user, user can only get the value of x.')
-        
+
     # set the property y in order to access self.__y in a safe way
     @property
     def y(self):
         """
             The y coordinates of the vortex blobs.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.y
 
         """
         return self.__y
-        
+
     @y.setter
     def y(self,ynew):
         raise AttributeError('y cannot be manually set by the user, user can only get the value of y.')
-            
+
     @y.deleter
     def y(self):
         raise AttributeError('y cannot be manually deleted by the user, user can only get the value of y.')
-        
-        
+
+
     # set the property g in order to access self.__y in a safe way
     @property
     def g(self):
         """
             The g coordinates of the vortex blobs.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.g
 
         """
         return self.__g
-        
+
     @g.setter
     def g(self,gnew):
         raise AttributeError('g cannot be manually set by the user, user can only get the value of g.')
-            
+
     @g.deleter
     def g(self):
         raise AttributeError('g cannot be manually deleted by the user, user can only get the value of g.')
-        
+
     # set the property numBlobs in order to get the number of blobs
     @property
     def numBlobs(self):
         """
             The number of blobs.
-            
+
             Usage
             -----
             .. code-block:: python
-        
+
                 self.num_blobs
 
         """
         return self.__x.shape[0]
-        
+
     @numBlobs.setter
     def numBlobs(self,gnew):
         raise AttributeError('numBlobs cannot be set by the user, user can only get the value of numBlobs.')
-            
+
     @numBlobs.deleter
     def numBlobs(self):
         raise AttributeError('numBlobs cannot be deleted by the user, user can only get the value of numBlobs.')
-        
+
     # set the property diffusionParams in order to get the diffusion parameters
     # of the simulation
-    @property      
+    @property
     def diffusionParams(self):
         """
             The diffusion parameters. It is a dictionary containing all the
             parameters of the diffusion method used for the simulation.
-            
+
             Usage
             -----
             .. code-block:: python
-                
+
                 self.diffusionParameters
-                
+
         """
-        
+
         return self.__diffusionParams
-        
+
     @diffusionParams.setter
     def diffusionParams(self,diffusionParamNew):
         raise AttributeError('diffusionParam cannot be set by the user, user can only get the value of diffusionParam.')
-            
+
     @diffusionParams.deleter
     def diffusionParams(self):
         raise AttributeError('diffusionParam cannot be deleted by the user, user can only get the value of diffusionParam.')
