@@ -42,7 +42,7 @@ VELOCITY_COMPUTATION_METHOD = {'default'    : 'direct',
 
 # Velocity computation hardwares
 VELOCITY_COMPUTATION_HARDWARE = {'default'      : 'cpu',
-                                 'available'    : ('cpu')}
+                                 'available'    : ('cpu','gpu')}
 
 # Solver computation parameters
 # Method of solving the linear system of equation of the panel method
@@ -84,7 +84,10 @@ _PROBLEM_TYPE_MOVING = 1
 # Velocity computation
 _VELOCITY_COMPUTATION_METHOD_DIRECT = DIRECT_METHOD
 _VELOCITY_COMPUTATION_HARDWARE_CPU  = CPU_HARDWARE
+_VELOCITY_COMPUTATION_HARDWARE_GPU  = GPU_HARDWARE
 
+# CUDA Precision - Float or double precision
+PRECISION = 'float'
 
 
 

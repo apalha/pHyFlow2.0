@@ -392,6 +392,7 @@ class Panels(object):
                                    the hardware for computing the induced velocity
                                    of the panel.
                                    'cpu' : [default] use the cpu.
+
                       * Note: options are available in .. py:module:: pHyFlow.panel.panelOptions
 
     __xyCP_global : numpy.ndarray(float64), shape (2, nPanelsTotal)
@@ -686,7 +687,7 @@ class Panels(object):
         if self.__velCompParams['hardware'] == 'cpu':
             hardware = _panelOptions._VELOCITY_COMPUTATION_HARDWARE_CPU
         else:
-            raise NotImplementedError('GPU computation not implemented !')
+            hardware = _panelOptions._VELOCITY_COMPUTATION_HARDWARE_GPU
 
         # Determine the computation method
         if self.__velCompParams['method'] == 'direct':
@@ -700,7 +701,7 @@ class Panels(object):
             panelKernel = _panelOptions._PANEL_KERNEL_CSS
 
         # Calculate the induced velocity (internal cython solver)
-        vx,vy = _panelSolver.inducedVelocity(self.__sPanel,self.__xyPanelStart_global[0],
+        vx,vy = _panelSolver.inducedVelocity(self.nPanels,self.__sPanel,self.__xyPanelStart_global[0],
                                              self.__xyPanelStart_global[1],self.__xyPanelEnd_global[0],
                                              self.__xyPanelEnd_global[1],self.__cosSinAlpha[0],self.__cosSinAlpha[1],
                                              xTarget,yTarget,hardware,method,panelKernel)
