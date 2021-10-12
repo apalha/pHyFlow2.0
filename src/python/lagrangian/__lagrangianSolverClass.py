@@ -616,40 +616,40 @@ class LagrangianSolver(object):
                 # Determine the temporary blob position
                 xBlobTemp, yBlobTemp = xBlob + RK4_c*self.deltaT*kxTemp, yBlob + RK4_c*self.deltaT*kyTemp
 
-                #                #--------------------------------------------------------------
-                #                # Solve panel strength
-                #
-                #                # Check if panel strength should be updated.
-                #                if self.__couplingParams['panelStrengthUpdate'] == 'varying':
-                #                    # In the case of varying panel strength, solve for panel
-                #                    # strength at each sub-steps
-                #
-                #                    # Determine induced velocity of blobs on panels [blobs --> panels]
-                #                    # * Note: don't forget the free-stream flow.
-                #                    vxSlip, vySlip = _blobs_velocity(xBlobTemp,yBlobTemp,gBlob,self.blobs.sigma,
-                #                                                     xEval=xCP,yEval=yCP,hardware=blobs_hardware,
-                #                                                     method=blobs_method) \
-                #                                             + self.vInf.reshape(2,-1)
-                #
-                #                    # Solve for no-slip panel strengths
-                #                    self.panels.solve(vxSlip, vySlip)
-                #
-                #                # In the case of constant panels strength, evaluate only once.
-                #                elif self.__couplingParams['panelStrengthUpdate'] == 'constant':
-                #                    # If constant, only calculate panel strengt at first substep
-                #                    if stage==1:
-                #
-                #                        # Determine induced velocity of blobs on panels [blobs --> panels]
-                #                        # * Note: don't forget the free-stream flow.
-                #                        vxSlip, vySlip = _blobs_velocity(xBlobTemp, yBlobTemp, gBlob, self.blobs.sigma,
-                #                                                         xEval=xCP, yEval=yCP, hardware=blobs_hardware,
-                #                                                         method=blobs_method) \
-                #                                                 + self.vInf.reshape(2,-1)
-                #
-                #                        # Solve for no-slip panel strengths
-                #                        self.panels.solve(vxSlip, vySlip)
-                #
-                #                #--------------------------------------------------------------
+                #--------------------------------------------------------------
+                # Solve panel strength
+
+                # Check if panel strength should be updated.
+                if self.__couplingParams['panelStrengthUpdate'] == 'varying':
+                   # In the case of varying panel strength, solve for panel
+                   # strength at each sub-steps
+
+                   # Determine induced velocity of blobs on panels [blobs --> panels]
+                   # * Note: don't forget the free-stream flow.
+                   vxSlip, vySlip = _blobs_velocity(xBlobTemp,yBlobTemp,gBlob,self.blobs.sigma,
+                                                    xEval=xCP,yEval=yCP,hardware=blobs_hardware,
+                                                    method=blobs_method) \
+                                            + self.vInf.reshape(2,-1)
+
+                   # Solve for no-slip panel strengths
+                   self.panels.solve(vxSlip, vySlip)
+
+                # In the case of constant panels strength, evaluate only once.
+                elif self.__couplingParams['panelStrengthUpdate'] == 'constant':
+                   # If constant, only calculate panel strengt at first substep
+                   if stage==1:
+
+                       # Determine induced velocity of blobs on panels [blobs --> panels]
+                       # * Note: don't forget the free-stream flow.
+                       vxSlip, vySlip = _blobs_velocity(xBlobTemp, yBlobTemp, gBlob, self.blobs.sigma,
+                                                        xEval=xCP, yEval=yCP, hardware=blobs_hardware,
+                                                        method=blobs_method) \
+                                                + self.vInf.reshape(2,-1)
+
+                       # Solve for no-slip panel strengths
+                       self.panels.solve(vxSlip, vySlip)
+
+                #--------------------------------------------------------------
 
                 #--------------------------------------------------------------
                 # Calculate the induced velocities on the blobs [ --> blobs]
@@ -799,4 +799,3 @@ class LagrangianSolver(object):
                the :math:`x,y` component of the free-stream velocity
         """
         return self.blobs.vInf
-
