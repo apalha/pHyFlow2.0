@@ -653,34 +653,34 @@ class Blobs(object):
                 (if value is None, yEval = self.y)
                 shape: (nEval,)
 
-        Ndirect :: int (optional)
+        Ndirect : int (optional)
                    the number of neighbor blobs where to perform direct calculation
                    (default value is 35)
                    shape: single value
 
-        tol :: float64
+        tol : float64
                the tolerance (error) with which the induced velocities are computed
                (default value is 1.0e-6, if tol=0.0 then direct calculation
                is performed instead of FMM)
                shape: single value
 
-        cutoff :: float64
-                  the radius over which the velocity field is approximately 1/r^2
-                  (default value is None, which corresponds to 5.0*xopt)
-                  shape: single value
+        cutoff : float64
+                 the radius over which the velocity field is approximately 1/r^2
+                 (default value is None, which corresponds to 5.0*xopt)
+                 shape: single value
 
 
         Returns
         -------
-        vx :: numpy.ndarray(float64)
-              the x component of the induced velocities in each of the
-              (xEval,yEval) points
-              shape: (nEval,)
+        vx : numpy.ndarray(float64)
+             the x component of the induced velocities in each of the
+             (xEval,yEval) points
+             shape: (nEval,)
 
-        vy :: numpy.ndarray(float64)
-              the y component of the induced velocities in each of the
-              (xEval,yEval) points
-              shape: (nEval,)
+        vy : numpy.ndarray(float64)
+             the y component of the induced velocities in each of the
+             (xEval,yEval) points
+             shape: (nEval,)
 
 
         Attributes
@@ -739,99 +739,44 @@ class Blobs(object):
         """
             Reviews: (apalha, 2014-04-14) Added diffusion as a callable function.
                      (apalha, 2014-04-15) Put redistribution before diffusion.
+                     (apalha, 2021-10-24) Removes regridding before diffusion and adds
+                                          to diffusion step to bundle together all steps
+                                          of Tutty diffusion.
         """
 
-        # convert the hardware flag into an int to use in _base_convection
+        # Convert the hardware flag into an int to use in _base_convection
         if self.__velocityComputationParams['hardware'] == 'gpu': hardware = blobOptions.GPU_HARDWARE
         else: hardware = blobOptions.CPU_HARDWARE
 
-        # convert the method flag into an int to use in _base_convection
+        # Convert the method flag into an int to use in _base_convection
         if self.__velocityComputationParams['method'] == 'fmm': method = blobOptions.FMM_METHOD
         else: method = blobOptions.DIRECT_METHOD
 
-        # convert the time integration method into an int to use in _base_convection
+        # Convert the time integration method into an int to use in _base_convection
         if self.__timeIntegrationParams['method'] == 'rk4': integrator = blobOptions.RK4_INTEGRATOR
         elif self.__timeIntegrationParams['method'] == 'euler': integrator = blobOptions.FE_INTEGRATOR
 
-        # convection step
-        xBlobTemp,yBlobTemp,gBlobTemp = _base_convection(self.__deltaTc,self.__x,self.__y,self.__g,self.__sigma,
-                                                         hardware=hardware,method=method,integrator=integrator,vInf=self.__vInf)
+        # Convection step
+        self.__x, self.__y, self.__g = _base_convection(self.__deltaTc, self.__x, self.__y, self.__g, self.__sigma,
+                                                        hardware=hardware, method=method, integrator=integrator, vInf=self.__vInf)
 
-        # update the blobs
-        self.__x = xBlobTemp
-        self.__y = yBlobTemp
-        self.__g = gBlobTemp
-
-        # # diffusion step
-        # if self.__stepDiffusion != 0: # corresponds to nu = 0.0, therefore no diffusion is to be computed
-        #     if (self.__tStep % self.__stepDiffusion) == 0: # if the time step is a multiple of the stepDiffusion perform diffusion
-        #
-        #         # select the diffusion method to use
-        #         if self.__diffusionParams['method'] == 'regrid_wee':
-        #             # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
-        #             # on regrid of the blobs into a grid that
-        #             # does not need to have a node at the point [0.0, 0.0], for that it
-        #             # uses the original grid placement of particles to redistribute them.
-        #             # in here it is assumed that the redistribution grid always contains the
-        #             # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
-        #             # yBounds variables are computes in order to redistribute particles
-        #             # into a grid that contains the point [0.0, 0.0]. Essentially, the
-        #             # redistribution is done into the following initial grid:
-        #             #
-        #             #       -------------------------
-        #             #       |       |       |       |
-        #             #       |   X   |   X   |   X   |
-        #             #       |  (3)  |  (7)  |  (11) |
-        #             #       -------------------------
-        #             #       |       |       |      O|
-        #             #       |   X   |   X   |   X   |
-        #             #       |  (2)  |  (6)  |  (10) |
-        #             #       -------------------------
-        #             #       |       |       |       |
-        #             #       |   X   |   X   |   X   |
-        #             #       |  (1)  |  (5)  |  (9)  |
-        #             #       -------------------------
-        #             #
-        #             # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
-        #             # terms appear.
-        #             xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
-        #             yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
-        #
-        #             # perform diffusion and store the results directly in the object
-        #             self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
-        #                                                              xBlobTemp,yBlobTemp,gBlobTemp,
-        #                                                              self.__sigma,xBounds,yBounds,
-        #                                                              overlap=self.__overlap)
-        #
-        #    else: # if the time step is not a multiple of stepDiffusion then don't perform diffusion and just update blobs
-        #        self.__x = xBlobTemp
-        #        self.__y = yBlobTemp
-        #        self.__g = gBlobTemp
-        #
-        #else: # if the stepDiffusion is 0 then just update the blobs
-        #    self.__x = xBlobTemp
-        #    self.__y = yBlobTemp
-        #    self.__g = gBlobTemp
-
-        # redistribution step
-        if self.__stepRedistribution != 0: # meaning that redistribution should be done
-            if (self.diffusionParams['method'] == 'regrid_tutty'): # if the time step is a multiple of the stepRedistribution perform redistribution
-                self.redistribute()
-
+        # Diffusion step
         self._diffusion()
 
-        # redistribution step
-        if self.__stepRedistribution != 0: # meaning that redistribution should be done
-            if ((self.__tStep % self.__stepRedistribution) == 0) and (self.diffusionParams['method'] != 'regrid_tutty'): # if the time step is a multiple of the stepRedistribution perform redistribution
+        # Redistribution step
+        # Nothing is assumed from self._diffusio() regarding the final state of
+        # the vortex blobs (on a grid or irregularly distributed). For this reason
+        # regridding is done according to the step interval predifined (even if Tutty
+        # diffusion is used, which results in blobs on a grid)
+        if self.__stepRedistribution != 0: # redistribution should be done
+            if ((self.__tStep % self.__stepRedistribution) == 0): # the current time step is a multiple of self.__stepRedistribution, so perform redistribution
                 self.redistribute()
 
-        # update the time counter
+        # Update the time counter
         self._advanceTime()
 
-
-
-        # population control step
-        if self.__stepPopulationControl != 0: # meaning that population control should be done
+        # Population control step
+        if self.__stepPopulationControl != 0: # population control should be done
             if (self.__tStep % self.__stepPopulationControl) == 0: # if the time step is a multiple of the stepPopulationControl perform population control
                 self.populationControl()
 
@@ -880,7 +825,7 @@ class Blobs(object):
         self.__x,self.__y,self.__g = _base_populationControl(self.x,self.y,self.g,self.gThresholdLocal,self.gThresholdGlobal)
 
 
-    def redistribute(self,interpKernel=0):
+    def redistribute(self, interpKernel=0):
         r"""
         Redistribute vortex blobs over evenly spaced grid points with separation
         h = sigma * overlap.
@@ -1084,45 +1029,53 @@ class Blobs(object):
         :License:       GNU GPL version 3 or any later version
 
         """
+
         # select the diffusion method to use
         if self.__diffusionParams['method'] == 'regrid_wee':
-            # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
-            # on regrid of the blobs into a grid that
-            # does not need to have a node at the point [0.0, 0.0], for that it
-            # uses the original grid placement of particles to redistribute them.
-            # in here it is assumed that the redistribution grid always contains the
-            # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
-            # yBounds variables are computes in order to redistribute particles
-            # into a grid that contains the point [0.0, 0.0]. Essentially, the
-            # redistribution is done into the following initial grid:
-            #
-            #       -------------------------
-            #       |       |       |       |
-            #       |   X   |   X   |   X   |
-            #       |  (3)  |  (7)  |  (11) |
-            #       -------------------------
-            #       |       |       |      O|
-            #       |   X   |   X   |   X   |
-            #       |  (2)  |  (6)  |  (10) |
-            #       -------------------------
-            #       |       |       |       |
-            #       |   X   |   X   |   X   |
-            #       |  (1)  |  (5)  |  (9)  |
-            #       -------------------------
-            #
-            # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
-            # terms appear.
-            xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
-            yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+            # Wee type diffusion is only performed at fixed diffusion time steps
+            # self.__stepDiffusion
+            if (self.__tStep % self.__stepDiffusion) == 0:
+                # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
+                # on regrid of the blobs into a grid that
+                # does not need to have a node at the point [0.0, 0.0], for that it
+                # uses the original grid placement of particles to redistribute them.
+                # in here it is assumed that the redistribution grid always contains the
+                # point [0.0, 0.0]. In order to re-use base_redistribute, the xBounds and
+                # yBounds variables are computes in order to redistribute particles
+                # into a grid that contains the point [0.0, 0.0]. Essentially, the
+                # redistribution is done into the following initial grid:
+                #
+                #       -------------------------
+                #       |       |       |       |
+                #       |   X   |   X   |   X   |
+                #       |  (3)  |  (7)  |  (11) |
+                #       -------------------------
+                #       |       |       |      O|
+                #       |   X   |   X   |   X   |
+                #       |  (2)  |  (6)  |  (10) |
+                #       -------------------------
+                #       |       |       |       |
+                #       |   X   |   X   |   X   |
+                #       |  (1)  |  (5)  |  (9)  |
+                #       -------------------------
+                #
+                # Where (6) is the point: [0.0, 0.0]. For this reason the self.__h*1.5
+                # terms appear.
+                xBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
+                yBounds = _numpy.array([-self.__h*1.5, self.__h*1.5])
 
-            # perform diffusion and store the results directly in the object
-            self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
-                                                             self.__x,self.__y,self.__g,
-                                                             self.__sigma,xBounds,yBounds,
-                                                             overlap=self.__overlap)
+                # perform diffusion and store the results directly in the object
+                self.__x,self.__y,self.__g = _base_diffusion_wee(self.__deltaTd,self.__nu,self.__h,
+                                                                 self.__x,self.__y,self.__g,
+                                                                 self.__sigma,xBounds,yBounds,
+                                                                 overlap=self.__overlap)
 
         if self.__diffusionParams['method'] == 'regrid_tutty':
-            # _base_diffusion_wee is a general function that implements the wee method for diffusion which is based
+            # Tutty type diffusion requires an initial redistribution step to achieve
+            # accuracy (this was verified empirically)
+            self.redistribute()
+
+            # _base_diffusion_tutty is a general function that implements the wee method for diffusion which is based
             # on regrid of the blobs into a grid that
             # does not need to have a node at the point [0.0, 0.0], for that it
             # uses the original grid placement of particles to redistribute them.
