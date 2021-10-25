@@ -21,7 +21,7 @@ Several different kernel implementations are implemented in one unified function
 # along with pHyFlow. If not, see <http://www.gnu.org/licenses/>.
 #
 # First added:  2013-05-22
-# Last changed: 2013-10-09
+# Last changed: 2021-10-25
 # -*- coding: utf-8 -*-
 
 __all__ = ['convection','diffusion_wee','diffusion_tutty']
@@ -34,11 +34,10 @@ from pHyFlow.blobs.base.induced import velocity
 from pHyFlow.blobs.base.regrid import Regrid
 
 
-def convection(dt,xBlob,yBlob,wBlob,sigma,k=2,kernel=1,vInf=[0.0,0.0],
-               hardware=0,method=1,blocksize=128,integrator=1):
+def convection(dt, xBlob, yBlob, wBlob, sigma,
+               k=2, kernel=1, vInf=[0.0,0.0],
+               hardware=0, method=1, blocksize=128, integrator=1):
     r"""
-        WORK IN PROGRESSS!!!!!!
-
         Compute the new blobs as given by integrating the convection equation:
 
         .. math::
@@ -123,9 +122,9 @@ def convection(dt,xBlob,yBlob,wBlob,sigma,k=2,kernel=1,vInf=[0.0,0.0],
     """
 
     if integrator == 0: # forward Euler
-        xBlobNew,yBlobNew,wBlobNew = _convection_fe(dt,xBlob,yBlob,wBlob,sigma,
-                                                    k,kernel,vInf,
-                                                    hardware,method,blocksize)
+        xBlobNew,yBlobNew,wBlobNew = _convection_fe(dt, xBlob, yBlob, wBlob, sigma,
+                                                    k, kernel, vInf,
+                                                    hardware, method, blocksize)
 
     elif integrator == 1: # Runge-Kutta 4th order
         xBlobNew,yBlobNew,wBlobNew = _convection_rk4(dt,xBlob,yBlob,wBlob,sigma,
@@ -133,7 +132,7 @@ def convection(dt,xBlob,yBlob,wBlob,sigma,k=2,kernel=1,vInf=[0.0,0.0],
                                                      hardware,method,blocksize)
 
     # return the new blobs
-    return xBlobNew,yBlobNew,wBlobNew
+    return xBlobNew, yBlobNew, wBlobNew
 
 
 def diffusion_wee(dt,nu,h,xBlob,yBlob,wBlob,sigma,xBounds,yBounds,overlap=0.5,k=2,
@@ -347,9 +346,7 @@ def diffusion_tutty(dt,nu,h,xBlob,yBlob,wBlob,sigma,xBounds,yBounds,overlap=0.5,
         # convert the indices to numbers greater than 2
 
         # generate all particles indices of the window of each particle
-        #xKernelIndices = numpy.concatenate((numpy.tile(xLIndices,kernelSize),numpy.tile(xLIndices+1,kernelSize),numpy.tile(xLIndices+2,kernelSize),numpy.tile(xLIndices+3,kernelSize)))
         xKernelIndices = numpy.tile(xLIndices,(4*4,1)) + numpy.tile(numpy.arange(0,4),4).reshape(4*4,1) # slower but general
-        #xKernelIndices = xKernelIndices.reshape(kernelSize*kernelSize,nBlobs)
         yKernelIndices = numpy.tile(yLIndices,(4*4,1)) + numpy.repeat(numpy.arange(0,4),4).reshape(4*4,1) # slower but general
 
         # clear memory of unnecessary data
@@ -409,39 +406,21 @@ def diffusion_tutty(dt,nu,h,xBlob,yBlob,wBlob,sigma,xBounds,yBounds,overlap=0.5,
 
         # Stack and tile the 1-D redistribution weights for the 4x4 2-D kernel - x-direction
         FWeights = numpy.tile(numpy.vstack((F_im1,F_i,F_ip1,F_ip2)),(4,1)).flatten()
+
         # Stack and tile the 1-D redistribution weights for the 4x4 2-D kernel - y-direction
         GWeights = numpy.vstack((numpy.tile(G_im1,(4,1)),
                                  numpy.tile(G_i,  (4,1)),
                                  numpy.tile(G_ip1,(4,1)),
                                  numpy.tile(G_ip2, (4,1)))).flatten()
 
-
-
-
-
-
-        # compute the coordinates of the grid vortex blobs of the interpolating kernel
-        #        xKernelCoordinates = xKernelIndices*h;
-        #        yKernelCoordinates = yKernelIndices*h;
-
         # compute the weight of the interpolation kernel for each new particle
         kernelValues = FWeights*GWeights
         kernelValues *= numpy.tile(wBlob,(4*4,1)).flatten()
-
-        #        # allocate memory space for the sparse matrix
-        #        newBlobsMatrix = pysparse.spmatrix.ll_mat(xLIndicesMax - xLIndicesMin + kernelSize + 2,\
-        #                                         yLIndicesMax - yLIndicesMin + kernelSize + 2,\
-        #                                         kernelSize*kernelSize*nBlobs)
 
         # gather data in the sparse matrix
         # repeated vortex blobs are added together
         xKernelIndicesMin = xKernelIndices.min()
         yKernelIndicesMin = yKernelIndices.min()
-
-        #        newBlobsMatrix.update_add_at(kernelValues.flatten(),\
-        #                           xKernelIndices.flatten() - xKernelIndicesMin + kernelSize/2,\
-        #                           yKernelIndices.flatten() - yKernelIndicesMin + kernelSize/2)
-
         newBlobsMatrix = scipy.sparse.csr_matrix( (kernelValues.flatten(),
                                           (xKernelIndices.flatten() - xKernelIndicesMin + 4/2,\
                                            yKernelIndices.flatten() - yKernelIndicesMin + 4/2))).tocoo()
@@ -452,7 +431,6 @@ def diffusion_tutty(dt,nu,h,xBlob,yBlob,wBlob,sigma,xBounds,yBounds,overlap=0.5,
         del yKernelIndices
 
         # get the new vortex blob data
-        #        wBlobNew,iBlobNew,jBlobNew = newBlobsMatrix.find()
         wBlobNew, iBlobNew, jBlobNew = newBlobsMatrix.data, newBlobsMatrix.row, newBlobsMatrix.col
 
         # clear memory of unecessary data
